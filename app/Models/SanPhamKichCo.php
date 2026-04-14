@@ -1,0 +1,31 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+
+class SanPhamKichCo extends Model
+{
+    use HasFactory;
+
+    protected $table = 'san_pham_kich_co';
+
+    protected $fillable = [
+        'san_pham_id',
+        'kich_co_id',
+        'gia_ban',
+        'gia_khuyen_mai',
+        'trang_thai',
+    ];
+
+    public function sanPham()
+    {
+        return $this->belongsTo(SanPham::class, 'san_pham_id');
+    }
+
+    public function kichCo()
+    {
+        return $this->belongsTo(KichCo::class, 'kich_co_id');
+    }
+}

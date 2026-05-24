@@ -7,7 +7,6 @@ use App\Models\DonHang;
 use App\Models\NguoiDung;
 use App\Models\SanPham;
 use App\Models\NguyenLieu;
-use App\Models\LichSuDiemThuong;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -34,10 +33,8 @@ class DashboardController extends Controller
             ->count();
 
         // Nguyên liệu sắp hết
-        $nguyenLieuSapHet = NguyenLieu::whereRaw('so_luong_ton <= muc_canh_bao')->count();
-        $dsNguyenLieuSapHet = NguyenLieu::whereRaw('so_luong_ton <= muc_canh_bao')
-            ->orderByRaw('so_luong_ton / NULLIF(muc_canh_bao, 0) ASC')
-            ->get();
+        $nguyenLieuSapHet = 0;
+        $dsNguyenLieuSapHet = collect();
 
         // ===== DOANH THU 7 NGÀY =====
         $doanhThu7NgayRaw = [];

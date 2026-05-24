@@ -1,4 +1,4 @@
-@extends('layouts.manager')
+@extends('manager.layout.app')
 
 @section('title', 'Voucher & Khuyến mãi')
 @section('breadcrumb', 'Kinh doanh / <strong>Voucher & Khuyến mãi</strong>')

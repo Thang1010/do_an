@@ -1,4 +1,4 @@
-@extends('layouts.manager')
+@extends('manager.layout.app')
 
 @section('title', 'Sửa người dùng')
 @section('breadcrumb', 'Nhân sự / Quản lý người dùng / <strong>Sửa</strong>')
@@ -12,6 +12,8 @@
     };
     $showStaffFields = old('vai_tro', $user->vai_tro) === 'nhân viên';
     $showAdminFields = old('vai_tro', $user->vai_tro) === 'quản lý';
+    $positionsStaff = $positionsStaff ?? ($positions ?? collect());
+    $positionsManager = $positionsManager ?? ($positions ?? collect());
 @endphp
 <div class="page-header">
     <div>
@@ -82,16 +84,16 @@
                 <div class="divider"></div>
 
                 <div class="form-group">
-                    <label class="form-label" for="chuc_vu">Chức vụ</label>
-                    <input
-                        id="chuc_vu"
-                        type="text"
-                        name="chuc_vu"
-                        class="form-control"
-                        value="{{ old('chuc_vu', $user->hoSoNhanVien?->chuc_vu) }}"
-                        placeholder="Ví dụ: Thu ngân, Pha chế"
-                    >
-                    @error('chuc_vu')
+                    <label class="form-label" for="chuc_vu_id">Chức vụ</label>
+                    <select id="chuc_vu_id" name="chuc_vu_id" class="form-control">
+                        <option value="">-- Chọn chức vụ --</option>
+                        @foreach($positionsStaff as $position)
+                            <option value="{{ $position->id }}" {{ (string) old('chuc_vu_id', $user->hoSoNhanVien?->chuc_vu_id) === (string) $position->id ? 'selected' : '' }}>
+                                {{ $position->ten_chuc_vu }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('chuc_vu_id')
                         <div class="form-error">{{ $message }}</div>
                     @enderror
                 </div>
@@ -133,48 +135,28 @@
             <div id="admin-fields" @if(! $showAdminFields) style="display:none;" @endif>
                 <div class="divider"></div>
 
-                <div class="form-grid-2">
-                    <div class="form-group">
-                        <label class="form-label" for="admin_ngay_vao_lam">Ngày vào làm</label>
-                        <input
-                            id="admin_ngay_vao_lam"
-                            type="date"
-                            name="ngay_vao_lam"
-                            class="form-control"
-                            value="{{ old('ngay_vao_lam', optional($user->hoSoQuanLy?->ngay_vao_lam)->format('Y-m-d')) }}"
-                        >
-                        @error('ngay_vao_lam')
-                            <div class="form-error">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label" for="ngan_hang">Ngân hàng</label>
-                        <input
-                            id="ngan_hang"
-                            type="text"
-                            name="ngan_hang"
-                            class="form-control"
-                            value="{{ old('ngan_hang', $user->hoSoQuanLy?->ngan_hang) }}"
-                            placeholder="Ví dụ: Vietcombank"
-                        >
-                        @error('ngan_hang')
-                            <div class="form-error">{{ $message }}</div>
-                        @enderror
-                    </div>
+                <div class="form-group">
+                    <label class="form-label" for="admin_chuc_vu_id">Chức vụ quản lý</label>
+                    <select id="admin_chuc_vu_id" name="chuc_vu_id" class="form-control">
+                        <option value="">-- Chọn chức vụ --</option>
+                        @foreach($positionsManager as $position)
+                            <option value="{{ $position->id }}" {{ (string) old('chuc_vu_id', $user->hoSoQuanLy?->chuc_vu_id) === (string) $position->id ? 'selected' : '' }}>
+                                {{ $position->ten_chuc_vu }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('chuc_vu_id')
+                        <div class="form-error">{{ $message }}</div>
+                    @enderror
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="so_tai_khoan">Số tài khoản</label>
-                    <input
-                        id="so_tai_khoan"
-                        type="text"
-                        name="so_tai_khoan"
-                        class="form-control"
-                        value="{{ old('so_tai_khoan', $user->hoSoQuanLy?->so_tai_khoan) }}"
-                        placeholder="Nhập số tài khoản"
-                    >
-                    @error('so_tai_khoan')
+                    <label class="form-label" for="admin_loai_hinh_lam_viec">Loại hình làm việc</label>
+                    <select id="admin_loai_hinh_lam_viec" name="loai_hinh_lam_viec" class="form-control">
+                        <option value="toàn thời gian" {{ old('loai_hinh_lam_viec', $user->hoSoQuanLy?->loai_hinh_lam_viec) === 'toàn thời gian' ? 'selected' : '' }}>Toàn thời gian</option>
+                        <option value="bán thời gian" {{ old('loai_hinh_lam_viec', $user->hoSoQuanLy?->loai_hinh_lam_viec) === 'bán thời gian' ? 'selected' : '' }}>Bán thời gian</option>
+                    </select>
+                    @error('loai_hinh_lam_viec')
                         <div class="form-error">{{ $message }}</div>
                     @enderror
                 </div>

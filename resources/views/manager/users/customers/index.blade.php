@@ -1,4 +1,4 @@
-@extends('layouts.manager')
+@extends('manager.layout.app')
 
 @section('title', 'Quản lý người dùng — Khách hàng')
 @section('breadcrumb', 'Nhân sự / <strong>Khách hàng</strong>')
@@ -46,6 +46,13 @@
             </thead>
             <tbody>
                 @forelse($customers ?? [] as $i => $user)
+                @php
+                    $statusLabel = match ($user->trang_thai) {
+                        'hoạt động' => 'Hoạt động',
+                        'ngưng hoạt động' => 'Chua xac minh email',
+                        default => 'Bị khóa',
+                    };
+                @endphp
                 <tr>
                     <td>{{ ($customers->firstItem() ?? 1) + $i }}</td>
                     <td>
@@ -59,7 +66,7 @@
                     <td class="text-12 text-muted">{{ $user->created_at->format('d/m/Y') }}</td>
                     <td>
                         <span class="badge {{ $user->trang_thai === 'hoạt động' ? 'badge-active' : 'badge-inactive' }}">
-                            {{ $user->trang_thai === 'hoạt động' ? 'Hoạt động' : 'Bị khóa' }}
+                            {{ $statusLabel }}
                         </span>
                     </td>
                     <td>

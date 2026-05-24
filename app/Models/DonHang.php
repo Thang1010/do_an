@@ -2,16 +2,20 @@
 
 namespace App\Models;
 
+use App\Enums\OrderStatus;
+use App\Enums\OrderType;
+use App\Enums\UserRole;
+use App\Enums\UserStatus;
 use App\Notifications\QrOrderPendingNotification;
+use App\Notifications\CustomerOrderPlacedNotification;
+use App\Services\TableStatusService;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class DonHang extends Model
 {
-    use HasFactory;
 
     protected $table = 'don_hang';
 
@@ -38,12 +42,12 @@ class DonHang extends Model
     {
         static::saving(function (DonHang $order): void {
             // Don online khong gan ban; don tai quan / QR bat buoc co ban.
-            if ($order->loai_don === 'đặt online') {
+            if ($order->loai_don === OrderType::DAT_ONLINE->value) {
                 $order->ban_an_id = null;
                 return;
             }
 
-            if (in_array($order->loai_don, ['mua tại quán', 'gọi tại bàn bằng qr'], true) && ! $order->ban_an_id) {
+            if (in_array($order->loai_don, [OrderType::MUA_TAI_QUAN->value, OrderType::GOI_TAI_BAN_QR->value], true) && !$order->ban_an_id) {
                 throw ValidationException::withMessages([
                     'ban_an_id' => 'Đơn tại quán hoặc gọi tại bàn bằng QR phải gắn với một bàn ăn.',
                 ]);
@@ -51,26 +55,37 @@ class DonHang extends Model
         });
 
         static::created(function (DonHang $order): void {
-            if (
-                $order->loai_don !== 'gọi tại bàn bằng qr'
-                || !in_array($order->trang_thai_don, ['chờ xác nhận', 'cho_xac_nhan'], true)
-                || !Schema::hasTable('notifications')
-            ) {
+            if ($order->ban_an_id && in_array($order->trang_thai_don, [OrderStatus::CHO_XAC_NHAN->value, 'cho_xac_nhan'], true)) {
+                $order->banAn()->update(['trang_thai' => \App\Enums\TableStatus::DANG_CHO_DUYET->value]);
+            }
+
+            if (!Schema::hasTable('notifications')) {
                 return;
             }
 
-            try {
-                NguoiDung::query()
-                    ->whereIn('vai_tro', ['quản lý', 'nhân viên'])
-                    ->where('trang_thai', 'hoạt động')
-                    ->get()
-                    ->each
-                    ->notify(new QrOrderPendingNotification($order));
-            } catch (\Throwable $e) {
-                Log::warning('Khong the gui thong bao don QR moi.', [
-                    'order_id' => $order->id,
-                    'error' => $e->getMessage(),
-                ]);
+            if (in_array($order->trang_thai_don, [OrderStatus::CHO_XAC_NHAN->value, 'cho_xac_nhan'], true)) {
+                try {
+                    NguoiDung::query()
+                        ->whereIn('vai_tro', ['nhân viên', 'quản lý', 'chủ cửa hàng'])
+                        ->where('trang_thai', UserStatus::HOAT_DONG->value)
+                        ->get()
+                        ->each(function ($user) use ($order) {
+                            if ($order->loai_don === OrderType::GOI_TAI_BAN_QR->value) {
+                                $user->notify(new QrOrderPendingNotification($order));
+                            } else {
+                                $user->notify(new CustomerOrderPlacedNotification($order));
+                            }
+                        });
+                } catch (\Throwable $e) {
+                    Log::warning('Khong the gui thong bao don moi.', [
+                        'order_id' => $order->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            if ($order->ban_an_id) {
+                TableStatusService::refreshForTable($order->ban_an_id);
             }
         });
     }
@@ -103,11 +118,6 @@ class DonHang extends Model
     public function thanhToan()
     {
         return $this->hasMany(ThanhToan::class, 'don_hang_id');
-    }
-
-    public function lichSuDiemThuong()
-    {
-        return $this->hasMany(LichSuDiemThuong::class, 'don_hang_id');
     }
 
     public function danhGiaSanPham()

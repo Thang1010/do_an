@@ -153,7 +153,7 @@
     font-size: 16px;
 }
 
-.input-group .form-control:focus ~ .input-icon {
+.input-group .form-control:focus~.input-icon {
     color: var(--primary-color);
 }
 
@@ -385,18 +385,18 @@
     .auth-body {
         padding: 20px;
     }
-    
+
     .auth-header,
     .auth-body,
     .auth-footer {
         padding-left: 25px;
         padding-right: 25px;
     }
-    
+
     .auth-title {
         font-size: 24px;
     }
-    
+
     .btn {
         padding: 12px 25px;
     }

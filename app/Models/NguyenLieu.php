@@ -3,20 +3,27 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class NguyenLieu extends Model
 {
-    use HasFactory;
 
     protected $table = 'nguyen_lieu';
+
+    public $timestamps = false;
 
     protected $fillable = [
         'ten_nguyen_lieu',
         'don_vi_tinh',
-        'so_luong_ton',
-        'muc_canh_bao',
+        'muc_dich_su_dung',
+        'created_at',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'created_at' => 'datetime',
+        ];
+    }
 
     public function lichSuKho()
     {

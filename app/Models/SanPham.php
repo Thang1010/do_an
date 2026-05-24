@@ -3,12 +3,10 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Str;
 
 class SanPham extends Model
 {
-    use HasFactory;
 
     protected $table = 'san_pham';
 
@@ -90,5 +88,11 @@ class SanPham extends Model
         }
 
         return asset('images/ca_phe_nau_da.jpg');
+    }
+
+    public function nguoiDungYeuThich()
+    {
+        return $this->belongsToMany(NguoiDung::class, 'san_pham_yeu_thich', 'san_pham_id', 'nguoi_dung_id')
+                    ->withTimestamps();
     }
 }

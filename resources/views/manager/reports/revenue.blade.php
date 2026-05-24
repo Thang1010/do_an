@@ -1,11 +1,11 @@
-@extends('layouts.manager')
+@extends('manager.layout.app')
 
 @section('title', 'Thống kê — Doanh thu')
 @section('breadcrumb', 'Báo cáo / <strong>Thống kê doanh thu</strong>')
 
 @section('content')
 
-@php $period = request('period', 'week'); @endphp
+@php $period = request('period', 'today'); @endphp
 
 <div class="page-header">
     <div>
@@ -29,7 +29,7 @@
 </div>
 
 {{-- Top stat cards --}}
-<div class="grid-4 mb-24">
+<div class="grid-3 mb-24">
     <div class="stat-card">
         <div class="stat-label">Tổng doanh thu</div>
         <div class="stat-value">{{ number_format($tongDoanhThu ?? 0, 0, ',', '.') }}đ</div>
@@ -54,14 +54,6 @@
         </div>
         <div class="stat-bar"><div class="stat-bar-fill" style="width:55%"></div></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-label">Điểm thưởng đã cấp</div>
-        <div class="stat-value">{{ number_format($diemDaCap ?? 0, 0, ',', '.') }}</div>
-        <div class="stat-change text-muted">
-            Đã dùng: {{ number_format($diemDaDung ?? 0, 0, ',', '.') }} điểm
-        </div>
-        <div class="stat-bar"><div class="stat-bar-fill" style="width:44%"></div></div>
-    </div>
 </div>
 
 {{-- Report Tabs --}}
@@ -73,7 +65,6 @@
         <button class="tab-btn" onclick="switchTab('tab-hours', this)">Khung giờ đông khách</button>
         <button class="tab-btn" onclick="switchTab('tab-staff', this)">Hiệu suất nhân viên</button>
         <button class="tab-btn" onclick="switchTab('tab-inventory', this)">Tồn kho</button>
-        <button class="tab-btn" onclick="switchTab('tab-points', this)">Điểm thưởng</button>
     </div>
 
     {{-- Tab: Doanh thu --}}
@@ -87,12 +78,10 @@
                     @if($revenueByDay->count() > 0)
                         @foreach($revenueByDay as $day)
                         <div class="chart-bar-item-sm">
-                            <div style="
-                                width:100%;height:{{ round($day->tong / $revMax * 140) }}px;
-                                background:{{ $day->tong == $revMax ? '#30261C' : '#E2D9C8' }};
-                                border-radius:4px 4px 0 0;
-                                transition:height 0.4s;
-                            " title="{{ number_format($day->tong, 0, ',', '.') }}đ"></div>
+                            <div class="chart-bar-fill"
+                                 data-bar-height="{{ round($day->tong / $revMax * 140) }}"
+                                 data-bar-color="{{ $day->tong == $revMax ? '#30261C' : '#E2D9C8' }}"
+                                 title="{{ number_format($day->tong, 0, ',', '.') }}đ"></div>
                             <span class="chart-date-label">{{ \Carbon\Carbon::parse($day->ngay)->format('d/m') }}</span>
                         </div>
                         @endforeach
@@ -181,7 +170,7 @@
                         <td><strong>{{ number_format($p->tong_doanh_thu, 0, ',', '.') }}đ</strong></td>
                         <td>
                             <div class="progress-bar w-160">
-                                <div class="progress-fill" style="width:{{ $percent }}%;"></div>
+                                <div class="progress-fill" data-progress-width="{{ $percent }}"></div>
                             </div>
                         </td>
                     </tr>
@@ -210,11 +199,10 @@
                 $color = $ratio >= 0.7 ? '#30261C' : ($ratio >= 0.4 ? '#7a6555' : '#E2D9C8');
             @endphp
             <div class="chart-bar-item-sm">
-                <div style="
-                    width:100%;height:{{ $height }}px;
-                    background:{{ $color }};
-                    border-radius:4px 4px 0 0;
-                " title="{{ $count }} đơn"></div>
+                <div class="chart-bar-fill"
+                     data-bar-height="{{ $height }}"
+                     data-bar-color="{{ $color }}"
+                     title="{{ $count }} đơn"></div>
                 <span class="chart-hour-label">{{ $h }}h</span>
             </div>
             @endforeach
@@ -260,22 +248,16 @@
         <div class="table-wrap">
             <table>
                 <thead><tr>
-                    <th>Nguyên liệu</th><th>Tồn kho</th>
-                    <th>Tối thiểu</th><th>Trạng thái</th>
+                    <th>Nguyên liệu</th><th>Tồn kho</th><th>Trạng thái</th>
                 </tr></thead>
                 <tbody>
                     @forelse($inventoryReport as $item)
                     <tr>
                         <td><strong>{{ $item->ten_nguyen_lieu }}</strong></td>
-                        <td class="{{ $item->so_luong_ton <= $item->muc_canh_bao ? 'low-stock' : '' }}">
-                            {{ $item->so_luong_ton }} {{ $item->don_vi_tinh }}
-                        </td>
-                        <td>{{ $item->muc_canh_bao }} {{ $item->don_vi_tinh }}</td>
+                        <td class="{{ $item->so_luong <= 0 ? 'low-stock' : '' }}">{{ $item->so_luong }} {{ $item->don_vi_tinh }}</td>
                         <td>
-                            @if($item->so_luong_ton <= 0)
+                            @if($item->so_luong <= 0)
                                 <span class="badge badge-inactive">Hết hàng</span>
-                            @elseif($item->so_luong_ton <= $item->muc_canh_bao)
-                                <span class="badge badge-pending">Sắp hết</span>
                             @else
                                 <span class="badge badge-active">Đủ hàng</span>
                             @endif
@@ -283,7 +265,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="4" class="empty-state-sm">
+                        <td colspan="3" class="empty-state-sm">
                             Chưa có dữ liệu tồn kho.
                         </td>
                     </tr>
@@ -293,31 +275,6 @@
         </div>
     </div>
 
-    {{-- Tab: Điểm thưởng --}}
-    <div class="tab-panel p-24" id="tab-points">
-        <div class="grid-3 mb-20">
-            @php $totalDiemConLai = ($totalDiemCap ?? 0) - ($totalDiemDung ?? 0); @endphp
-            <div class="info-box-lg">
-                <div class="stat-label">Tổng điểm đã cấp</div>
-                <div class="stat-value-xl">
-                    {{ number_format($totalDiemCap ?? 0, 0, ',', '.') }}
-                </div>
-            </div>
-            <div class="info-box-lg">
-                <div class="stat-label">Tổng điểm đã dùng</div>
-                <div class="stat-value-xl">
-                    {{ number_format($totalDiemDung ?? 0, 0, ',', '.') }}
-                </div>
-            </div>
-            <div class="info-box-lg">
-                <div class="stat-label">Tổng điểm còn lại</div>
-                <div class="stat-value-xl">
-                    {{ number_format($totalDiemConLai, 0, ',', '.') }}
-                </div>
-            </div>
-        </div>
-        <div class="chart-placeholder" style="height:160px;">Biểu đồ điểm thưởng theo tháng</div>
-    </div>
 </div>
 
 @endsection
@@ -339,5 +296,25 @@ function applyCustomRange() {
         window.location.href = `?period=custom&from=${from}&to=${to}`;
     }
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-bar-height]').forEach(function (el) {
+        var rawHeight = Number(el.dataset.barHeight || 0);
+        var height = Math.max(0, rawHeight);
+        var color = el.dataset.barColor || '#E2D9C8';
+
+        el.style.width = '100%';
+        el.style.height = height + 'px';
+        el.style.background = color;
+        el.style.borderRadius = '4px 4px 0 0';
+        el.style.transition = 'height 0.4s';
+    });
+
+    document.querySelectorAll('[data-progress-width]').forEach(function (el) {
+        var rawWidth = Number(el.dataset.progressWidth || 0);
+        var width = Math.max(0, Math.min(100, rawWidth));
+        el.style.width = width + '%';
+    });
+});
 </script>
 @endpush

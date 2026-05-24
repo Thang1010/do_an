@@ -3,29 +3,40 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class ChamCong extends Model
 {
-    use HasFactory;
 
     protected $table = 'cham_cong';
 
     protected $fillable = [
-        'nhan_vien_id',
-        'phan_cong_ca_id',
+        'nguoi_dung_id',
+        'ca_lam_viec_id',
         'check_in_luc',
         'check_out_luc',
         'ghi_chu',
     ];
 
-    public function nhanVien()
+    protected function casts(): array
     {
-        return $this->belongsTo(NguoiDung::class, 'nhan_vien_id');
+        return [
+            'check_in_luc' => 'datetime',
+            'check_out_luc' => 'datetime',
+        ];
     }
 
-    public function phanCongCa()
+    public function nhanVien()
     {
-        return $this->belongsTo(PhanCongCa::class, 'phan_cong_ca_id');
+        return $this->belongsTo(NguoiDung::class, 'nguoi_dung_id');
+    }
+
+    public function nguoiDung()
+    {
+        return $this->belongsTo(NguoiDung::class, 'nguoi_dung_id');
+    }
+
+    public function caLamViec()
+    {
+        return $this->belongsTo(CaLamViec::class, 'ca_lam_viec_id');
     }
 }

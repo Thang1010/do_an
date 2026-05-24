@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('bang_luong', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('nhan_vien_id')->constrained('nguoi_dung')->cascadeOnDelete();
+            $table->foreignId('nguoi_dung_id')->constrained('nguoi_dung')->cascadeOnDelete();
             $table->unsignedTinyInteger('thang');
             $table->unsignedSmallInteger('nam');
             $table->integer('tong_so_ca')->default(0);
@@ -25,7 +25,7 @@ return new class extends Migration
             $table->enum('trang_thai', ['nháp', 'đã chốt', 'đã thanh toán'])->default('nháp');
             $table->timestamps();
 
-            $table->unique(['nhan_vien_id', 'thang', 'nam']);
+            $table->unique(['nguoi_dung_id', 'thang', 'nam']);
         });
     }
 

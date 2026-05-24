@@ -1,4 +1,4 @@
-@extends('layouts.manager')
+@extends('manager.layout.app')
 
 @section('title', 'Chi tiết bàn ăn')
 @section('breadcrumb')
@@ -126,73 +126,87 @@ Kinh doanh / <a href="{{ route('manager.tables.index') }}">Quản lý bàn ăn</
             </div>
         </div>
 
-        @if($latestOrder && auth()->check() && in_array(auth()->user()->vai_tro ?? '', ['quản lý', 'nhân viên'], true))
-        <form method="POST" action="{{ route('manager.tables.payment.update', $table->id) }}" style="margin-top: 18px; border-top: 1px dashed #e6ded2; padding-top: 14px;">
-            @csrf
-            @method('PATCH')
-            <input type="hidden" name="order_id" value="{{ $latestOrder->id }}">
-            <div class="text-12 text-muted" style="margin-bottom: 10px;">
-                Cập nhật thủ công thanh toán cho đơn gần nhất #{{ $latestOrder->id }}
-            </div>
-            <div class="form-grid-2">
-                <div class="form-group">
-                    <label class="form-label">Phương thức thanh toán</label>
-                    <select name="phuong_thuc_thanh_toan" class="form-control">
-                        <option value="">Chưa chọn</option>
-                        <option value="tiền mặt" {{ ($latestOrder->phuong_thuc_thanh_toan ?? '') === 'tiền mặt' ? 'selected' : '' }}>Tiền mặt</option>
-                        <option value="chuyển khoản" {{ ($latestOrder->phuong_thuc_thanh_toan ?? '') === 'chuyển khoản' ? 'selected' : '' }}>Chuyển khoản</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Trạng thái thanh toán</label>
-                    <select name="trang_thai_thanh_toan" class="form-control" required>
-                        <option value="chưa thanh toán" {{ ($latestOrder->trang_thai_thanh_toan ?? '') === 'chưa thanh toán' ? 'selected' : '' }}>Chưa thanh toán</option>
-                        <option value="đã thanh toán" {{ ($latestOrder->trang_thai_thanh_toan ?? '') === 'đã thanh toán' ? 'selected' : '' }}>Đã thanh toán</option>
-                        <option value="thất bại" {{ ($latestOrder->trang_thai_thanh_toan ?? '') === 'thất bại' ? 'selected' : '' }}>Thất bại</option>
-                    </select>
-                </div>
-            </div>
-            <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
-                <button type="submit" class="btn btn-primary btn-sm">Lưu thanh toán</button>
-            </div>
-        </form>
-        @endif
-
+        @if($latestOrder && auth()->check() && in_array(auth()->user()->vai_tro ?? '', ['quản lý', 'nhân viên', 'chủ cửa hàng'], true))
         <div style="margin-top: 18px; border-top: 1px dashed #e6ded2; padding-top: 14px;">
-            <div class="text-12 text-muted" style="margin-bottom: 10px;">Tạo mã QR thanh toán nhanh (hiệu lực 60 giây)</div>
-            <button type="button"
-                    class="btn btn-primary btn-sm"
-                    id="generate-payment-qr-btn"
-                    data-url="{{ route('manager.tables.payment-qr', $table->id) }}">
-                Tạo mã QR thanh toán
-            </button>
-
-            <div id="payment-qr-message" class="text-12 text-muted" style="margin-top: 10px;">Nhấn nút để tạo mã QR theo đơn chưa thanh toán gần nhất.</div>
-
-            <div id="payment-qr-panel" style="display: none; margin-top: 12px;">
-                <img id="payment-qr-image" src="" alt="QR thanh toán" style="width: 220px; height: 220px; border-radius: 10px; border: 1px solid #e6ded2; background: #fff;">
-                <div class="text-12" style="margin-top: 10px;">
-                    <div><strong>Ngân hàng:</strong> <span id="payment-qr-bank">—</span></div>
-                    <div><strong>Số tài khoản:</strong> <span id="payment-qr-account">—</span></div>
-                    <div><strong>Số tiền:</strong> <span id="payment-qr-amount">0đ</span></div>
-                    <div><strong>Nội dung CK:</strong> <span id="payment-qr-content">—</span></div>
-                    <div style="margin-top: 6px;"><strong>Hết hiệu lực sau:</strong> <span id="payment-qr-countdown">60</span>s</div>
+            <div class="text-12 text-muted" style="margin-bottom: 10px;">
+                Cập nhật thanh toán cho đơn gần nhất #{{ $latestOrder->id }} (bắt buộc chọn phương thức)
+            </div>
+            <form method="POST" action="{{ route('manager.tables.payment.update', $table->id) }}" id="table-payment-method-form">
+                @csrf
+                @method('PATCH')
+                <input type="hidden" name="order_id" value="{{ $latestOrder->id }}">
+                <input type="hidden" name="trang_thai_thanh_toan" value="{{ $latestOrder->trang_thai_thanh_toan ?? 'chưa thanh toán' }}">
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Phương thức thanh toán <span>*</span></label>
+                        <select name="phuong_thuc_thanh_toan" id="table-payment-method-select" class="form-control" required>
+                            <option value="" disabled {{ empty($latestOrder->phuong_thuc_thanh_toan) ? 'selected' : '' }}>Chọn phương thức</option>
+                            <option value="tiền mặt" {{ ($latestOrder->phuong_thuc_thanh_toan ?? '') === 'tiền mặt' ? 'selected' : '' }}>Tiền mặt</option>
+                            <option value="chuyển khoản" {{ ($latestOrder->phuong_thuc_thanh_toan ?? '') === 'chuyển khoản' ? 'selected' : '' }}>Chuyển khoản</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: flex-end;">
+                        <button type="submit" class="btn btn-secondary btn-sm">Lưu phương thức</button>
+                    </div>
                 </div>
+            </form>
 
-                <form id="confirm-qr-paid-form"
-                      method="POST"
-                      action="{{ route('manager.tables.payment.update', $table->id) }}"
-                      style="margin-top: 10px;"
-                      onsubmit="return confirm('Xác nhận đã nhận tiền qua QR cho đơn này?')">
-                    @csrf
-                    @method('PATCH')
-                    <input type="hidden" name="order_id" id="confirm-qr-order-id" value="{{ $latestOrder?->id }}">
-                    <input type="hidden" name="phuong_thuc_thanh_toan" value="chuyển khoản">
-                    <input type="hidden" name="trang_thai_thanh_toan" value="đã thanh toán">
-                    <button type="submit" class="btn btn-secondary btn-sm">Xác nhận đã nhận tiền QR</button>
-                </form>
+            <div id="table-payment-actions" data-paid="{{ ($latestOrder->trang_thai_thanh_toan ?? '') === 'đã thanh toán' ? '1' : '0' }}">
+                <div id="table-payment-paid" class="text-12 text-muted" style="margin-top: 10px; display: none;">
+                    Đơn hàng đã thanh toán thành công.
+                </div>
+                <div id="table-payment-hint" class="text-12 text-muted" style="margin-top: 10px; display: none;">
+                    Vui lòng chọn phương thức thanh toán để tiếp tục.
+                </div>
+                <div id="table-cash-action" style="margin-top: 12px; display: none;">
+                    <form method="POST" action="{{ route('manager.tables.payment.update', $table->id) }}"
+                          onsubmit="return confirm('Xác nhận đã nhận tiền mặt cho đơn này?')">
+                        @csrf
+                        @method('PATCH')
+                        <input type="hidden" name="order_id" value="{{ $latestOrder->id }}">
+                        <input type="hidden" name="phuong_thuc_thanh_toan" value="tiền mặt">
+                        <input type="hidden" name="trang_thai_thanh_toan" value="đã thanh toán">
+                        <button type="submit" class="btn btn-primary btn-sm">Xác nhận đã thanh toán</button>
+                    </form>
+                </div>
+                <div id="table-transfer-action" style="margin-top: 12px; display: none;">
+                    <div class="text-12 text-muted" style="margin-bottom: 10px;">Tạo mã QR thanh toán nhanh (hiệu lực 60 giây)</div>
+                    <button type="button"
+                            class="btn btn-primary btn-sm"
+                            id="generate-payment-qr-btn"
+                            data-url="{{ route('manager.tables.payment-qr', $table->id) }}">
+                        Tạo mã QR thanh toán
+                    </button>
+
+                    <div id="payment-qr-message" class="text-12 text-muted" style="margin-top: 10px;">Nhấn nút để tạo mã QR theo đơn chưa thanh toán gần nhất.</div>
+
+                    <div id="payment-qr-panel" style="display: none; margin-top: 12px;">
+                        <img id="payment-qr-image" src="" alt="QR thanh toán" style="width: 220px; height: 220px; border-radius: 10px; border: 1px solid #e6ded2; background: #fff;">
+                        <div class="text-12" style="margin-top: 10px;">
+                            <div><strong>Ngân hàng:</strong> <span id="payment-qr-bank">—</span></div>
+                            <div><strong>Số tài khoản:</strong> <span id="payment-qr-account">—</span></div>
+                            <div><strong>Số tiền:</strong> <span id="payment-qr-amount">0đ</span></div>
+                            <div><strong>Nội dung CK:</strong> <span id="payment-qr-content">—</span></div>
+                            <div style="margin-top: 6px;"><strong>Hết hiệu lực sau:</strong> <span id="payment-qr-countdown">60</span>s</div>
+                        </div>
+
+                        <form id="confirm-qr-paid-form"
+                              method="POST"
+                              action="{{ route('manager.tables.payment.update', $table->id) }}"
+                              style="margin-top: 10px;"
+                              onsubmit="return confirm('Xác nhận đã nhận tiền qua QR cho đơn này?')">
+                            @csrf
+                            @method('PATCH')
+                            <input type="hidden" name="order_id" id="confirm-qr-order-id" value="{{ $latestOrder?->id }}">
+                            <input type="hidden" name="phuong_thuc_thanh_toan" value="chuyển khoản">
+                            <input type="hidden" name="trang_thai_thanh_toan" value="đã thanh toán">
+                            <button type="submit" class="btn btn-secondary btn-sm">Xác nhận đã nhận tiền QR</button>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
+        @endif
     </div>
 </div>
 
@@ -200,6 +214,42 @@ Kinh doanh / <a href="{{ route('manager.tables.index') }}">Quản lý bàn ăn</
 
 @push('scripts')
 <script>
+(function () {
+    const methodSelect = document.getElementById('table-payment-method-select');
+    const actions = document.getElementById('table-payment-actions');
+    if (!actions) {
+        return;
+    }
+
+    const paid = actions.dataset.paid === '1';
+    const cashAction = document.getElementById('table-cash-action');
+    const transferAction = document.getElementById('table-transfer-action');
+    const hint = document.getElementById('table-payment-hint');
+    const paidNote = document.getElementById('table-payment-paid');
+
+    function updateActions() {
+        if (paid) {
+            if (paidNote) paidNote.style.display = 'block';
+            if (cashAction) cashAction.style.display = 'none';
+            if (transferAction) transferAction.style.display = 'none';
+            if (hint) hint.style.display = 'none';
+            return;
+        }
+
+        const method = methodSelect ? methodSelect.value : '';
+        if (cashAction) cashAction.style.display = method === 'tiền mặt' ? 'block' : 'none';
+        if (transferAction) transferAction.style.display = method === 'chuyển khoản' ? 'block' : 'none';
+        if (hint) hint.style.display = method ? 'none' : 'block';
+        if (paidNote) paidNote.style.display = 'none';
+    }
+
+    updateActions();
+
+    if (methodSelect) {
+        methodSelect.addEventListener('change', updateActions);
+    }
+})();
+
 (function () {
     const btn = document.getElementById('generate-payment-qr-btn');
     if (!btn) {

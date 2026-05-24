@@ -13,14 +13,14 @@ return new class extends Migration
     {
         Schema::create('cham_cong', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('nhan_vien_id')->constrained('nguoi_dung')->cascadeOnDelete();
-            $table->foreignId('phan_cong_ca_id')->constrained('phan_cong_ca')->cascadeOnDelete();
+            $table->foreignId('nguoi_dung_id')->constrained('nguoi_dung')->cascadeOnDelete();
+            $table->foreignId('ca_lam_viec_id')->constrained('ca_lam_viec')->cascadeOnDelete();
             $table->dateTime('check_in_luc')->nullable();
             $table->dateTime('check_out_luc')->nullable();
             $table->text('ghi_chu')->nullable();
             $table->timestamps();
 
-            $table->index(['nhan_vien_id', 'phan_cong_ca_id']);
+            $table->index(['nguoi_dung_id', 'ca_lam_viec_id']);
         });
     }
 

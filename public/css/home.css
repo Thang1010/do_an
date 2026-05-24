@@ -1,13 +1,25 @@
-* { box-sizing: border-box; }
+* {
+	box-sizing: border-box;
+}
+
 body {
 	font-family: 'Outfit', sans-serif;
 	background-color: #F1F0EE;
 	color: #30261C;
 	-webkit-font-smoothing: antialiased;
 }
-.font-playfair { font-family: 'Playfair Display', serif; }
-.font-poppins { font-family: 'Poppins', sans-serif; }
-.font-outfit { font-family: 'Outfit', sans-serif; }
+
+.font-playfair {
+	font-family: 'Playfair Display', serif;
+}
+
+.font-poppins {
+	font-family: 'Poppins', sans-serif;
+}
+
+.font-outfit {
+	font-family: 'Outfit', sans-serif;
+}
 
 /* Product card title */
 .product-name {
@@ -17,6 +29,7 @@ body {
 	line-height: 1.26;
 	color: #302617;
 }
+
 .product-desc {
 	font-family: 'Outfit', sans-serif;
 	font-weight: 400;
@@ -24,6 +37,7 @@ body {
 	line-height: 28px;
 	color: #29001A;
 }
+
 .product-price {
 	font-family: 'Poppins', sans-serif;
 	font-weight: 600;
@@ -31,6 +45,7 @@ body {
 	line-height: 30px;
 	color: #29001A;
 }
+
 .product-btn {
 	font-family: 'Poppins', sans-serif;
 	font-weight: 500;
@@ -41,7 +56,10 @@ body {
 	padding: 10px 26px;
 	transition: background 0.2s;
 }
-.product-btn:hover { background: #000; }
+
+.product-btn:hover {
+	background: #000;
+}
 
 /* Product card */
 .product-card {
@@ -54,10 +72,12 @@ body {
 	gap: 16px;
 	transition: box-shadow 0.2s, transform 0.2s;
 }
+
 .product-card:hover {
-	box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10);
 	transform: translateY(-2px);
 }
+
 .product-card img.card-img {
 	width: 100%;
 	aspect-ratio: 334/364;
@@ -75,6 +95,7 @@ body {
 	color: white;
 	line-height: 1;
 }
+
 .hero-title-main {
 	font-family: 'Playfair Display', serif;
 	font-weight: 700;
@@ -82,11 +103,21 @@ body {
 	line-height: 82px;
 	color: white;
 }
+
 @media (max-width: 768px) {
-	.hero-title-main { line-height: 1.3; }
-	.product-desc { font-size: 16px; }
-	.cat-label { font-size: 14px; }
+	.hero-title-main {
+		line-height: 1.3;
+	}
+
+	.product-desc {
+		font-size: 16px;
+	}
+
+	.cat-label {
+		font-size: 14px;
+	}
 }
+
 .hero-desc {
 	font-family: 'Outfit', sans-serif;
 	font-weight: 400;
@@ -123,6 +154,7 @@ body {
 	font-weight: 500;
 	font-size: 18px;
 }
+
 .nav-link {
 	color: white;
 	font-family: 'Outfit', sans-serif;
@@ -130,7 +162,10 @@ body {
 	font-size: 18px;
 	transition: color 0.2s;
 }
-.nav-link:hover { color: #F0EADC; }
+
+.nav-link:hover {
+	color: #F0EADC;
+}
 
 /* Discover banner */
 .discover-title {
@@ -148,6 +183,7 @@ body {
 	font-size: 28px;
 	color: #30261C;
 }
+
 .testimonial-title {
 	font-family: 'Playfair Display', serif;
 	font-weight: 700;
@@ -185,28 +221,39 @@ body {
 	z-index: 10;
 	width: 56px;
 	height: 56px;
-	background: rgba(226,217,200,0.85);
+	background: rgba(226, 217, 200, 0.85);
 	border: 1.5px solid #E2D9C8;
 	border-radius: 50%;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 	transition: background 0.2s, transform 0.2s;
 }
+
 .arrow-btn:hover {
 	background: #E2D9C8;
 	transform: translateY(-50%) scale(1.08);
 }
 
 /* Dot indicator (pagination area) - below testimonials */
-.dot-row { display: flex; gap: 6px; justify-content: center; }
+.dot-row {
+	display: flex;
+	gap: 6px;
+	justify-content: center;
+}
+
 .dot {
-	width: 8px; height: 8px; border-radius: 50%;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
 	background: #C4B9A8;
 	transition: background 0.2s;
 }
-.dot.active { background: #30261C; }
+
+.dot.active {
+	background: #30261C;
+}
 
 /* Mobile menu */
 #mobile-menu {
@@ -220,7 +267,10 @@ body {
 	z-index: 50;
 	padding: 24px;
 }
-#mobile-menu.open { display: block; }
+
+#mobile-menu.open {
+	display: block;
+}
 
 /* Chatbot bubble */
 #chatbot-btn {
@@ -236,10 +286,11 @@ body {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
 	cursor: pointer;
 	transition: background 0.2s, transform 0.2s;
 }
+
 #chatbot-btn:hover {
 	background: #000;
 	transform: scale(1.08);
@@ -259,10 +310,11 @@ body {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
 	cursor: pointer;
 	transition: background 0.2s, transform 0.2s;
 }
+
 #qr-btn:hover {
 	background: #6b3d3d;
 	transform: scale(1.08);

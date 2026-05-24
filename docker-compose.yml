@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cafetea-app:latest
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: ${APP_URL:-http://localhost}
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-cafetea}
+      DB_USERNAME: ${DB_USERNAME:-cafetea}
+      DB_PASSWORD: ${DB_PASSWORD:-cafetea}
+      CACHE_DRIVER: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "8000:80"  # Cloudflare Tunnel sẽ trỏ vào port 8000 này của VPS
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - app_storage:/var/www/laravel/storage
+      - app_cache:/var/www/laravel/bootstrap/cache
+    command: >
+      sh -c "mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views bootstrap/cache
+      && chown -R www-data:www-data storage bootstrap/cache
+      && chmod -R 775 storage bootstrap/cache
+      && php artisan config:cache
+      && php artisan route:cache
+      && php artisan view:cache
+      && apache2-foreground"
+    restart: always
+
+  db:
+    image: mysql:5.7 
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-cafetea}
+      MYSQL_USER: ${DB_USERNAME:-cafetea}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-cafetea}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+    volumes:
+      - db_data:/var/lib/mysql
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    restart: always
+
+  # TÍCH HỢP LUÔN CLOUDFLARED VÀO ĐÂY ĐỂ TỰ ĐỘNG KHỞI CHẠY
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: always
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN} # Lấy token từ file .env
+    command: tunnel --no-autoupdate run
+    depends_on:
+      - app
+
+volumes:
+  app_storage:
+  app_cache:
+  db_data:
+  redis_data:

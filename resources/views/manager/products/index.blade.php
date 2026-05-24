@@ -1,4 +1,4 @@
-@extends('layouts.manager')
+@extends('manager.layout.app')
 
 @section('title', 'Quản lý sản phẩm')
 @section('breadcrumb', 'Kinh doanh / <strong>Quản lý sản phẩm</strong>')
@@ -11,7 +11,7 @@
         <p class="page-subtitle">Danh sách tất cả sản phẩm trong menu</p>
     </div>
     <div class="page-actions">
-        <a href="{{ route('manager.categories.index') }}" class="btn btn-secondary">Thêm danh mục</a>
+        <a href="{{ route('manager.products.recipes.excel') }}" class="btn btn-secondary">Xuất công thức (Excel)</a>
         <a href="{{ route('manager.products.create') }}" class="btn btn-primary">Thêm sản phẩm</a>
     </div>
 </div>

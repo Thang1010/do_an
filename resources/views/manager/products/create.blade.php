@@ -1,4 +1,4 @@
-@extends('layouts.manager')
+@extends('manager.layout.app')
 
 @section('title', isset($product) ? 'Sửa sản phẩm' : 'Thêm sản phẩm')
 @section('breadcrumb', 'Sản phẩm / <strong>' . (isset($product) ? 'Chỉnh sửa' : 'Thêm mới') . '</strong>')
@@ -189,6 +189,79 @@
                     <div class="form-hint mt-8">Hệ số giá = 1 nghĩa là giá gốc. 1.5 = 150% giá gốc.</div>
                 </div>
             </div>
+
+            {{-- Recipes --}}
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Công thức nguyên liệu</span>
+                </div>
+                <div class="card-body">
+                    @php
+                        $recipes = old('recipes');
+                        if ($recipes === null) {
+                            if (isset($product) && $product->congThucSanPham->isNotEmpty()) {
+                                $recipes = $product->congThucSanPham->map(function ($recipe) {
+                                    return [
+                                        'nguyen_lieu_id' => $recipe->nguyen_lieu_id,
+                                        'so_luong_can' => $recipe->so_luong_can,
+                                    ];
+                                })->values()->all();
+                            } else {
+                                $recipes = [[
+                                    'nguyen_lieu_id' => '',
+                                    'so_luong_can' => '',
+                                ]];
+                            }
+                        }
+                    @endphp
+
+                    <div class="table-wrap">
+                        <table id="recipe-table">
+                            <thead>
+                                <tr>
+                                    <th>Nguyên liệu</th>
+                                    <th>Đơn vị</th>
+                                    <th>Số lượng tiêu hao</th>
+                                    <th class="col-action">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($recipes as $rIndex => $recipe)
+                                <tr>
+                                    <td>
+                                        <select name="recipes[{{ $rIndex }}][nguyen_lieu_id]" class="form-control recipe-ingredient" onchange="syncRecipeUnit(this)">
+                                            <option value="">-- Chọn nguyên liệu --</option>
+                                            @foreach(($nguyenLieus ?? []) as $nguyenLieu)
+                                                <option
+                                                    value="{{ $nguyenLieu->id }}"
+                                                    data-unit="{{ $nguyenLieu->don_vi_tinh }}"
+                                                    {{ (string)($recipe['nguyen_lieu_id'] ?? '') === (string)$nguyenLieu->id ? 'selected' : '' }}
+                                                >
+                                                    {{ $nguyenLieu->ten_nguyen_lieu }} ({{ $nguyenLieu->don_vi_tinh }})
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        @error("recipes.$rIndex.nguyen_lieu_id")<div class="form-error">{{ $message }}</div>@enderror
+                                    </td>
+                                    <td>
+                                        <span class="recipe-unit">{{ $recipe['nguyen_lieu_id'] ? optional(($nguyenLieus ?? collect())->firstWhere('id', (int) $recipe['nguyen_lieu_id']))->don_vi_tinh : '' }}</span>
+                                    </td>
+                                    <td>
+                                        <input type="number" step="0.001" min="0" name="recipes[{{ $rIndex }}][so_luong_can]" class="form-control" value="{{ $recipe['so_luong_can'] ?? '' }}" placeholder="0.00">
+                                        @error("recipes.$rIndex.so_luong_can")<div class="form-error">{{ $message }}</div>@enderror
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-danger btn-sm" onclick="removeRecipeRow(this)">Xóa</button>
+                                    </td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="addRecipeRow()">+ Thêm nguyên liệu</button>
+                    <div class="form-hint mt-8">Công thức này sẽ dùng để trừ kho khi đơn hàng được xác nhận.</div>
+                </div>
+            </div>
         </div>
 
         {{-- Right: Image & Options --}}
@@ -234,6 +307,7 @@
 @push('scripts')
 <script>
 let sizeIndex = {{ isset($sizes) ? count($sizes) : 1 }};
+let recipeIndex = {{ isset($recipes) ? count($recipes) : 1 }};
 
 function addSizeRow() {
     const container = document.getElementById('sizes-container');
@@ -305,5 +379,64 @@ function previewImage(input) {
         reader.readAsDataURL(input.files[0]);
     }
 }
+
+function syncRecipeUnit(selectEl) {
+    const row = selectEl.closest('tr');
+    const unitCell = row ? row.querySelector('.recipe-unit') : null;
+    const selected = selectEl.options[selectEl.selectedIndex];
+
+    if (unitCell) {
+        unitCell.textContent = selected ? (selected.getAttribute('data-unit') || '') : '';
+    }
+}
+
+function addRecipeRow() {
+    const tbody = document.querySelector('#recipe-table tbody');
+    if (!tbody) {
+        return;
+    }
+
+    const options = `{!! collect($nguyenLieus ?? [])->map(function($nl){
+        $label = e($nl->ten_nguyen_lieu . ' (' . $nl->don_vi_tinh . ')');
+        return '<option value="' . $nl->id . '" data-unit="' . $nl->don_vi_tinh . '">' . $label . '</option>';
+    })->implode('') !!}`;
+
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td>
+            <select name="recipes[${recipeIndex}][nguyen_lieu_id]" class="form-control recipe-ingredient" onchange="syncRecipeUnit(this)">
+                <option value="">-- Chọn nguyên liệu --</option>
+                ${options}
+            </select>
+        </td>
+        <td><span class="recipe-unit"></span></td>
+        <td>
+            <input type="number" step="0.001" min="0" name="recipes[${recipeIndex}][so_luong_can]" class="form-control" placeholder="0.00">
+        </td>
+        <td>
+            <button type="button" class="btn btn-danger btn-sm" onclick="removeRecipeRow(this)">Xóa</button>
+        </td>
+    `;
+
+    tbody.appendChild(row);
+    recipeIndex++;
+}
+
+function removeRecipeRow(button) {
+    const tbody = document.querySelector('#recipe-table tbody');
+    if (!tbody) {
+        return;
+    }
+
+    const rows = tbody.querySelectorAll('tr');
+    if (rows.length <= 1) {
+        alert('Cần giữ lại ít nhất một nguyên liệu trong công thức.');
+        return;
+    }
+
+    button.closest('tr').remove();
+}
+
+document.querySelectorAll('.recipe-ingredient').forEach(syncRecipeUnit);
 </script>
 @endpush

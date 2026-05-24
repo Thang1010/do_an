@@ -776,16 +776,16 @@ ul {
     .nav-menu {
         display: none;
     }
-    
+
     .mobile-menu-toggle {
         display: flex;
     }
-    
+
     .about-grid,
     .footer-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .hero-title {
         font-size: 36px;
     }
@@ -795,19 +795,19 @@ ul {
     .section-title {
         font-size: 28px;
     }
-    
+
     .hero {
         height: 400px;
     }
-    
+
     .hero-title {
         font-size: 28px;
     }
-    
+
     .hero-subtitle {
         font-size: 16px;
     }
-    
+
     .footer-bottom-content {
         flex-direction: column;
         gap: 15px;

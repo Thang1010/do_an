@@ -3,22 +3,44 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class CaLamViec extends Model
 {
-    use HasFactory;
 
     protected $table = 'ca_lam_viec';
 
     protected $fillable = [
+        'nguoi_dung_id',
         'ten_ca',
+        'ngay_lam',
         'gio_bat_dau',
         'gio_ket_thuc',
     ];
 
-    public function phanCongCa()
+    protected function casts(): array
     {
-        return $this->hasMany(PhanCongCa::class, 'ca_lam_viec_id');
+        return [
+            'ngay_lam' => 'date',
+        ];
+    }
+
+    public function nguoiDung()
+    {
+        return $this->belongsTo(NguoiDung::class, 'nguoi_dung_id');
+    }
+
+    public function chamCong()
+    {
+        return $this->hasMany(ChamCong::class, 'ca_lam_viec_id');
+    }
+
+    public function chiTieu()
+    {
+        return $this->hasMany(ChiTieu::class, 'ca_lam_viec_id');
+    }
+
+    public function chotCa()
+    {
+        return $this->hasOne(ChotCa::class, 'ca_lam_viec_id');
     }
 }

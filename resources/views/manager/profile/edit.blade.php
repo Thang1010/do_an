@@ -1,4 +1,4 @@
-@extends('layouts.manager')
+@extends('manager.layout.app')
 
 @section('title', 'Hồ sơ cá nhân')
 @section('breadcrumb', 'Tổng quan / <strong>Hồ sơ cá nhân</strong>')
@@ -6,8 +6,10 @@
 @section('content')
 @php
     $managerProfile = $user->hoSoQuanLy;
+    $storeProfile = $user->cuaHang;
     $staffProfile = $user->hoSoNhanVien;
     $customerProfile = $user->hoSoKhachHang;
+    $isStoreOwner = $user->vai_tro === 'chủ cửa hàng';
 @endphp
 
 <div class="page-header">
@@ -47,33 +49,50 @@
         </div>
     </div>
 
-    @if($user->vai_tro === 'quản lý')
+    @if($user->vai_tro === 'quản lý' || $isStoreOwner)
     <div class="card mb-20">
         <div class="card-header">
-            <span class="card-title">Thông tin quản lý</span>
+            <span class="card-title">{{ $isStoreOwner ? 'Thông tin chủ cửa hàng' : 'Thông tin quản lý' }}</span>
         </div>
         <div class="card-body">
             <div class="form-grid-2">
+                @if($user->vai_tro === 'quản lý')
+                <div class="form-group">
+                    <label class="form-label">Chức vụ quản lý</label>
+                    <select name="chuc_vu_id" class="form-control">
+                        <option value="">-- Chọn chức vụ --</option>
+                        @foreach($positions ?? [] as $position)
+                            <option value="{{ $position->id }}" {{ (string) old('chuc_vu_id', $managerProfile?->chuc_vu_id) === (string) $position->id ? 'selected' : '' }}>
+                                {{ $position->ten_chuc_vu }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
                 <div class="form-group">
                     <label class="form-label">Ngày vào làm</label>
                     <input type="date" name="ngay_vao_lam" class="form-control"
                            value="{{ old('ngay_vao_lam', optional($managerProfile?->ngay_vao_lam)->format('Y-m-d')) }}">
                 </div>
+                @endif
+
+                @if($isStoreOwner)
                 <div class="form-group">
                     <label class="form-label">Số tài khoản</label>
-                    <input type="text" name="so_tai_khoan" class="form-control" value="{{ old('so_tai_khoan', $managerProfile?->so_tai_khoan) }}">
+                    <input type="text" name="so_tai_khoan" class="form-control" value="{{ old('so_tai_khoan', $storeProfile?->so_tai_khoan) }}">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Ngân hàng</label>
                     <select name="ngan_hang" class="form-control">
                         <option value="">Chọn ngân hàng</option>
                         @foreach(($managerBankOptions ?? []) as $bankCode => $bankLabel)
-                            <option value="{{ $bankCode }}" {{ old('ngan_hang', $managerProfile?->ngan_hang) === $bankCode ? 'selected' : '' }}>
+                            <option value="{{ $bankCode }}" {{ old('ngan_hang', $storeProfile?->ngan_hang) === $bankCode ? 'selected' : '' }}>
                                 {{ $bankLabel }} ({{ $bankCode }})
                             </option>
                         @endforeach
                     </select>
                 </div>
+                @endif
             </div>
         </div>
     </div>
@@ -92,7 +111,14 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Chức vụ</label>
-                    <input type="text" name="chuc_vu" class="form-control" value="{{ old('chuc_vu', $staffProfile?->chuc_vu) }}">
+                    <select name="chuc_vu_id" class="form-control">
+                        <option value="">-- Chọn chức vụ --</option>
+                        @foreach($positions ?? [] as $position)
+                            <option value="{{ $position->id }}" {{ (string) old('chuc_vu_id', $staffProfile?->chuc_vu_id) === (string) $position->id ? 'selected' : '' }}>
+                                {{ $position->ten_chuc_vu }}
+                            </option>
+                        @endforeach
+                    </select>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Lương cơ bản</label>

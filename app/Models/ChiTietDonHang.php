@@ -3,11 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class ChiTietDonHang extends Model
 {
-    use HasFactory;
 
     protected $table = 'chi_tiet_don_hang';
 

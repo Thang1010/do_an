@@ -2,137 +2,37 @@
 
 namespace App\Http\Controllers\Manager;
 
+use App\Enums\PaymentStatus;
+use App\Enums\TableStatus;
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\BanAn;
+use App\Models\CuaHang;
 use App\Models\DonHang;
-use App\Models\HoSoQuanLy;
 use App\Models\ThanhToan;
+use App\Services\PaymentService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Traits\NormalizesPayment;
+use App\Traits\ResolvesVietQrBank;
 
 class TableController extends Controller
 {
-    private function normalizePaymentStatus(?string $status): ?string
-    {
-        if ($status === null || $status === '') {
-            return null;
-        }
+    use NormalizesPayment, ResolvesVietQrBank;
 
-        return match ($status) {
-            'chua_thanh_toan', 'chưa thanh toán' => 'chưa thanh toán',
-            'da_thanh_toan', 'đã thanh toán' => 'đã thanh toán',
-            'that_bai', 'thất bại', 'thanh toán thất bại' => 'thất bại',
-            default => null,
-        };
-    }
-
-    private function normalizePaymentMethod(?string $method): ?string
-    {
-        if ($method === null || $method === '') {
-            return null;
-        }
-
-        return match ($method) {
-            'tien_mat', 'tiền mặt' => 'tiền mặt',
-            'chuyen_khoan', 'chuyển khoản' => 'chuyển khoản',
-            default => null,
-        };
-    }
-
-    private function toPaymentRecordStatus(string $orderPaymentStatus): string
-    {
-        return match ($orderPaymentStatus) {
-            'đã thanh toán' => 'đã thanh toán',
-            'thất bại' => 'thanh toán thất bại',
-            default => 'chờ thanh toán',
-        };
-    }
-
-    private function syncThanhToanRecord(DonHang $order, ?string $paymentMethod, string $paymentStatus): void
-    {
-        $record = ThanhToan::query()
-            ->where('don_hang_id', $order->id)
-            ->latest('id')
-            ->first();
-
-        $method = $paymentMethod ?: ($record->phuong_thuc ?? $order->phuong_thuc_thanh_toan ?? 'chuyển khoản');
-        if (! in_array($method, ['tiền mặt', 'chuyển khoản'], true)) {
-            $method = 'chuyển khoản';
-        }
-
-        $payload = [
-            'phuong_thuc' => $method,
-            'so_tien' => (float) ($order->tong_tien ?? 0),
-            'trang_thai' => $this->toPaymentRecordStatus($paymentStatus),
-            'thanh_toan_luc' => $paymentStatus === 'đã thanh toán' ? now() : null,
-            'noi_dung_chuyen_khoan' => $method === 'chuyển khoản'
-                ? ('TT ' . ($order->ma_don_hang ?? ('DON' . $order->id)))
-                : null,
-        ];
-
-        if ($record) {
-            $record->update($payload);
-            return;
-        }
-
-        ThanhToan::create(array_merge([
-            'don_hang_id' => $order->id,
-        ], $payload));
-    }
-
-    private function resolveVietQrBankCode(?string $bankName): string
-    {
-        $raw = trim((string) $bankName);
-        if ($raw === '') {
-            return '';
-        }
-
-        $normalized = Str::of($raw)
-            ->ascii()
-            ->upper()
-            ->replaceMatches('/[^A-Z0-9]/', '')
-            ->value();
-
-        $map = [
-            'VCB' => 'VCB',
-            'VIETCOMBANK' => 'VCB',
-            'BIDV' => 'BIDV',
-            'VIETINBANK' => 'ICB',
-            'ICB' => 'ICB',
-            'AGRIBANK' => 'VBA',
-            'VBA' => 'VBA',
-            'TECHCOMBANK' => 'TCB',
-            'TCB' => 'TCB',
-            'MB' => 'MB',
-            'MBBANK' => 'MB',
-            'ACB' => 'ACB',
-            'SACOMBANK' => 'STB',
-            'STB' => 'STB',
-            'VPBANK' => 'VPB',
-            'VPB' => 'VPB',
-            'PVCOMBANK' => 'PVCB',
-            'PVCBANK' => 'PVCB',
-            'PVCB' => 'PVCB',
-            'PVC' => 'PVCB',
-            'TPBANK' => 'TPB',
-            'TPB' => 'TPB',
-        ];
-
-        return $map[$normalized] ?? $normalized;
-    }
+    public function __construct(
+        private readonly PaymentService $paymentService,
+    ) {}
+    // normalizePaymentStatus(), normalizePaymentMethod() => NormalizesPayment trait
+    // resolveVietQrBankCode() => ResolvesVietQrBank trait
 
     private function toDbTrangThai(?string $status): string
     {
-        return match ($status) {
-            'dang_phuc_vu', 'đang phục vụ' => 'đang phục vụ',
-            'da_dat', 'đã đặt' => 'đã đặt',
-            'ngung_su_dung', 'ngưng sử dụng' => 'ngưng sử dụng',
-            default => 'trống',
-        };
+        return TableStatus::normalize($status)->value;
     }
 
     public function index(Request $request)
@@ -237,91 +137,36 @@ class TableController extends Controller
             ], 422);
         }
 
-        $managerProfile = $request->user()?->hoSoQuanLy;
+        $storeId = $request->user()?->cua_hang_id;
+        $store = $this->paymentService->resolveStoreForPayment($storeId);
 
-        if (! $managerProfile || ! $managerProfile->so_tai_khoan || ! $managerProfile->ngan_hang) {
-            $managerProfile = HoSoQuanLy::query()
-                ->with('nguoiDung')
-                ->whereNotNull('so_tai_khoan')
-                ->whereNotNull('ngan_hang')
-                ->whereHas('nguoiDung', function ($q) {
-                    $q->where('vai_tro', 'quản lý')
-                        ->where('trang_thai', 'hoạt động');
-                })
-                ->latest('id')
-                ->first();
-        }
-
-        if (! $managerProfile || ! $managerProfile->so_tai_khoan || ! $managerProfile->ngan_hang) {
+        if (! $store || ! $store->chu_cua_hang_id || ! $store->so_tai_khoan || ! $store->ngan_hang) {
             return response()->json([
-                'message' => 'Chưa có hồ sơ quản lý có số tài khoản/ngân hàng để tạo QR thanh toán.',
+                'message' => 'Chưa có thông tin tài khoản thanh toán của chủ cửa hàng để tạo QR.',
             ], 422);
         }
 
-        $bankCode = $this->resolveVietQrBankCode($managerProfile->ngan_hang);
-        $accountNo = preg_replace('/\s+/', '', (string) $managerProfile->so_tai_khoan);
-        $amount = (int) round((float) ($order->tong_tien ?? 0));
+        $qrData = $this->paymentService->generateQrDataWithCache($order, $store);
 
-        if ($bankCode === '' || $accountNo === '') {
+        if (!$qrData) {
             return response()->json([
-                'message' => 'Thông tin ngân hàng hoặc số tài khoản của quản lý chưa hợp lệ.',
+                'message' => 'Thông tin ngân hàng hoặc số tài khoản chưa hợp lệ hoặc đơn hàng chưa có tổng tiền.',
             ], 422);
         }
 
-        if ($amount <= 0) {
-            return response()->json([
-                'message' => 'Đơn hàng chưa có tổng tiền hợp lệ để tạo QR.',
-            ], 422);
-        }
-
-        $transferContent = 'TT ' . ($order->ma_don_hang ?? ('DON' . $order->id));
-        $accountName = $managerProfile->nguoiDung?->ho_ten ?? 'Chu cua hang';
-        $expiresAt = now()->addSeconds(60);
-
-        $params = http_build_query([
-            'amount' => $amount,
-            'addInfo' => $transferContent,
-            'accountName' => $accountName,
-        ], '', '&', PHP_QUERY_RFC3986);
-
-        $qrUrl = "https://img.vietqr.io/image/{$bankCode}-{$accountNo}-compact2.png?{$params}";
-
-        $token = (string) Str::uuid();
-        Cache::put("table_payment_qr:{$token}", [
-            'table_id' => $table->id,
-            'order_id' => $order->id,
-            'amount' => $amount,
-            'transfer_content' => $transferContent,
-            'expires_at' => $expiresAt->toIso8601String(),
-        ], $expiresAt);
-
-        return response()->json([
-            'message' => 'Đã tạo QR thanh toán. Mã sẽ hết hiệu lực sau 60 giây.',
-            'token' => $token,
-            'order_id' => $order->id,
-            'order_code' => $order->ma_don_hang,
-            'amount' => $amount,
-            'bank_code' => $bankCode,
-            'bank_name' => $managerProfile->ngan_hang,
-            'account_no' => $accountNo,
-            'account_name' => $accountName,
-            'transfer_content' => $transferContent,
-            'qr_url' => $qrUrl,
-            'expires_at' => $expiresAt->toIso8601String(),
-            'expires_in' => 60,
-        ]);
+        return response()->json($qrData);
     }
 
     public function updateOrderPayment(Request $request, int $id)
     {
         $user = $request->user();
-        if (! $user || ! in_array($user->vai_tro, ['quản lý', 'nhân viên'], true)) {
+        if (! $user || ! in_array($user->vai_tro, UserRole::staffRoleValues(), true)) {
             abort(403, 'Bạn không có quyền cập nhật thanh toán.');
         }
 
         $request->validate([
             'order_id' => 'required|integer',
-            'phuong_thuc_thanh_toan' => 'nullable|string|max:50',
+            'phuong_thuc_thanh_toan' => 'required|string|max:50',
             'trang_thai_thanh_toan' => 'required|string|max:50',
         ]);
 
@@ -332,7 +177,7 @@ class TableController extends Controller
             return back()->with('error', 'Trạng thái thanh toán không hợp lệ.');
         }
 
-        if ($request->filled('phuong_thuc_thanh_toan') && ! $paymentMethod) {
+        if (! $paymentMethod) {
             return back()->with('error', 'Phương thức thanh toán không hợp lệ.');
         }
 
@@ -341,17 +186,21 @@ class TableController extends Controller
             ->where('ban_an_id', $table->id)
             ->firstOrFail();
 
-        DB::transaction(function () use ($order, $paymentMethod, $paymentStatus, $user): void {
+        DB::transaction(function () use ($order, $paymentMethod, $paymentStatus, $user, $table): void {
             $order->update([
                 'phuong_thuc_thanh_toan' => $paymentMethod,
                 'trang_thai_thanh_toan' => $paymentStatus,
                 'nhan_vien_id' => $user->id,
             ]);
 
-            $this->syncThanhToanRecord($order->fresh(), $paymentMethod, $paymentStatus);
+            $this->paymentService->syncThanhToanRecord($order->fresh(), $paymentMethod, $paymentStatus);
+
+            if ($paymentStatus === 'đã thanh toán') {
+                $this->paymentService->freeTableIfAllPaid($table->id);
+            }
         });
 
-        return back()->with('success', "Đã cập nhật thanh toán cho đơn #{$order->id} tại bàn {$table->so_ban}.");
+        return redirect()->route('manager.tables.index')->with('success', "Đã cập nhật thanh toán cho đơn #{$order->id} tại bàn {$table->so_ban}.");
     }
 
     public function store(Request $request)
@@ -370,7 +219,7 @@ class TableController extends Controller
             'trang_thai' => $this->toDbTrangThai($validated['trang_thai'] ?? null),
         ]);
 
-        return back()->with('success', "Đã thêm bàn {$table->so_ban}.");
+        return redirect()->route('manager.tables.index')->with('success', "Đã thêm bàn {$table->so_ban}.");
     }
 
     public function update(Request $request, int $id)
@@ -391,7 +240,7 @@ class TableController extends Controller
             'trang_thai' => $this->toDbTrangThai($validated['trang_thai'] ?? null),
         ]);
 
-        return back()->with('success', "Đã cập nhật bàn {$table->so_ban}.");
+        return redirect()->route('manager.tables.index')->with('success', "Đã cập nhật bàn {$table->so_ban}.");
     }
 
     public function destroy(int $id)
@@ -405,7 +254,7 @@ class TableController extends Controller
         try {
             $name = $table->so_ban;
             $table->delete();
-            return back()->with('success', "Đã xóa bàn {$name}.");
+            return redirect()->route('manager.tables.index')->with('success', "Đã xóa bàn {$name}.");
         } catch (QueryException) {
             return back()->with('error', 'Không thể xóa bàn do dữ liệu liên quan.');
         }

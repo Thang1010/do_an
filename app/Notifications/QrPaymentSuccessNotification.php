@@ -30,21 +30,27 @@ class QrPaymentSuccessNotification extends Notification
      */
     public function toArray(object $notifiable): array
     {
+        $tableNumber = $this->order->banAn?->so_ban;
+        $tableText = $tableNumber ? ('Bàn ' . $tableNumber) : 'Đơn';
+
         return [
             'title' => 'Thanh toán QR thành công',
             'message' => sprintf(
-                'Đơn #%d (%s) đã được thanh toán thành công qua QR.',
+                '%s #%d (%s) đã được thanh toán thành công qua QR.',
+                $tableText,
                 $this->order->id,
                 $this->order->ma_don_hang
             ),
             'order_id' => $this->order->id,
             'order_code' => $this->order->ma_don_hang,
+            'table_id' => $this->order->ban_an_id,
+            'table_number' => $tableNumber,
             'payment_id' => $this->payment->id,
             'payment_method' => $this->payment->phuong_thuc,
             'payment_status' => $this->payment->trang_thai,
             'payment_amount' => (float) ($this->payment->so_tien ?? 0),
             'paid_at' => optional($this->payment->thanh_toan_luc ?? now())->toDateTimeString(),
-                'target_url' => route('manager.orders.show', ['id' => $this->order->id]),
+            'target_url' => route('manager.orders.show', ['id' => $this->order->id]),
         ];
     }
 }

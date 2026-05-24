@@ -27,14 +27,18 @@ class QrOrderPendingNotification extends Notification
      */
     public function toArray(object $notifiable): array
     {
+        $tableNumber = $this->order->banAn?->so_ban;
+        $tableLabel = $tableNumber ? ('Bàn ' . $tableNumber) : 'Đơn';
+
         return [
             'title' => 'Đơn QR mới chờ xác nhận',
-            'message' => sprintf('Đơn #%d (%s) vừa được tạo từ QR và đang chờ xác nhận.', $this->order->id, $this->order->ma_don_hang),
+            'message' => sprintf('%s #%d (%s) vừa được tạo từ QR và đang chờ xác nhận.', $tableLabel, $this->order->id, $this->order->ma_don_hang),
             'order_id' => $this->order->id,
             'order_code' => $this->order->ma_don_hang,
             'order_type' => $this->order->loai_don,
             'status' => $this->order->trang_thai_don,
-            'target_url' => route('manager.orders.show', ['id' => $this->order->id]),
+            'table_id' => $this->order->ban_an_id,
+            'table_number' => $tableNumber,
         ];
     }
 }

@@ -3,71 +3,51 @@
 namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Manager\StoreProductRequest;
 use App\Models\SanPham;
 use App\Models\DanhMuc;
 use App\Models\HinhAnhSanPham;
+use App\Models\CongThucSanPham;
 use App\Models\KichCo;
+use App\Models\NguyenLieu;
 use App\Models\SanPhamKichCo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Validator;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ProductController extends Controller
 {
-    private function validateProductRequest(Request $request): array
+    // validateProductRequest() => Đã chuyển sang App\Http\Requests\Manager\StoreProductRequest
+
+    private function syncProductRecipes(SanPham $product, array $recipes): void
     {
-        $validator = Validator::make($request->all(), [
-            'ten_san_pham'   => 'required|string|max:200',
-            'danh_muc_id'    => 'required|exists:danh_muc,id',
-            'gia_goc'        => 'required|numeric|min:0',
-            'gia_khuyen_mai' => 'nullable|numeric|min:0',
-            'trang_thai_ban' => 'required|in:dang_ban,ngung_ban',
-            'anh_chinh'      => 'nullable|mimes:jpg,jpeg,png,gif,webp,avif,bmp,tiff,svg|max:5120',
-            'sizes'          => 'nullable|array',
-            'sizes.*.kich_co_id' => 'required',
-            'sizes.*.he_so_gia'  => 'required|numeric|min:1',
-            'sizes.*.ma_kich_co_moi'  => 'nullable|string|max:20',
-            'sizes.*.ten_kich_co_moi' => 'nullable|string|max:50',
-            'sizes.*.mo_ta_kich_co_moi' => 'nullable|string|max:500',
-        ], [
-            'ten_san_pham.required' => 'Vui lòng nhập tên sản phẩm.',
-            'danh_muc_id.required'  => 'Vui lòng chọn danh mục.',
-            'gia_goc.required'      => 'Vui lòng nhập giá sản phẩm.',
-            'sizes.*.kich_co_id.required' => 'Vui lòng chọn kích cỡ.',
-            'sizes.*.he_so_gia.required'  => 'Vui lòng nhập hệ số giá.',
-        ]);
+        $cleaned = collect($recipes)
+            ->map(function ($recipe) {
+                return [
+                    'nguyen_lieu_id' => isset($recipe['nguyen_lieu_id']) ? (int) $recipe['nguyen_lieu_id'] : 0,
+                    'so_luong_can' => isset($recipe['so_luong_can']) ? (float) $recipe['so_luong_can'] : 0,
+                ];
+            })
+            ->filter(function (array $recipe) {
+                return $recipe['nguyen_lieu_id'] > 0 && $recipe['so_luong_can'] > 0;
+            })
+            ->unique('nguyen_lieu_id')
+            ->values();
 
-        $validator->after(function ($validator) use ($request) {
-            foreach ($request->input('sizes', []) as $index => $size) {
-                $kichCoId = (string)($size['kich_co_id'] ?? '');
+        CongThucSanPham::where('san_pham_id', $product->id)->delete();
 
-                if ($kichCoId === 'khac') {
-                    $tenMoi = trim((string)($size['ten_kich_co_moi'] ?? ''));
-                    $maMoi  = trim((string)($size['ma_kich_co_moi'] ?? ''));
-
-                    if ($tenMoi === '') {
-                        $validator->errors()->add("sizes.$index.ten_kich_co_moi", 'Vui lòng nhập tên kích cỡ mới.');
-                    } elseif (KichCo::where('ten_kich_co', $tenMoi)->exists()) {
-                        $validator->errors()->add("sizes.$index.ten_kich_co_moi", 'Tên kích cỡ này đã tồn tại, vui lòng chọn trong danh sách.');
-                    }
-
-                    if ($maMoi === '') {
-                        $validator->errors()->add("sizes.$index.ma_kich_co_moi", 'Vui lòng nhập mã kích cỡ mới.');
-                    } elseif (KichCo::where('ma_kich_co', $maMoi)->exists()) {
-                        $validator->errors()->add("sizes.$index.ma_kich_co_moi", 'Mã kích cỡ này đã tồn tại.');
-                    }
-                } else {
-                    $selectedId = (int)$kichCoId;
-                    if ($selectedId <= 0 || !KichCo::whereKey($selectedId)->exists()) {
-                        $validator->errors()->add("sizes.$index.kich_co_id", 'Kích cỡ không hợp lệ.');
-                    }
-                }
-            }
-        });
-
-        return $validator->validate();
+        foreach ($cleaned as $recipe) {
+            CongThucSanPham::create([
+                'san_pham_id' => $product->id,
+                'nguyen_lieu_id' => $recipe['nguyen_lieu_id'],
+                'so_luong_can' => $recipe['so_luong_can'],
+                'created_at' => now(),
+            ]);
+        }
     }
 
     private function syncProductSizes(SanPham $product, array $sizes, float $giaGoc, ?float $giaKhuyenMai, string $trangThaiBanDb): void
@@ -155,12 +135,14 @@ class ProductController extends Controller
             ->orderBy('ten_danh_muc')
             ->get();
         $kichCos = KichCo::orderBy('ten_kich_co')->get();
-        return view('manager.products.create', compact('danhMucs', 'kichCos'));
+        $nguyenLieus = NguyenLieu::orderBy('ten_nguyen_lieu')->get();
+
+        return view('manager.products.create', compact('danhMucs', 'kichCos', 'nguyenLieus'));
     }
 
-    public function store(Request $request)
+    public function store(StoreProductRequest $request)
     {
-        $validated = $this->validateProductRequest($request);
+        $validated = $request->validated();
 
         $data = [
             'ten_san_pham' => $validated['ten_san_pham'],
@@ -188,6 +170,7 @@ class ProductController extends Controller
                 $data['gia_khuyen_mai'] === null ? null : (float) $data['gia_khuyen_mai'],
                 $data['trang_thai_ban']
             );
+            $this->syncProductRecipes($product, $validated['recipes'] ?? []);
             return $product;
         });
 
@@ -197,19 +180,21 @@ class ProductController extends Controller
 
     public function edit(int $id)
     {
-        $product  = SanPham::with(['hinhAnhSanPham', 'sanPhamKichCo.kichCo'])->findOrFail($id);
+        $product  = SanPham::with(['hinhAnhSanPham', 'sanPhamKichCo.kichCo', 'congThucSanPham.nguyenLieu'])->findOrFail($id);
         $product->trang_thai_ban = $this->toFormTrangThaiBan($product->trang_thai_ban);
         $danhMucs = DanhMuc::where('trang_thai', 'đang dùng')
             ->orderBy('ten_danh_muc')
             ->get();
         $kichCos = KichCo::orderBy('ten_kich_co')->get();
-        return view('manager.products.create', compact('product', 'danhMucs', 'kichCos'));
+        $nguyenLieus = NguyenLieu::orderBy('ten_nguyen_lieu')->get();
+
+        return view('manager.products.create', compact('product', 'danhMucs', 'kichCos', 'nguyenLieus'));
     }
 
-    public function update(Request $request, int $id)
+    public function update(StoreProductRequest $request, int $id)
     {
         $product = SanPham::findOrFail($id);
-        $validated = $this->validateProductRequest($request);
+        $validated = $request->validated();
 
         $data = [
             'ten_san_pham' => $validated['ten_san_pham'],
@@ -237,10 +222,139 @@ class ProductController extends Controller
                 $data['gia_khuyen_mai'] === null ? null : (float) $data['gia_khuyen_mai'],
                 $data['trang_thai_ban']
             );
+            $this->syncProductRecipes($product, $validated['recipes'] ?? []);
         });
 
         return redirect()->route('manager.products.index')
             ->with('success', "Sản phẩm «{$product->ten_san_pham}» đã được cập nhật.");
+    }
+
+    public function exportRecipesExcel()
+    {
+        $products = SanPham::with(['sanPhamKichCo.kichCo', 'congThucSanPham.nguyenLieu'])
+            ->orderBy('ten_san_pham')
+            ->get();
+
+        $ingredientIds = CongThucSanPham::query()
+            ->select('nguyen_lieu_id')
+            ->distinct()
+            ->pluck('nguyen_lieu_id');
+
+        $ingredients = NguyenLieu::query()
+            ->when($ingredientIds->isNotEmpty(), function ($query) use ($ingredientIds) {
+                $query->whereIn('id', $ingredientIds);
+            })
+            ->orderBy('ten_nguyen_lieu')
+            ->get();
+
+        $headers = [
+            'STT',
+            'Tên sản phẩm',
+            'Size',
+        ];
+
+        foreach ($ingredients as $ingredient) {
+            $headers[] = $ingredient->ten_nguyen_lieu . ' (' . $ingredient->don_vi_tinh . ')';
+        }
+
+        $rows = [];
+        $index = 1;
+        $mergeRanges = [];
+        $rowCursor = 0;
+
+        foreach ($products as $product) {
+            $sizes = $product->sanPhamKichCo;
+            $sizeList = $sizes->isEmpty()
+                ? collect([null])
+                : $sizes;
+
+            $recipesByIngredient = $product->congThucSanPham->keyBy('nguyen_lieu_id');
+            $firstRow = true;
+            $startRow = $rowCursor;
+
+            foreach ($sizeList as $size) {
+                $sizeLabel = 'Mặc định';
+                if ($size && $size->kichCo) {
+                    $kichCo = $size->kichCo;
+                    $baseLabel = trim((string) ($kichCo->ma_kich_co ?? ''));
+                    if ($baseLabel === '') {
+                        $baseLabel = trim((string) ($kichCo->ten_kich_co ?? ''));
+                    }
+
+                    if ($baseLabel !== '') {
+                        $moTa = trim((string) ($kichCo->mo_ta ?? ''));
+                        $sizeLabel = $moTa !== '' ? ($baseLabel . '(' . $moTa . ')') : $baseLabel;
+                    }
+                }
+
+                $row = [
+                    $firstRow ? $index : '',
+                    $firstRow ? $product->ten_san_pham : '',
+                    $sizeLabel,
+                ];
+
+                foreach ($ingredients as $ingredient) {
+                    $recipe = $recipesByIngredient->get($ingredient->id);
+                    if (! $recipe) {
+                        $row[] = '';
+                        continue;
+                    }
+
+                    $qty = (float) $recipe->so_luong_can;
+                    $qtyText = rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.');
+                    $row[] = $qtyText !== '' ? ($qtyText . ' ' . $ingredient->don_vi_tinh) : '';
+                }
+
+                $rows[] = $row;
+                $firstRow = false;
+                $rowCursor++;
+            }
+
+            $rowCount = $sizeList->count();
+            if ($rowCount > 1) {
+                $mergeRanges[] = [
+                    'start' => $startRow,
+                    'count' => $rowCount,
+                ];
+            }
+
+            $index++;
+        }
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $sheet->fromArray($headers, null, 'A1');
+        if (!empty($rows)) {
+            $sheet->fromArray($rows, null, 'A2');
+        }
+
+        foreach ($mergeRanges as $range) {
+            $startRowNumber = $range['start'] + 2;
+            $endRowNumber = $startRowNumber + $range['count'] - 1;
+            $sheet->mergeCells("A{$startRowNumber}:A{$endRowNumber}");
+            $sheet->mergeCells("B{$startRowNumber}:B{$endRowNumber}");
+        }
+
+        $highestColumnIndex = Coordinate::columnIndexFromString($sheet->getHighestColumn());
+        for ($column = 1; $column <= $highestColumnIndex; $column++) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($column))->setAutoSize(true);
+        }
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'recipes_excel_');
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($tempFile);
+
+        $spreadsheet->disconnectWorksheets();
+        unset($spreadsheet);
+
+        $filename = 'cong-thuc-san-pham-' . now()->format('Ymd-His') . '.xlsx';
+
+        return response()->download(
+            $tempFile,
+            $filename,
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+        )->deleteFileAfterSend(true);
     }
 
     public function destroy(int $id)
@@ -258,7 +372,7 @@ class ProductController extends Controller
 
         $product->delete();
 
-        return back()->with('success', "Đã xóa sản phẩm «{$product->ten_san_pham}».");
+        return redirect()->route('manager.products.index')->with('success', "Đã xóa sản phẩm «{$product->ten_san_pham}».");
     }
 
     /** Cập nhật trạng thái bán (AJAX toggle) */
@@ -299,7 +413,7 @@ class ProductController extends Controller
             'la_anh_chinh'  => $request->boolean('la_anh_chinh'),
         ]);
 
-        return back()->with('success', 'Đã thêm ảnh sản phẩm.');
+        return redirect()->route('manager.products.index')->with('success', 'Đã thêm ảnh sản phẩm.');
     }
 
     /** Xóa ảnh sản phẩm */
@@ -308,6 +422,6 @@ class ProductController extends Controller
         $image = HinhAnhSanPham::where('san_pham_id', $id)->findOrFail($imageId);
         Storage::disk('public')->delete($image->duong_dan_anh);
         $image->delete();
-        return back()->with('success', 'Đã xóa ảnh.');
+        return redirect()->route('manager.products.index')->with('success', 'Đã xóa ảnh.');
     }
 }

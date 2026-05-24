@@ -290,6 +290,10 @@ class VoucherController extends Controller
             $status = 'đang hoạt động';
         }
 
+        $usageLimit = array_key_exists('so_luong', $validated) && $validated['so_luong'] !== null
+            ? (int) $validated['so_luong']
+            : 0;
+
         Voucher::create([
             'ma_voucher'    => strtoupper($validated['ma_voucher']),
             'ten_voucher'   => $validated['ten_voucher'] ?? strtoupper($validated['ma_voucher']),
@@ -297,7 +301,7 @@ class VoucherController extends Controller
             'gia_tri_giam'  => $validated['gia_tri_giam'],
             'giam_toi_da'   => $validated['giam_toi_da'] ?? null,
             'don_toi_thieu' => $validated['don_toi_thieu'] ?? 0,
-            'so_luong'      => $validated['so_luong'] ?? null,
+            'so_luong'      => $usageLimit,
             'da_su_dung'    => 0,
             'ngay_bat_dau'  => $validated['ngay_bat_dau'],
             'ngay_ket_thuc' => $validated['ngay_ket_thuc'],
@@ -339,6 +343,10 @@ class VoucherController extends Controller
             return back()->withInput()->with('error', 'Voucher phần trăm không được lớn hơn 100%.');
         }
 
+        $usageLimit = array_key_exists('so_luong', $validated) && $validated['so_luong'] !== null
+            ? (int) $validated['so_luong']
+            : 0;
+
         $voucher->update([
             'ma_voucher'    => strtoupper($validated['ma_voucher']),
             'ten_voucher'   => $validated['ten_voucher'] ?? strtoupper($validated['ma_voucher']),
@@ -346,7 +354,7 @@ class VoucherController extends Controller
             'gia_tri_giam'  => $validated['gia_tri_giam'],
             'giam_toi_da'   => $validated['giam_toi_da'] ?? null,
             'don_toi_thieu' => $validated['don_toi_thieu'] ?? 0,
-            'so_luong'      => $validated['so_luong'] ?? null,
+            'so_luong'      => $usageLimit,
             'ngay_bat_dau'  => $validated['ngay_bat_dau'],
             'ngay_ket_thuc' => $validated['ngay_ket_thuc'],
             'trang_thai'    => $status,
@@ -364,6 +372,6 @@ class VoucherController extends Controller
         }
 
         $voucher->delete();
-        return back()->with('success', 'Đã xóa voucher thành công.');
+        return redirect()->route('manager.vouchers.index')->with('success', 'Đã xóa voucher thành công.');
     }
 }

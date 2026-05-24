@@ -3,11 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class LichSuKho extends Model
 {
-    use HasFactory;
 
     protected $table = 'lich_su_kho';
 
@@ -16,12 +14,24 @@ class LichSuKho extends Model
     protected $fillable = [
         'nguyen_lieu_id',
         'loai_giao_dich',
+        'tham_chieu_loai',
+        'tham_chieu_id',
         'so_luong',
-        'don_gia',
+        'gia_nhap',
         'ghi_chu',
         'nguoi_tao_id',
         'created_at',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'tham_chieu_id' => 'integer',
+            'so_luong' => 'decimal:2',
+            'gia_nhap' => 'decimal:2',
+            'created_at' => 'datetime',
+        ];
+    }
 
     public function nguyenLieu()
     {

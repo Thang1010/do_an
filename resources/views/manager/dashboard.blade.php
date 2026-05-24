@@ -1,4 +1,4 @@
-@extends('layouts.manager')
+@extends('manager.layout.app')
 
 @section('title', 'Bảng điều khiển')
 @section('breadcrumb', '<strong>Bảng điều khiển</strong>')
@@ -183,8 +183,7 @@
                 <div class="flex-1">
                     <div class="stock-item-name">{{ $nl->ten_nguyen_lieu }}</div>
                     <div class="stock-item-detail">
-                        Còn: <span class="low-stock">{{ $nl->so_luong_ton }} {{ $nl->don_vi_tinh }}</span>
-                        — Tối thiểu: {{ $nl->muc_canh_bao }} {{ $nl->don_vi_tinh }}
+                        Còn: <span class="low-stock">{{ $nl->so_luong }} {{ $nl->don_vi_tinh }}</span>
                     </div>
                 </div>
                 <a href="{{ route('manager.inventory.import') }}" class="btn btn-warning btn-sm">Nhập thêm</a>

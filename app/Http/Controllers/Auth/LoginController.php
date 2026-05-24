@@ -63,9 +63,23 @@ class LoginController extends Controller
         }
 
         if ($nguoiDung->trang_thai === 'ngưng hoạt động') {
+            if ($nguoiDung->vai_tro === 'khách hàng') {
+                $request->session()->put('pending_verification_email', $nguoiDung->email);
+
+                return back()
+                    ->withInput($request->only('login', 'remember'))
+                    ->withErrors(['login' => 'Tài khoản chưa xác minh email. Vui lòng nhập mã xác minh.']);
+            }
+
             return back()
                 ->withInput($request->only('login', 'remember'))
                 ->withErrors(['login' => 'Tài khoản chưa được kích hoạt.']);
+        }
+
+        if (! $nguoiDung->mat_khau) {
+            return back()
+                ->withInput($request->only('login', 'remember'))
+                ->withErrors(['password' => 'Tài khoản này đăng nhập bằng Google. Vui lòng đăng nhập bằng Google để đặt mật khẩu.']);
         }
 
         // Kiểm tra mật khẩu
@@ -86,7 +100,7 @@ class LoginController extends Controller
                 $request->session()->flash('success', 'Bạn vừa nhận được ' . $assignedVouchers->count() . ' voucher mới trong tài khoản.');
             }
         } catch (\Throwable $e) {
-            Log::warning('Khong the cap voucher tu dong khi dang nhap.', [
+            Log::warning('Không thể cấp voucher tự động khi đăng nhập.', [
                 'user_id' => $nguoiDung->id,
                 'error' => $e->getMessage(),
             ]);
@@ -114,7 +128,7 @@ class LoginController extends Controller
     private function redirectByRole(NguoiDung $nguoiDung)
     {
         return match($nguoiDung->vai_tro) {
-            'quản lý'   => redirect()->route('manager.dashboard'),
+            'quản lý', 'chủ cửa hàng' => redirect()->route('manager.dashboard'),
             'nhân viên' => redirect()->route('staff.dashboard'),
             default     => redirect()->route('home'),   // khách hàng
         };

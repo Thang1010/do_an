@@ -3,11 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class SanPhamKichCo extends Model
 {
-    use HasFactory;
 
     protected $table = 'san_pham_kich_co';
 

@@ -1,4 +1,4 @@
-@extends('layouts.manager')
+@extends('manager.layout.app')
 
 @section('title', 'Chi tiết người dùng')
 @section('breadcrumb', 'Nhân sự / Quản lý người dùng / <strong>Chi tiết</strong>')
@@ -145,11 +145,11 @@
 				</div>
 				<div>
 					<div class="text-muted text-sm">Chức vụ</div>
-					<div class="font-semibold">{{ $user->hoSoNhanVien?->chuc_vu ?? '—' }}</div>
+					<div class="font-semibold">{{ $user->hoSoNhanVien?->chucVu?->ten_chuc_vu ?? '—' }}</div>
 				</div>
 				<div>
-					<div class="text-muted text-sm">Lương cơ bản</div>
-					<div class="font-semibold">{{ number_format($user->hoSoNhanVien?->luong_co_ban ?? 0, 0, ',', '.') }}đ</div>
+					<div class="text-muted text-sm">Loại hình làm việc</div>
+					<div class="font-semibold">{{ ucfirst($user->hoSoNhanVien?->loai_hinh_lam_viec ?? 'Toàn thời gian') }}</div>
 				</div>
 				<div>
 					<div class="text-muted text-sm">Ngày vào làm</div>
@@ -170,17 +170,23 @@
 					<div class="font-semibold">{{ $user->hoSoQuanLy?->ma_quan_ly ?? '—' }}</div>
 				</div>
 				<div>
+					<div class="text-muted text-sm">Chức vụ quản lý</div>
+					<div class="font-semibold">{{ $user->hoSoQuanLy?->chucVu?->ten_chuc_vu ?? '—' }}</div>
+				</div>
+				<div>
 					<div class="text-muted text-sm">Ngày vào làm</div>
 					<div class="font-semibold">{{ optional($user->hoSoQuanLy?->ngay_vao_lam)->format('d/m/Y') ?? '—' }}</div>
 				</div>
+				@if($user->vai_tro === 'chủ cửa hàng')
 				<div>
-					<div class="text-muted text-sm">Ngân hàng</div>
-					<div class="font-semibold">{{ $user->hoSoQuanLy?->ngan_hang ?? '—' }}</div>
+					<div class="text-muted text-sm">Ngân hàng thanh toán (cửa hàng)</div>
+					<div class="font-semibold">{{ $user->cuaHang?->ngan_hang ?? '—' }}</div>
 				</div>
 				<div>
-					<div class="text-muted text-sm">Số tài khoản</div>
-					<div class="font-semibold">{{ $user->hoSoQuanLy?->so_tai_khoan ?? '—' }}</div>
+					<div class="text-muted text-sm">Số tài khoản thanh toán (cửa hàng)</div>
+					<div class="font-semibold">{{ $user->cuaHang?->so_tai_khoan ?? '—' }}</div>
 				</div>
+				@endif
 			</div>
 		</div>
 	</div>

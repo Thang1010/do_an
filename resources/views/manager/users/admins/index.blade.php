@@ -1,4 +1,4 @@
-﻿@extends('layouts.manager')
+@extends('manager.layout.app')
 
 @section('title', 'Quản lý người dùng — Quản lý')
 @section('breadcrumb', 'Nhân sự / <strong>Quản lý</strong>')
@@ -38,6 +38,8 @@
                     <th>Họ tên</th>
                     <th>Email / SĐT</th>
                     <th>Mã quản lý</th>
+                    <th>Chức vụ</th>
+                    <th>Loại hình</th>
                     <th>Ngày vào làm</th>
                     <th>Trạng thái</th>
                     <th class="col-action-lg">Thao tác</th>
@@ -45,6 +47,17 @@
             </thead>
             <tbody>
                 @forelse($admins ?? [] as $i => $user)
+                @php
+                    $actorRole = auth()->user()->vai_tro ?? null;
+                    $canConfirmThisUser = $user->trang_thai === 'ngưng hoạt động'
+                        && $actorRole === 'chủ cửa hàng';
+
+                    $statusLabel = match ($user->trang_thai) {
+                        'hoạt động' => 'Hoạt động',
+                        'ngưng hoạt động' => 'Chờ xác nhận',
+                        default => 'Bị khóa',
+                    };
+                @endphp
                 <tr>
                     <td>{{ ($admins->firstItem() ?? 1) + $i }}</td>
                     <td><div class="font-600">{{ $user->ho_ten }}</div></td>
@@ -53,14 +66,22 @@
                         <div class="text-12 text-muted">{{ $user->so_dien_thoai ?? '—' }}</div>
                     </td>
                     <td>{{ $user->hoSoQuanLy->ma_quan_ly ?? '—' }}</td>
+                    <td>{{ $user->hoSoQuanLy?->chucVu?->ten_chuc_vu ?? '—' }}</td>
+                    <td><span class="badge badge-outline">{{ ucfirst($user->hoSoQuanLy?->loai_hinh_lam_viec ?? 'Toàn thời gian') }}</span></td>
                     <td class="text-12 text-muted">{{ optional($user->hoSoQuanLy?->ngay_vao_lam)->format('d/m/Y') ?? '—' }}</td>
                     <td>
                         <span class="badge {{ $user->trang_thai === 'hoạt động' ? 'badge-active' : 'badge-inactive' }}">
-                            {{ $user->trang_thai === 'hoạt động' ? 'Hoạt động' : 'Bị khóa' }}
+                            {{ $statusLabel }}
                         </span>
                     </td>
                     <td>
                         <div class="action-row">
+                            @if($canConfirmThisUser)
+                            <form method="POST" action="{{ route('account-approvals.confirm', $user->id) }}" onsubmit="return confirm('Xác nhận kích hoạt tài khoản {{ $user->ho_ten }}?')">
+                                @csrf
+                                <button type="submit" class="btn btn-primary btn-sm">Xác nhận</button>
+                            </form>
+                            @endif
                             <a href="{{ route('manager.users.show', $user->id) }}" class="btn btn-secondary btn-sm">Chi tiết</a>
                             <a href="{{ route('manager.users.edit', ['id' => $user->id, 'from' => 'admins']) }}" class="btn btn-warning btn-sm">Sửa</a>
                             <form method="POST" action="{{ route('manager.users.destroy', $user->id) }}" onsubmit="return confirm('Bạn có chắc muốn xóa tài khoản {{ $user->ho_ten }}?')">
@@ -73,7 +94,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="7" class="empty-state">Không tìm thấy tài khoản quản lý nào.</td>
+                    <td colspan="8" class="empty-state">Không tìm thấy tài khoản quản lý nào.</td>
                 </tr>
                 @endforelse
             </tbody>
@@ -117,20 +138,26 @@
                     <input type="text" name="so_dien_thoai" class="form-control" value="{{ old('so_dien_thoai') }}" maxlength="20" placeholder="Có thể bỏ trống nếu dùng email để đăng nhập">
                 </div>
 
-                <div class="form-grid-2">
-                    <div class="form-group">
-                        <label class="form-label">Ngày vào làm</label>
-                        <input type="date" name="ngay_vao_lam" class="form-control" value="{{ old('ngay_vao_lam') }}">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Ngân hàng</label>
-                        <input type="text" name="ngan_hang" class="form-control" value="{{ old('ngan_hang') }}" maxlength="150">
-                    </div>
+
+
+                <div class="form-group">
+                    <label class="form-label">Chức vụ</label>
+                    <select name="chuc_vu_id" class="form-control">
+                        <option value="">-- Chọn chức vụ quản lý --</option>
+                        @foreach($positions ?? [] as $position)
+                            <option value="{{ $position->id }}" {{ (string) old('chuc_vu_id') === (string) $position->id ? 'selected' : '' }}>
+                                {{ $position->ten_chuc_vu }}
+                            </option>
+                        @endforeach
+                    </select>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Số tài khoản</label>
-                    <input type="text" name="so_tai_khoan" class="form-control" value="{{ old('so_tai_khoan') }}" maxlength="50">
+                    <label class="form-label">Loại hình làm việc</label>
+                    <select name="loai_hinh_lam_viec" class="form-control">
+                        <option value="toàn thời gian" {{ old('loai_hinh_lam_viec') === 'toàn thời gian' ? 'selected' : '' }}>Toàn thời gian</option>
+                        <option value="bán thời gian" {{ old('loai_hinh_lam_viec') === 'bán thời gian' ? 'selected' : '' }}>Bán thời gian</option>
+                    </select>
                 </div>
 
                 <div class="form-group">

@@ -2,19 +2,22 @@
 
 namespace App\Models;
 
+use App\Enums\UserRole;
+use App\Enums\UserStatus;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Notifications\Notifiable;
 
 class NguoiDung extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use Notifiable;
 
     protected $table = 'nguoi_dung';
 
     protected $fillable = [
+        'cua_hang_id',
         'ho_ten',
         'email',
+        'google_id',
         'so_dien_thoai',
         'mat_khau',
         'vai_tro',
@@ -33,7 +36,7 @@ class NguoiDung extends Authenticatable
      */
     public function getAuthPassword(): string
     {
-        return $this->mat_khau;
+        return $this->mat_khau ?? '';
     }
 
     /**
@@ -51,10 +54,15 @@ class NguoiDung extends Authenticatable
     // ROLE HELPERS
     // =====================
 
-    public function isKhachHang(): bool { return $this->vai_tro === 'khách hàng'; }
-    public function isNhanVien(): bool  { return $this->vai_tro === 'nhân viên'; }
-    public function isQuanLy(): bool    { return $this->vai_tro === 'quản lý'; }
-    public function isActive(): bool    { return $this->trang_thai === 'hoạt động'; }
+    public function isKhachHang(): bool { return $this->vai_tro === UserRole::KHACH_HANG->value; }
+    public function isNhanVien(): bool  { return $this->vai_tro === UserRole::NHAN_VIEN->value; }
+    public function isQuanLy(): bool    { return $this->vai_tro === UserRole::QUAN_LY->value; }
+    public function isChuCuaHang(): bool { return $this->vai_tro === UserRole::CHU_CUA_HANG->value; }
+    public function isQuanTriCuaHang(): bool
+    {
+        return in_array($this->vai_tro, UserRole::managerRoleValues(), true);
+    }
+    public function isActive(): bool    { return $this->trang_thai === UserStatus::HOAT_DONG->value; }
 
     /**
      * URL ảnh đại diện.
@@ -71,6 +79,11 @@ class NguoiDung extends Authenticatable
     public function hoSoKhachHang()
     {
         return $this->hasOne(HoSoKhachHang::class, 'nguoi_dung_id');
+    }
+
+    public function cuaHang()
+    {
+        return $this->belongsTo(CuaHang::class, 'cua_hang_id');
     }
 
     public function hoSoNhanVien()
@@ -98,11 +111,6 @@ class NguoiDung extends Authenticatable
         return $this->hasMany(VoucherNguoiDung::class, 'nguoi_dung_id');
     }
 
-    public function lichSuDiemThuong()
-    {
-        return $this->hasMany(LichSuDiemThuong::class, 'nguoi_dung_id');
-    }
-
     public function danhGiaSanPham()
     {
         return $this->hasMany(DanhGiaSanPham::class, 'nguoi_dung_id');
@@ -111,5 +119,11 @@ class NguoiDung extends Authenticatable
     public function phienChat()
     {
         return $this->hasMany(PhienChat::class, 'nguoi_dung_id');
+    }
+
+    public function sanPhamYeuThich()
+    {
+        return $this->belongsToMany(SanPham::class, 'san_pham_yeu_thich', 'nguoi_dung_id', 'san_pham_id')
+                    ->withTimestamps();
     }
 }

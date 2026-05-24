@@ -1,0 +1,124 @@
+<?php
+
+namespace App\Http\Controllers\Customer;
+
+use App\Http\Controllers\Controller;
+use App\Models\DanhMuc;
+use App\Models\SanPham;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+
+class MenuController extends Controller
+{
+    public function index(Request $request)
+    {
+        // Load all active categories with product count
+        $categories = DanhMuc::withCount(['sanPham' => function ($q) {
+            $q->whereIn('trang_thai_ban', ['dang_ban', 'đang bán']);
+        }])->orderBy('ten_danh_muc')->get();
+
+        // Build category slugs map
+        $categorySlugs = $categories->mapWithKeys(function ($category) {
+            $slug = $category->slug ?: Str::slug($category->ten_danh_muc);
+            return [$category->id => $slug];
+        });
+
+        // Build category images map
+        $categoryImages = SanPham::whereIn('danh_muc_id', $categories->pluck('id'))
+            ->whereNotNull('hinh_anh_chinh')
+            ->orderByDesc('noi_bat')
+            ->orderByDesc('created_at')
+            ->get(['danh_muc_id', 'hinh_anh_chinh'])
+            ->groupBy('danh_muc_id')
+            ->map(function ($items) {
+                $img = $items->first()->hinh_anh_chinh;
+                if (Str::startsWith($img, ['http://', 'https://'])) {
+                    return $img;
+                }
+                return asset('storage/' . $img);
+            });
+
+        // Determine active category
+        $categorySlug = $request->query('category');
+        $activeCategory = null;
+
+        if ($categorySlug) {
+            $activeCategory = $categories->first(function ($cat) use ($categorySlug, $categorySlugs) {
+                return ($categorySlugs[$cat->id] ?? Str::slug($cat->ten_danh_muc)) === $categorySlug;
+            });
+        }
+
+        // Default to first category
+        if (!$activeCategory && $categories->isNotEmpty()) {
+            $activeCategory = $categories->first();
+        }
+
+        // Search
+        $search = trim((string) $request->query('search', ''));
+
+        // Build products query
+        $productsQuery = SanPham::with('danhMuc')
+            ->whereIn('trang_thai_ban', ['dang_ban', 'đang bán']);
+
+        if (auth()->check()) {
+            $productsQuery->withExists(['nguoiDungYeuThich as is_favorite' => function ($q) {
+                $q->where('nguoi_dung_id', auth()->id());
+            }])->orderByDesc('is_favorite');
+        }
+
+        if ($search !== '') {
+            $productsQuery->where(function ($q) use ($search) {
+                $q->where('ten_san_pham', 'like', "%{$search}%")
+                    ->orWhere('mo_ta', 'like', "%{$search}%");
+            });
+        } elseif ($activeCategory) {
+            $productsQuery->where('danh_muc_id', $activeCategory->id);
+        }
+
+        $products = $productsQuery->orderByDesc('noi_bat')->orderByDesc('created_at')->paginate(12)->withQueryString();
+
+        return view('customer.menu.index', compact(
+            'categories',
+            'categorySlugs',
+            'categoryImages',
+            'activeCategory',
+            'products',
+            'search'
+        ));
+    }
+
+    public function show(int $id)
+    {
+        $product = SanPham::with(['danhMuc', 'sanPhamKichCo', 'hinhAnhSanPham'])->findOrFail($id);
+
+        $related = SanPham::where('danh_muc_id', $product->danh_muc_id)
+            ->where('id', '!=', $product->id)
+            ->whereIn('trang_thai_ban', ['dang_ban', 'đang bán'])
+            ->limit(4)
+            ->get();
+
+        return view('customer.menu.show', compact('product', 'related'));
+    }
+
+    public function toggleFavorite(Request $request, $id)
+    {
+        if (!auth()->check()) {
+            return response()->json(['success' => false, 'message' => 'Bạn cần đăng nhập để thực hiện chức năng này.'], 401);
+        }
+
+        $user = auth()->user();
+        $product = SanPham::findOrFail($id);
+
+        $isFavorite = $user->sanPhamYeuThich()->where('san_pham_id', $product->id)->exists();
+
+        if ($isFavorite) {
+            $user->sanPhamYeuThich()->detach($product->id);
+            $status = false;
+        } else {
+            $user->sanPhamYeuThich()->attach($product->id);
+            $status = true;
+        }
+
+        return response()->json(['success' => true, 'is_favorite' => $status]);
+    }
+}

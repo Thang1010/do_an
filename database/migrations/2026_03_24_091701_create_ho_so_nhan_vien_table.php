@@ -18,8 +18,10 @@ return new class extends Migration
                 ->constrained('nguoi_dung')
                 ->cascadeOnDelete();
             $table->string('ma_nhan_vien', 50)->unique();
-            $table->string('chuc_vu', 100)->nullable();
-            $table->decimal('luong_co_ban', 12, 2)->default(0);
+            $table->foreignId('chuc_vu_id')->nullable()->constrained('chuc_vu')->nullOnDelete();
+            $table->string('loai_hinh_lam_viec', 30)->default('toàn thời gian');
+            $table->decimal('luong_co_ban', 12, 2)->nullable();
+            $table->decimal('luong_theo_gio', 12, 2)->nullable();
             $table->date('ngay_vao_lam')->nullable();
             $table->timestamps();
         });

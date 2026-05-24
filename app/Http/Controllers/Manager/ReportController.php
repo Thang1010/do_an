@@ -7,7 +7,6 @@ use App\Models\DonHang;
 use App\Models\SanPham;
 use App\Models\NguoiDung;
 use App\Models\NguyenLieu;
-use App\Models\LichSuDiemThuong;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -43,11 +42,6 @@ class ReportController extends Controller
         return $this->buildReport($request, 'inventory');
     }
 
-    public function points(Request $request)
-    {
-        return $this->buildReport($request, 'points');
-    }
-
     // =====================================================
     private function buildReport(Request $request, string $activeTab)
     {
@@ -63,11 +57,6 @@ class ReportController extends Controller
         $giaTriTrungBinh = $tongDon > 0
             ? round($tongDoanhThu / $tongDon)
             : 0;
-
-        $diemDaCap  = LichSuDiemThuong::whereBetween('created_at', [$from, $to])
-            ->where('loai', 'cong')->sum('so_diem');
-        $diemDaDung = LichSuDiemThuong::whereBetween('created_at', [$from, $to])
-            ->where('loai', 'tru')->sum('so_diem');
 
         // ===== DOANH THU THEO NGÀY =====
         $revenueByDay = DonHang::selectRaw('DATE(created_at) as ngay, SUM(tong_tien) as tong')
@@ -130,40 +119,37 @@ class ReportController extends Controller
             ->get();
 
         // ===== INVENTORY REPORT =====
-        $inventoryReport = NguyenLieu::orderByRaw('so_luong_ton <= muc_canh_bao DESC, ten_nguyen_lieu ASC')
-            ->get();
+        $inventoryBalanceExpression = "SUM(CASE
+            WHEN lich_su_kho.loai_giao_dich IN ('nhap', 'nhập', 'nhap kho', 'nhập kho') THEN lich_su_kho.so_luong
+            WHEN lich_su_kho.loai_giao_dich IN ('xuat', 'xuất', 'xuat kho', 'xuất kho') THEN -lich_su_kho.so_luong
+            WHEN lich_su_kho.loai_giao_dich IN ('điều chỉnh', 'dieu chinh') THEN lich_su_kho.so_luong
+            ELSE 0
+        END)";
 
-        // ===== POINTS REPORT =====
-        $pointsByMonth = LichSuDiemThuong::selectRaw(
-                "DATE_FORMAT(created_at, '%Y-%m') as thang,
-                 SUM(CASE WHEN loai='cong' THEN so_diem ELSE 0 END) as da_cap,
-                 SUM(CASE WHEN loai='tru' THEN so_diem ELSE 0 END) as da_dung"
-            )
-            ->where('created_at', '>=', Carbon::now()->subMonths(6))
-            ->groupBy('thang')
-            ->orderBy('thang')
+        $inventoryReport = NguyenLieu::query()
+            ->leftJoin('lich_su_kho', 'lich_su_kho.nguyen_lieu_id', '=', 'nguyen_lieu.id')
+            ->select('nguyen_lieu.id', 'nguyen_lieu.ten_nguyen_lieu', 'nguyen_lieu.don_vi_tinh')
+            ->selectRaw("COALESCE({$inventoryBalanceExpression}, 0) as so_luong")
+            ->groupBy('nguyen_lieu.id', 'nguyen_lieu.ten_nguyen_lieu', 'nguyen_lieu.don_vi_tinh')
+            ->orderByRaw('COALESCE(' . $inventoryBalanceExpression . ', 0) <= 0 DESC')
+            ->orderBy('nguyen_lieu.ten_nguyen_lieu')
             ->get();
-
-        $totalDiemCap  = LichSuDiemThuong::where('loai', 'cong')->sum('so_diem');
-        $totalDiemDung = LichSuDiemThuong::where('loai', 'tru')->sum('so_diem');
 
         return view('manager.reports.revenue', compact(
             'tongDoanhThu', 'tongDon', 'giaTriTrungBinh',
-            'diemDaCap', 'diemDaDung',
             'revenueByDay', 'maxRevenue',
             'statusCounts',
             'topProducts', 'maxSold',
             'peakHours', 'maxHour',
             'staffPerformance',
             'inventoryReport',
-            'pointsByMonth', 'totalDiemCap', 'totalDiemDung',
             'from', 'to', 'activeTab'
         ));
     }
 
     private function resolveDateRange(Request $request): array
     {
-        $period = $request->get('period', 'week');
+        $period = $request->get('period', 'today');
 
         if ($period === 'custom' && $request->filled('from') && $request->filled('to')) {
             return [
@@ -176,7 +162,7 @@ class ReportController extends Controller
             'today' => [Carbon::today()->startOfDay(), Carbon::today()->endOfDay()],
             'month' => [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()],
             'year'  => [Carbon::now()->startOfYear(), Carbon::now()->endOfYear()],
-            default => [Carbon::now()->subDays(6)->startOfDay(), Carbon::now()->endOfDay()],
+            default => [Carbon::today()->startOfDay(), Carbon::today()->endOfDay()],
         };
     }
 }

@@ -4,19 +4,16 @@ namespace App\Models;
 
 use App\Notifications\QrPaymentSuccessNotification;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class ThanhToan extends Model
 {
-    use HasFactory;
 
     protected $table = 'thanh_toan';
 
     protected $fillable = [
         'don_hang_id',
-        'cau_hinh_thanh_toan_id',
         'ma_thanh_toan',
         'phuong_thuc',
         'so_tien',
@@ -62,12 +59,28 @@ class ThanhToan extends Model
             }
 
             try {
-                NguoiDung::query()
-                    ->whereIn('vai_tro', ['quản lý', 'nhân viên'])
+                $recipientIds = collect();
+
+                if ($order->nhan_vien_id) {
+                    $recipientIds->push((int) $order->nhan_vien_id);
+                }
+
+                $managerIds = NguoiDung::query()
+                    ->whereIn('vai_tro', ['quản lý', 'chủ cửa hàng'])
                     ->where('trang_thai', 'hoạt động')
-                    ->get()
-                    ->each
-                    ->notify(new QrPaymentSuccessNotification($order, $payment));
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id);
+
+                $recipientIds = $recipientIds->merge($managerIds)->unique();
+
+                if ($recipientIds->isNotEmpty()) {
+                    NguoiDung::query()
+                        ->whereIn('id', $recipientIds->all())
+                        ->where('trang_thai', 'hoạt động')
+                        ->get()
+                        ->each
+                        ->notify(new QrPaymentSuccessNotification($order, $payment));
+                }
             } catch (\Throwable $e) {
                 Log::warning('Khong the gui thong bao thanh toan QR thanh cong.', [
                     'payment_id' => $payment->id,
@@ -81,10 +94,5 @@ class ThanhToan extends Model
     public function donHang()
     {
         return $this->belongsTo(DonHang::class, 'don_hang_id');
-    }
-
-    public function cauHinhThanhToan()
-    {
-        return $this->belongsTo(CauHinhThanhToan::class, 'cau_hinh_thanh_toan_id');
     }
 }

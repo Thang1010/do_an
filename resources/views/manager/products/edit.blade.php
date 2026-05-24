@@ -1,4 +1,4 @@
-@extends('layouts.manager')
+@extends('manager.layout.app')
 
 @section('title', 'Sửa sản phẩm')
 @section('breadcrumb', 'Sản phẩm / <strong>Chỉnh sửa</strong>')

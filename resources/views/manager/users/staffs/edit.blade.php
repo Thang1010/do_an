@@ -89,7 +89,7 @@
                         <option value="">-- Chọn chức vụ --</option>
                         @foreach($positionsStaff as $position)
                             <option value="{{ $position->id }}" {{ (string) old('chuc_vu_id', $user->hoSoNhanVien?->chuc_vu_id) === (string) $position->id ? 'selected' : '' }}>
-                                {{ $position->ten_chuc_vu }}
+                                {{ $position->ten_chuc_vu }} ({{ ucfirst($position->loai_hinh_lam_viec) }})
                             </option>
                         @endforeach
                     </select>
@@ -98,16 +98,7 @@
                     @enderror
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label" for="loai_hinh_lam_viec">Loại hình làm việc</label>
-                    <select id="loai_hinh_lam_viec" name="loai_hinh_lam_viec" class="form-control">
-                        <option value="toàn thời gian" {{ old('loai_hinh_lam_viec', $user->hoSoNhanVien?->loai_hinh_lam_viec) === 'toàn thời gian' ? 'selected' : '' }}>Toàn thời gian</option>
-                        <option value="bán thời gian" {{ old('loai_hinh_lam_viec', $user->hoSoNhanVien?->loai_hinh_lam_viec) === 'bán thời gian' ? 'selected' : '' }}>Bán thời gian</option>
-                    </select>
-                    @error('loai_hinh_lam_viec')
-                        <div class="form-error">{{ $message }}</div>
-                    @enderror
-                </div>
+
             </div>
 
             <div id="admin-fields" @if(! $showAdminFields) style="display:none;" @endif>

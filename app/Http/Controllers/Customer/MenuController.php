@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
+use App\Models\DanhGiaSanPham;
 use App\Models\DanhMuc;
 use App\Models\SanPham;
 use Illuminate\Http\Request;
@@ -57,7 +58,7 @@ class MenuController extends Controller
         $search = trim((string) $request->query('search', ''));
 
         // Build products query
-        $productsQuery = SanPham::with('danhMuc')
+        $productsQuery = SanPham::with(['danhMuc', 'kichCo'])
             ->whereIn('trang_thai_ban', ['dang_ban', 'đang bán']);
 
         if (auth()->check()) {
@@ -89,15 +90,39 @@ class MenuController extends Controller
 
     public function show(int $id)
     {
-        $product = SanPham::with(['danhMuc', 'sanPhamKichCo', 'hinhAnhSanPham'])->findOrFail($id);
+        $product = SanPham::with(['danhMuc', 'kichCo', 'hinhAnhSanPham', 'danhGiaSanPham.nguoiDung'])->findOrFail($id);
+
+        $avgRating = $product->danhGiaSanPham->avg('so_sao') ?? 0;
 
         $related = SanPham::where('danh_muc_id', $product->danh_muc_id)
             ->where('id', '!=', $product->id)
             ->whereIn('trang_thai_ban', ['dang_ban', 'đang bán'])
+            ->withAvg('danhGiaSanPham as avg_rating', 'so_sao')
             ->limit(4)
             ->get();
 
-        return view('customer.menu.show', compact('product', 'related'));
+        return view('customer.menu.show', compact('product', 'related', 'avgRating'));
+    }
+
+    public function storeReview(Request $request, int $id)
+    {
+        if (!auth()->check()) {
+            return redirect()->route('auth.login')->with('error', 'Bạn cần đăng nhập để đánh giá sản phẩm.');
+        }
+
+        $request->validate([
+            'so_sao' => 'required|integer|min:1|max:5',
+            'noi_dung' => 'nullable|string|max:1000',
+        ]);
+
+        $product = SanPham::findOrFail($id);
+
+        DanhGiaSanPham::updateOrCreate(
+            ['nguoi_dung_id' => auth()->id(), 'san_pham_id' => $product->id],
+            ['so_sao' => $request->so_sao, 'noi_dung' => $request->noi_dung, 'don_hang_id' => null]
+        );
+
+        return back()->with('success', 'Đánh giá của bạn đã được ghi nhận!');
     }
 
     public function toggleFavorite(Request $request, $id)

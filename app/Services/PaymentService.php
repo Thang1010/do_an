@@ -6,6 +6,7 @@ use App\Models\BanAn;
 use App\Models\CuaHang;
 use App\Models\DonHang;
 use App\Models\ThanhToan;
+use App\Enums\TableStatus;
 use App\Traits\NormalizesPayment;
 use App\Traits\ResolvesVietQrBank;
 use Illuminate\Database\Eloquent\Builder;
@@ -48,12 +49,13 @@ class PaymentService
 
         if ($record) {
             $record->update($payload);
-            return;
+        } else {
+            ThanhToan::create(array_merge([
+                'don_hang_id' => $order->id,
+            ], $payload));
         }
 
-        ThanhToan::create(array_merge([
-            'don_hang_id' => $order->id,
-        ], $payload));
+        $this->notifyOwnerIfNewlyPaid($order, $record, $paymentStatus);
     }
 
     /**
@@ -74,6 +76,58 @@ class PaymentService
         } else {
             ThanhToan::create(array_merge(['don_hang_id' => $order->id], $payload));
         }
+
+        $this->notifyOwnerIfNewlyPaid($order, $record, $paymentStatus);
+    }
+
+    /**
+     * Gửi email cho chủ cửa hàng nếu đơn hàng vừa chuyển sang đã thanh toán.
+     */
+    private function notifyOwnerIfNewlyPaid(DonHang $order, ?ThanhToan $record, string $paymentStatus): void
+    {
+        $targetStatus = $this->toPaymentRecordStatus($paymentStatus);
+        
+        if ($targetStatus !== 'đã thanh toán') {
+            return;
+        }
+
+        // Nếu bản ghi trước đó đã là đã thanh toán thì bỏ qua để không gửi lặp
+        if ($record && $record->trang_thai === 'đã thanh toán') {
+            return;
+        }
+
+        $owners = \App\Models\NguoiDung::whereIn('vai_tro', ['chủ cửa hàng'])->get();
+        foreach ($owners as $owner) {
+            if ($owner->email) {
+                \Illuminate\Support\Facades\Mail::to($owner->email)->send(new \App\Mail\OrderPaidMail($order));
+            }
+        }
+    }
+
+    /**
+     * Cập nhật trạng thái bàn ngay sau khi thanh toán thành công.
+     */
+    public function applyTableStatusAfterPayment(DonHang $order): void
+    {
+        if (! $order->ban_an_id) {
+            return;
+        }
+
+        $table = BanAn::query()->find($order->ban_an_id);
+        if (! $table || $table->trang_thai === TableStatus::NGUNG_SU_DUNG->value) {
+            return;
+        }
+
+        $isBooking = \App\Services\TableStatusService::isBookingOrder($order);
+
+        if ($isBooking && $table->trang_thai !== TableStatus::DANG_PHUC_VU->value) {
+            $table->update(['trang_thai' => TableStatus::DA_DAT->value]);
+            return;
+        }
+
+        if ($table->trang_thai !== TableStatus::DANG_PHUC_VU->value) {
+            $table->update(['trang_thai' => TableStatus::DANG_PHUC_VU->value]);
+        }
     }
 
     /**
@@ -87,8 +141,7 @@ class PaymentService
 
         $hasUnpaid = DonHang::query()
             ->where('ban_an_id', $tableId)
-            ->where('trang_thai_don', '!=', 'đã hủy')
-            ->where('trang_thai_thanh_toan', 'chưa thanh toán')
+            ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
             ->exists();
 
         if (!$hasUnpaid) {
@@ -108,82 +161,12 @@ class PaymentService
             ->when($storeId, fn(Builder $q) => $q->where('id', $storeId))
             ->first();
 
-        if (!$store || !$store->so_tai_khoan || !$store->ngan_hang) {
+        if (!$store) {
             $store = CuaHang::query()
                 ->with('chuCuaHang')
-                ->whereNotNull('so_tai_khoan')
-                ->whereNotNull('ngan_hang')
                 ->first();
         }
 
         return $store;
-    }
-
-    /**
-     * Tạo QR thanh toán VietQR cho đơn hàng.
-     *
-     * @return array|null null nếu không đủ thông tin
-     */
-    public function generateQrData(DonHang $order, CuaHang $store): ?array
-    {
-        $bankCode = $this->resolveVietQrBankCode($store->ngan_hang);
-        $accountNo = preg_replace('/\s+/', '', (string) $store->so_tai_khoan);
-        $amount = (int) round((float) ($order->tong_tien ?? 0));
-
-        if ($bankCode === '' || $accountNo === '' || $amount <= 0) {
-            return null;
-        }
-
-        $transferContent = 'TT ' . ($order->ma_don_hang ?? ('DON' . $order->id));
-        $accountName = $store->chuCuaHang?->ho_ten ?? $store->ten_cua_hang;
-
-        $params = http_build_query([
-            'amount' => $amount,
-            'addInfo' => $transferContent,
-            'accountName' => $accountName,
-        ], '', '&', PHP_QUERY_RFC3986);
-
-        $qrUrl = "https://img.vietqr.io/image/{$bankCode}-{$accountNo}-compact2.png?{$params}";
-
-        return [
-            'qr_url' => $qrUrl,
-            'order_id' => $order->id,
-            'order_code' => $order->ma_don_hang,
-            'amount' => $amount,
-            'bank_code' => $bankCode,
-            'bank_name' => $store->ngan_hang,
-            'account_no' => $accountNo,
-            'account_name' => $accountName,
-            'transfer_content' => $transferContent,
-        ];
-    }
-
-    /**
-     * Tạo QR data kèm cache token + expiry (dùng bởi Manager\OrderController).
-     */
-    public function generateQrDataWithCache(DonHang $order, CuaHang $store): ?array
-    {
-        $base = $this->generateQrData($order, $store);
-        if (!$base) {
-            return null;
-        }
-
-        $expiresAt = now()->addSeconds(60);
-        $token = (string) Str::uuid();
-
-        Cache::put("order_payment_qr:{$token}", [
-            'order_id' => $order->id,
-            'table_id' => $order->ban_an_id,
-            'amount' => $base['amount'],
-            'transfer_content' => $base['transfer_content'],
-            'expires_at' => $expiresAt->toIso8601String(),
-        ], $expiresAt);
-
-        return array_merge($base, [
-            'message' => 'Đã tạo QR thanh toán. Mã sẽ hết hiệu lực sau 60 giây.',
-            'token' => $token,
-            'expires_at' => $expiresAt->toIso8601String(),
-            'expires_in' => 60,
-        ]);
     }
 }

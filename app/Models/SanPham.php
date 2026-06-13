@@ -15,13 +15,23 @@ class SanPham extends Model
         'ten_san_pham',
         'slug',
         'mo_ta',
+        'mo_ta_chi_tiet',
         'gia_goc',
         'gia_khuyen_mai',
         'hinh_anh_chinh',
         'trang_thai_ban',
+        'nhiet_do',
         'loai_quan_ly_kho',
         'noi_bat',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'gia_goc' => 'float',
+            'gia_khuyen_mai' => 'float',
+        ];
+    }
 
     public function danhMuc()
     {
@@ -43,9 +53,22 @@ class SanPham extends Model
         return $this->hasMany(DanhGiaSanPham::class, 'san_pham_id');
     }
 
+    /**
+     * Product-specific sizes (kich_co belongs to this product via san_pham_id FK).
+     */
+    public function kichCo()
+    {
+        return $this->belongsToMany(KichCo::class, 'san_pham_kich_co', 'san_pham_id', 'kich_co_id')
+                    ->withTimestamps();
+    }
+
+    /**
+     * Alias for backward compatibility with views/controllers using sanPhamKichCo.
+     * Returns the product's KichCo collection.
+     */
     public function sanPhamKichCo()
     {
-        return $this->hasMany(SanPhamKichCo::class, 'san_pham_id');
+        return $this->hasMany(KichCo::class, 'san_pham_id');
     }
 
     public function congThucSanPham()
@@ -53,23 +76,9 @@ class SanPham extends Model
         return $this->hasMany(CongThucSanPham::class, 'san_pham_id');
     }
 
-    public function banAnDaGoi()
-    {
-        return $this->belongsToMany(BanAn::class, 'chi_tiet_don_hang', 'san_pham_id', 'ban_an_id')
-            ->withPivot([
-                'don_hang_id',
-                'kich_co_id',
-                'ten_san_pham',
-                'ten_kich_co',
-                'don_gia',
-                'so_luong',
-                'ghi_chu_mon',
-            ]);
-    }
-
     public function getGiaAttribute()
     {
-        return $this->gia_khuyen_mai ?? $this->gia_goc;
+        return $this->gia_khuyen_mai > 0 ? $this->gia_khuyen_mai : $this->gia_goc;
     }
 
     public function getTrangThaiAttribute()
@@ -84,10 +93,19 @@ class SanPham extends Model
                 return $this->hinh_anh_chinh;
             }
 
-            return asset('storage/' . $this->hinh_anh_chinh);
+            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($this->hinh_anh_chinh)) {
+                return asset('storage/' . $this->hinh_anh_chinh);
+            }
+
+            try {
+                return \Illuminate\Support\Facades\Storage::disk('s3')->url($this->hinh_anh_chinh);
+            } catch (\Exception $e) {
+                return asset('storage/' . $this->hinh_anh_chinh);
+            }
         }
 
-        return asset('images/ca_phe_nau_da.jpg');
+        // Nếu sản phẩm không có ảnh, trả về ảnh chứa chữ cái đầu tiên của tên sản phẩm
+        return 'https://ui-avatars.com/api/?name=' . urlencode($this->ten_san_pham) . '&background=E2D9C8&color=30261C&size=500';
     }
 
     public function nguoiDungYeuThich()

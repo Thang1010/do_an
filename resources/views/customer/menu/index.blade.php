@@ -67,14 +67,14 @@
             <div id="products-container">
                 <div class="products-grid">
                     @forelse($products as $product)
-                        <div class="menu-card">
+                        <div class="menu-card cursor-pointer" onclick="window.location='{{ route('menu.show', $product->id) }}'">
                             <!-- Image -->
                             <div class="menu-card-img-wrap">
                                 <img src="{{ $product->image_url }}" alt="{{ $product->ten_san_pham }}" class="menu-card-img"
                                     loading="lazy" />
                                 @php $isFav = isset($product->is_favorite) && $product->is_favorite; @endphp
                                 <button class="menu-card-heart {{ $isFav ? 'liked' : '' }}" aria-label="Yêu thích"
-                                    data-wishlist="{{ $product->id }}">
+                                    data-wishlist="{{ $product->id }}" onclick="event.stopPropagation();">
                                     <svg class="w-4 h-4" fill="{{ $isFav ? '#c94040' : 'none' }}" viewBox="0 0 24 24"
                                         stroke="{{ $isFav ? '#c94040' : '#5a3520' }}" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round"
@@ -90,8 +90,25 @@
                                     <span class="menu-card-price">
                                         {{ number_format($product->gia_khuyen_mai ?? $product->gia_goc, 0, ',', '.') }}đ
                                     </span>
-                                    <button class="menu-card-btn menu-add-btn" data-product-id="{{ $product->id }}"
-                                        data-product-img="{{ $product->image_url }}" data-add-url="{{ route('cart.add') }}">Thêm
+                                    @php
+                                        $basePrice = (float)($product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc);
+                                        $sizesJson = $product->kichCo->map(function($kc) use ($basePrice) {
+                                            return [
+                                                'id' => $kc->id,
+                                                'name' => $kc->ten_kich_co,
+                                                'price' => $basePrice * (float)($kc->he_so_gia ?? 1),
+                                                'code' => $kc->ma_kich_co ?? '',
+                                            ];
+                                        })->toJson();
+                                    @endphp
+                                    <button class="menu-card-btn menu-add-btn" 
+                                        data-product-id="{{ $product->id }}"
+                                        data-product-name="{{ $product->ten_san_pham }}"
+                                        data-product-img="{{ $product->image_url }}" 
+                                        data-add-url="{{ route('cart.add') }}"
+                                        data-sizes="{{ $sizesJson }}"
+                                        data-nhiet-do="{{ $product->nhiet_do ?? '' }}"
+                                        onclick="event.stopPropagation();">Thêm
                                         món</button>
                                 </div>
                             </div>
@@ -235,21 +252,16 @@
         document.querySelectorAll('.menu-add-btn').forEach(btn => {
             btn.addEventListener('click', function () {
                 const productId = this.dataset.productId;
+                const productName = this.dataset.productName;
                 const imgSrc = this.dataset.productImg;
                 const addUrl = this.dataset.addUrl;
+                const sizes = JSON.parse(this.dataset.sizes || '[]');
                 const imgEl = this.closest('.menu-card')?.querySelector('.menu-card-img');
-                const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                const nhietDo = this.dataset.nhietDo;
 
-                launchCartAnimation(imgEl, imgSrc);
-
-                fetch(addUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
-                    body: JSON.stringify({ product_id: productId, qty: 1 }),
-                })
-                    .then(r => r.json())
-                    .then(d => { if (d.success) updateCartBadge(d.cart_count || 0); })
-                    .catch(err => console.error('Cart error:', err));
+                if (typeof window.showGlobalSizeModal === 'function') {
+                    window.showGlobalSizeModal(productId, productName, imgSrc, addUrl, sizes, imgEl, nhietDo);
+                }
             });
         });
     </script>

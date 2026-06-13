@@ -23,41 +23,80 @@ class ShiftCloseController extends Controller
         $selectedShiftId = $selectedShift?->id;
 
         $summary = $this->buildSummary($selectedShiftId);
+        $hasUnpaidTables = \App\Models\BanAn::where('trang_thai', 'đang phục vụ')->exists();
 
         return view('manager.shift-close.index', [
             'shiftGroups' => $shiftGroups,
             'selectedShift' => $selectedShift,
             'selectedShiftId' => $selectedShiftId,
             'summary' => $summary,
+            'hasUnpaidTables' => $hasUnpaidTables,
         ]);
+    }
+
+    public function startShift(Request $request)
+    {
+        $request->merge([
+            'so_tien_dau_ca' => str_replace(',', '', $request->input('so_tien_dau_ca', ''))
+        ]);
+
+        $request->validate([
+            'ca_lam_viec_id' => 'required|exists:ca_lam_viec,id',
+            'so_tien_dau_ca' => 'required|numeric|min:0',
+        ]);
+
+        $selectedShiftId = (int) $request->input('ca_lam_viec_id');
+
+        $existing = ChotCa::where('ca_lam_viec_id', $selectedShiftId)->first();
+        if ($existing) {
+            return back()->with('error', 'Ca này đã được bắt đầu.');
+        }
+
+        ChotCa::create([
+            'ca_lam_viec_id' => $selectedShiftId,
+            'nguoi_chot_id' => Auth::id(),
+            'so_tien_dau_ca' => (float) $request->input('so_tien_dau_ca'),
+        ]);
+
+        return back()->with('success', 'Đã khai báo tiền đầu ca thành công.');
     }
 
     public function store(Request $request)
     {
         $request->validate([
             'ca_lam_viec_id' => 'required|exists:ca_lam_viec,id',
-            'so_tien_dau_ca' => 'required|numeric|min:0',
             'ghi_chu' => 'nullable|string|max:500',
         ]);
 
         $selectedShiftId = (int) $request->input('ca_lam_viec_id');
-        $summary = $this->buildSummary($selectedShiftId, (float) $request->input('so_tien_dau_ca'));
+        $shift = CaLamViec::find($selectedShiftId);
+        
+        $allGroupIds = [];
+        if ($shift) {
+            $allGroupIds = CaLamViec::where('ngay_lam', $shift->ngay_lam)
+                ->where('ten_ca', $shift->ten_ca)
+                ->where('gio_bat_dau', $shift->gio_bat_dau)
+                ->where('gio_ket_thuc', $shift->gio_ket_thuc)
+                ->pluck('id')->toArray();
+        }
 
-        if (! $summary['shift']) {
+        $chotCa = ChotCa::whereIn('ca_lam_viec_id', empty($allGroupIds) ? [$selectedShiftId] : $allGroupIds)->first();
+
+        if (!$chotCa) {
             throw ValidationException::withMessages([
-                'ca_lam_viec_id' => 'Không tìm thấy ca làm việc cần chốt.',
+                'ca_lam_viec_id' => 'Vui lòng khai báo tiền đầu ca trước khi chốt ca.',
             ]);
         }
 
-        ChotCa::updateOrCreate(
-            ['ca_lam_viec_id' => $selectedShiftId],
-            [
-                'nguoi_chot_id' => Auth::id(),
-                'so_tien_dau_ca' => $summary['so_tien_dau_ca'],
-                'chot_luc' => now(),
-                'ghi_chu' => $request->filled('ghi_chu') ? trim((string) $request->input('ghi_chu')) : null,
-            ]
-        );
+        if (\App\Models\BanAn::where('trang_thai', 'đang phục vụ')->exists()) {
+            return back()->with('error', 'Hiện tại vẫn còn bàn chưa thanh toán (đang phục vụ). Hãy thanh toán hoặc trả bàn trước khi chốt ca.');
+        }
+
+        $chotCa->update([
+            'nguoi_chot_id' => Auth::id(),
+            'chot_luc' => now(),
+            'ghi_chu' => $request->filled('ghi_chu') ? trim((string) $request->input('ghi_chu')) : null,
+        ]);
 
         return redirect()
             ->route('manager.shift-close.index', ['ca_lam_viec_id' => $selectedShiftId])
@@ -75,6 +114,12 @@ class ShiftCloseController extends Controller
             return $this->emptySummary(null);
         }
 
+        $allGroupIds = CaLamViec::where('ngay_lam', $shift->ngay_lam)
+            ->where('ten_ca', $shift->ten_ca)
+            ->where('gio_bat_dau', $shift->gio_bat_dau)
+            ->where('gio_ket_thuc', $shift->gio_ket_thuc)
+            ->pluck('id');
+
         [$startAt, $endAt] = $this->shiftRange($shift);
 
         $orderCash = $this->sumPaidOrders($startAt, $endAt, ['tiền mặt', 'tien_mat']);
@@ -83,7 +128,7 @@ class ShiftCloseController extends Controller
         $expenseCash = $this->sumExpenses($shiftId, ['tiền mặt']);
         $expenseTransfer = $this->sumExpenses($shiftId, ['chuyển khoản']);
 
-        $existingClose = ChotCa::where('ca_lam_viec_id', $shiftId)->first();
+        $existingClose = ChotCa::whereIn('ca_lam_viec_id', $allGroupIds)->first();
         $startCashValue = $startCash !== null
             ? $startCash
             : (float) ($existingClose?->so_tien_dau_ca ?? 0);
@@ -164,7 +209,7 @@ class ShiftCloseController extends Controller
             return $activeShift;
         }
 
-        return $groups->first();
+        return null;
     }
 
     private function shiftRange(CaLamViec $shift): array

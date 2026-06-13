@@ -41,19 +41,17 @@ class RegisterController extends Controller
     public function register(Request $request)
     {
         $validated = $request->validate([
-            'ho_ten' => 'required|string|min:2|max:150',
+            'ho_ten' => 'nullable|string|max:70',
             'email' => [
                 'required',
                 'email',
-                'max:150',
+                'max:60',
                 Rule::unique('nguoi_dung', 'email'),
                 Rule::unique('tai_khoan_cho_xac_minh', 'email'),
             ],
-            'password' => ['required', 'confirmed', Password::min(8)],
+            'password' => ['required', 'confirmed', Password::min(8)->max(20)],
             'vai_tro' => 'required|in:khách hàng,nhân viên,quản lý',
         ], [
-            'ho_ten.required' => 'Vui lòng nhập họ và tên.',
-            'ho_ten.min' => 'Họ tên phải có ít nhất 2 ký tự.',
             'email.required' => 'Vui lòng nhập email.',
             'email.email' => 'Email không hợp lệ.',
             'email.unique' => 'Email này đã được sử dụng.',
@@ -79,7 +77,6 @@ class RegisterController extends Controller
 
             $nguoiDung = NguoiDung::create([
                 'cua_hang_id' => $store?->id,
-                'ho_ten' => trim($validated['ho_ten']),
                 'email' => strtolower(trim($validated['email'])),
                 'mat_khau' => Hash::make($validated['password']),
                 'vai_tro' => $validated['vai_tro'],
@@ -96,9 +93,8 @@ class RegisterController extends Controller
                 HoSoNhanVien::firstOrCreate(
                     ['nguoi_dung_id' => $nguoiDung->id],
                     [
-                        'ma_nhan_vien' => 'NV' . str_pad((string) $nguoiDung->id, 5, '0', STR_PAD_LEFT),
+                        'ho_ten' => trim($validated['ho_ten'] ?? ''),
                         'chuc_vu_id' => null,
-                        'luong_co_ban' => 0,
                     ]
                 );
             }
@@ -123,7 +119,6 @@ class RegisterController extends Controller
                     [
                         'cua_hang_id' => $store?->id,
                         'chuc_vu_id' => $managerPositionId,
-                        'ma_quan_ly' => 'QL' . str_pad((string) $nguoiDung->id, 5, '0', STR_PAD_LEFT),
                     ]
                 );
             }
@@ -151,7 +146,7 @@ class RegisterController extends Controller
 
     private function notifyApproversForApproval(NguoiDung $pendingUser, ?CuaHang $store): void
     {
-        if (! Schema::hasTable('notifications')) {
+        if (! Schema::hasTable('thong_bao')) {
             return;
         }
 
@@ -164,16 +159,8 @@ class RegisterController extends Controller
             $approvers = NguoiDung::query()
                 ->whereIn('vai_tro', $approvalRoles)
                 ->where('trang_thai', 'hoạt động')
-                ->when($store?->id || $store?->chu_cua_hang_id, function ($q) use ($store) {
-                    $q->where(function ($scope) use ($store) {
-                        if ($store?->id) {
-                            $scope->where('cua_hang_id', $store->id);
-                        }
-
-                        if ($store?->chu_cua_hang_id) {
-                            $scope->orWhere('id', $store->chu_cua_hang_id);
-                        }
-                    });
+                ->when($store?->id, function ($q) use ($store) {
+                    $q->where('cua_hang_id', $store->id);
                 })
                 ->get();
 

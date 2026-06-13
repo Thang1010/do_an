@@ -24,7 +24,6 @@
 					@if($order->banAn)
 						<div><strong>Bàn:</strong> {{ $order->banAn->ten_ban ?? ('Bàn ' . $order->banAn->so_ban) }}</div>
 					@endif
-					<div><strong>Trạng thái:</strong> {{ $order->trang_thai_don }}</div>
 					<div><strong>Thanh toán:</strong> {{ $order->trang_thai_thanh_toan }}</div>
 				</div>
 
@@ -50,12 +49,7 @@
 					<span>{{ number_format($order->tong_tien, 0, ',', '.') }}đ</span>
 				</div>
 
-				@if(in_array($order->trang_thai_don, ['chờ xác nhận', 'cho_xac_nhan']))
-					<form action="{{ route('customer.orders.cancel', $order->id) }}" method="POST" style="margin-top: 16px;" onsubmit="return confirm('Bạn có chắc muốn hủy đơn này?');">
-						@csrf @method('PATCH')
-						<button type="submit" class="cart-submit-btn" style="background: rgba(201, 64, 64, 0.7);">Hủy đơn</button>
-					</form>
-				@endif
+
 			</div>
 		</div>
 	</main>

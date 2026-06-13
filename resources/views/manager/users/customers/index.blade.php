@@ -39,7 +39,6 @@
                     <th>Họ tên</th>
                     <th>Email / SĐT</th>
                     <th>Tổng chi tiêu</th>
-                    <th>Ngày đăng ký</th>
                     <th>Trạng thái</th>
                     <th class="col-action-lg">Thao tác</th>
                 </tr>
@@ -63,7 +62,6 @@
                         <div class="text-12 text-muted">{{ $user->so_dien_thoai ?? '—' }}</div>
                     </td>
                     <td class="font-600">{{ number_format($user->tong_chi_tieu_tai_khoan ?? 0, 0, ',', '.') }}đ</td>
-                    <td class="text-12 text-muted">{{ $user->created_at->format('d/m/Y') }}</td>
                     <td>
                         <span class="badge {{ $user->trang_thai === 'hoạt động' ? 'badge-active' : 'badge-inactive' }}">
                             {{ $statusLabel }}
@@ -73,7 +71,7 @@
                         <div class="action-row">
                             <a href="{{ route('manager.users.show', $user->id) }}" class="btn btn-secondary btn-sm">Chi tiết</a>
                             <a href="{{ route('manager.users.edit', ['id' => $user->id, 'from' => 'customers']) }}" class="btn btn-warning btn-sm">Sửa</a>
-                            <form method="POST" action="{{ route('manager.users.destroy', $user->id) }}" onsubmit="return confirm('Bạn có chắc muốn xóa tài khoản {{ $user->ho_ten }}?')">
+                            <form method="POST" action="{{ route('manager.users.destroy', $user->id) }}" onsubmit="return confirmDelete(this, 'Bạn có chắc muốn xóa tài khoản {{ addslashes($user->ho_ten) }}?')">
                                 @csrf @method('DELETE')
                                 <input type="hidden" name="from" value="customers">
                                 <button type="submit" class="btn btn-danger btn-sm">Xóa</button>
@@ -83,7 +81,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="7" class="empty-state">
+                    <td colspan="6" class="empty-state">
                         Không tìm thấy khách hàng nào.
                     </td>
                 </tr>
@@ -116,21 +114,19 @@
                 <div class="form-group">
                     <label class="form-label">Họ tên <span>*</span></label>
                     <input type="text" name="ho_ten" class="form-control" value="{{ old('ho_ten') }}" maxlength="150" required>
+                    @error('ho_ten') <div class="form-error">{{ $message }}</div> @enderror
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Email</label>
-                    <input type="email" name="email" class="form-control" value="{{ old('email') }}" maxlength="150" placeholder="Có thể bỏ trống nếu dùng SĐT để đăng nhập">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Số điện thoại</label>
-                    <input type="text" name="so_dien_thoai" class="form-control" value="{{ old('so_dien_thoai') }}" maxlength="20" placeholder="Có thể bỏ trống nếu dùng email để đăng nhập">
+                    <label class="form-label">Email <span>*</span></label>
+                    <input type="email" name="email" class="form-control" value="{{ old('email') }}" maxlength="150" required>
+                    @error('email') <div class="form-error">{{ $message }}</div> @enderror
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">Mật khẩu <span>*</span></label>
                     <input type="password" name="password" class="form-control" minlength="8" required>
+                    @error('password') <div class="form-error">{{ $message }}</div> @enderror
                 </div>
 
                 <div class="form-group">
@@ -141,7 +137,7 @@
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal('create-customer-modal')">Hủy</button>
-            <button class="btn btn-primary" onclick="document.getElementById('create-customer-form').submit()">Tạo tài khoản</button>
+            <button type="submit" form="create-customer-form" class="btn btn-primary">Tạo tài khoản</button>
         </div>
     </div>
 </div>

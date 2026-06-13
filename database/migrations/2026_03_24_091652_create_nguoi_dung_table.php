@@ -13,16 +13,13 @@ return new class extends Migration
     {
         Schema::create('nguoi_dung', function (Blueprint $table) {
             $table->id();
-            $table->string('ho_ten', 150);
-            $table->string('email', 150)->nullable()->unique();
+            $table->string('email', 60)->unique();
             $table->string('google_id', 191)->nullable()->unique();
-            $table->string('so_dien_thoai', 20)->nullable()->unique();
             $table->string('mat_khau')->nullable();
             $table->enum('vai_tro', ['khách hàng', 'nhân viên', 'quản lý', 'chủ cửa hàng'])
                 ->default('khách hàng');
-            $table->enum('trang_thai', ['hoạt động', 'ngưng hoạt động', 'bị khóa'])
+            $table->enum('trang_thai', ['hoạt động', 'ngưng hoạt động'])
                 ->default('hoạt động');
-            $table->string('anh_dai_dien')->nullable();
             $table->timestamp('email_da_xac_thuc_luc')->nullable();
             $table->rememberToken();
             $table->timestamps();

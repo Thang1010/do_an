@@ -59,20 +59,15 @@
 {{-- ===== MAIN GRID ===== --}}
 <div class="layout-main-sidebar mb-20">
 
-    {{-- Biểu đồ doanh thu 7 ngày --}}
+    {{-- Biểu đồ doanh thu trong tuần --}}
     <div class="card">
         <div class="card-header">
-            <span class="card-title">Doanh thu 7 ngày gần nhất</span>
-            <div class="flex-gap-8">
-                <a href="?period=week" class="btn btn-secondary btn-sm {{ request('period','week')==='week' ? '' : '' }}">7 ngày</a>
-                <a href="?period=month" class="btn btn-secondary btn-sm">30 ngày</a>
-                <a href="?period=year" class="btn btn-secondary btn-sm">Năm</a>
-            </div>
+            <span class="card-title">Doanh thu ngày {{ now()->format('d/m/Y') }}</span>
         </div>
         <div class="card-body">
             @if($doanhThu7Ngay->sum('total') == 0)
                 <div class="empty-state">
-                    Chưa có dữ liệu doanh thu trong 7 ngày qua.
+                    Chưa có dữ liệu doanh thu trong tuần này.
                 </div>
             @else
             <div class="chart-bar-container">
@@ -85,7 +80,7 @@
                     <div
                         class="dashboard-chart-bar"
                         data-height="{{ max(4, $h) }}"
-                        data-color="{{ $day['total'] == $maxDoanhThu && $maxDoanhThu > 0 ? '#30261C' : '#E2D9C8' }}"
+                        data-color="{{ $day['is_today'] ? '#30261C' : '#E2D9C8' }}"
                         title="{{ number_format($day['total'],0,',','.') }}đ"
                     ></div>
                     <span class="chart-day-label">{{ $day['thu'] }}</span>
@@ -104,32 +99,20 @@
             <a href="{{ route('manager.orders.index') }}" class="btn btn-secondary btn-sm">Xem tất cả</a>
         </div>
         <div class="overflow-hidden">
-            @php
-                $statuses = [
-                    'cho_xac_nhan' => ['label'=>'Chờ xác nhận','class'=>'badge-pending'],
-                    'chờ xác nhận' => ['label'=>'Chờ xác nhận','class'=>'badge-pending'],
-                    'dang_pha_che' => ['label'=>'Đã xác nhận','class'=>'badge-done'],
-                    'hoan_thanh'   => ['label'=>'Đã xác nhận','class'=>'badge-done'],
-                    'da_giao'      => ['label'=>'Đã xác nhận','class'=>'badge-done'],
-                    'đã xác nhận'  => ['label'=>'Đã xác nhận','class'=>'badge-done'],
-                    'huy'          => ['label'=>'Đã hủy','class'=>'badge-cancelled'],
-                    'đã hủy'       => ['label'=>'Đã hủy','class'=>'badge-cancelled'],
-                ];
-            @endphp
             @forelse($latestOrders as $order)
             <div class="order-item">
                 <div>
                     <div class="order-item-title">
                         #{{ $order->id }} —
-                        {{ $order->nguoiDung->ho_ten ?? $order->ten_khach_hang ?? 'Khách vãng lai' }}
+                        {{ $order->nguoiDung?->hoSoKhachHang?->ho_ten ?? $order->nguoiDung?->email ?? 'Khách vãng lai' }}
                     </div>
                     <div class="order-item-sub">
                         {{ number_format($order->tong_tien, 0, ',', '.') }}đ
                         · {{ $order->created_at->diffForHumans() }}
                     </div>
                 </div>
-                <span class="badge {{ $statuses[$order->trang_thai_don]['class'] ?? 'badge-default' }}">
-                    {{ $statuses[$order->trang_thai_don]['label'] ?? $order->trang_thai_don }}
+                <span class="badge {{ $order->trang_thai_thanh_toan === 'đã thanh toán' ? 'badge-done' : 'badge-pending' }}">
+                    {{ $order->trang_thai_thanh_toan === 'đã thanh toán' ? 'Đã TT' : 'Chưa TT' }}
                 </span>
             </div>
             @empty
@@ -148,7 +131,6 @@
     <div class="card">
         <div class="card-header">
             <span class="card-title">Sản phẩm bán chạy tuần này</span>
-            <a href="{{ route('manager.reports.products') }}" class="btn btn-secondary btn-sm">Chi tiết</a>
         </div>
         <div class="card-body py-12">
             @forelse($topProducts as $i => $prod)

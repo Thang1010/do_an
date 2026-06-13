@@ -20,7 +20,7 @@
     </div>
     <div class="stat-card">
         <div class="stat-label">Tổng giờ làm</div>
-        <div class="stat-value" style="font-size: 20px;">{{ number_format($salaryRow['tong_gio'], 1) }} giờ</div>
+        <div class="stat-value" style="font-size: 20px;">{{ $salaryRow['tong_gio_format'] }}</div>
     </div>
     <div class="stat-card">
         <div class="stat-label">Tổng lương</div>
@@ -33,17 +33,14 @@
         <div class="stat-label">Chức vụ</div>
         <div class="stat-value" style="font-size: 16px;">{{ $salaryRow['chuc_vu'] }}</div>
     </div>
-    @if($salaryRow['loai_hinh'] === 'toàn thời gian')
-        <div class="stat-card">
-            <div class="stat-label">Lương cơ bản</div>
-            <div class="stat-value" style="font-size: 16px;">{{ $salaryRow['luong_co_ban'] !== null ? number_format($salaryRow['luong_co_ban'], 0, ',', '.') . 'đ' : '—' }}</div>
-        </div>
-    @else
-        <div class="stat-card">
-            <div class="stat-label">Lương theo giờ</div>
-            <div class="stat-value" style="font-size: 16px;">{{ $salaryRow['luong_theo_gio'] !== null ? number_format($salaryRow['luong_theo_gio'], 0, ',', '.') . 'đ/giờ' : '—' }}</div>
-        </div>
-    @endif
+    <div class="stat-card">
+        <div class="stat-label">Lương cơ bản</div>
+        <div class="stat-value" style="font-size: 16px;">{{ $salaryRow['luong_co_ban'] !== null ? number_format($salaryRow['luong_co_ban'], 0, ',', '.') . 'đ' : '—' }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Lương theo giờ</div>
+        <div class="stat-value" style="font-size: 16px;">{{ $salaryRow['luong_theo_gio'] !== null ? number_format($salaryRow['luong_theo_gio'], 0, ',', '.') . 'đ/giờ' : '—' }}</div>
+    </div>
 </div>
 
 <div class="card">
@@ -58,8 +55,8 @@
                     <th>Ca</th>
                     <th>Giờ bắt đầu</th>
                     <th>Giờ kết thúc</th>
-                    <th>Check-in</th>
-                    <th>Check-out</th>
+                    <th>Chấm công vào</th>
+                    <th>Chấm công ra</th>
                     <th>Số giờ thực tế</th>
                     <th>Ghi chú</th>
                 </tr>
@@ -68,8 +65,8 @@
                 @forelse($attendances as $attendance)
                     @php
                         $shift = $attendance->caLamViec;
-                        $checkIn = $attendance->check_in_luc ? \Carbon\Carbon::parse($attendance->check_in_luc) : null;
-                        $checkOut = $attendance->check_out_luc ? \Carbon\Carbon::parse($attendance->check_out_luc) : null;
+                        $checkIn = $attendance->cham_cong_vao ? \Carbon\Carbon::parse($attendance->cham_cong_vao) : null;
+                        $checkOut = $attendance->cham_cong_ra ? \Carbon\Carbon::parse($attendance->cham_cong_ra) : null;
                         $hours = ($checkIn && $checkOut && $checkOut->greaterThan($checkIn))
                             ? round($checkIn->diffInMinutes($checkOut) / 60, 2)
                             : 0;

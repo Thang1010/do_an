@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('ca_lam_viec', function (Blueprint $table) {
             $table->id();
             $table->foreignId('nguoi_dung_id')->nullable()->constrained('nguoi_dung')->nullOnDelete();
-            $table->string('ten_ca', 100);
+            $table->string('ten_ca', 50);
             $table->date('ngay_lam');
             $table->time('gio_bat_dau');
             $table->time('gio_ket_thuc');

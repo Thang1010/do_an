@@ -88,6 +88,17 @@ class CategoryController extends Controller
         return back()->with('success', "Đã thêm danh mục {$category->ten_danh_muc}.");
     }
 
+    public function show(int $id)
+    {
+        $category = DanhMuc::findOrFail($id);
+        $products = $category->sanPham()
+            ->with('hinhAnhSanPham')
+            ->withCount(['chiTietDonHang as so_luong_ban'])
+            ->latest()
+            ->paginate(15);
+        return view('manager.categories.show', compact('category', 'products'));
+    }
+
     public function update(Request $request, int $id)
     {
         $category = DanhMuc::findOrFail($id);

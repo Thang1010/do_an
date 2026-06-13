@@ -69,10 +69,10 @@ class InventoryController extends Controller
 
         $managerNames = LichSuKho::query()
             ->join('nguoi_dung', 'nguoi_dung.id', '=', 'lich_su_kho.nguoi_tao_id')
-            ->whereNotNull('nguoi_dung.ho_ten')
+            ->whereNotNull('nguoi_dung.email')
             ->distinct()
-            ->orderBy('nguoi_dung.ho_ten')
-            ->pluck('nguoi_dung.ho_ten');
+            ->orderBy('nguoi_dung.email')
+            ->pluck('nguoi_dung.email');
 
         return view('manager.inventory.index', compact(
             'inventory',
@@ -109,18 +109,18 @@ class InventoryController extends Controller
     public function storeImport(Request $request)
     {
         $request->validate([
-            'nguyen_lieu_id' => 'required|exists:nguyen_lieu,id',
-            'so_luong'       => 'required|numeric|min:0.01',
-            'don_gia'        => 'nullable|numeric|min:0',
-            'ghi_chu'        => 'nullable|string|max:500',
+            'items' => 'required|array|min:1',
+            'items.*.nguyen_lieu_id' => 'required|exists:nguyen_lieu,id',
+            'items.*.so_luong'       => 'required|numeric|min:0.01',
+            'items.*.don_gia'        => 'nullable|numeric|min:0',
+            'items.*.ghi_chu'        => 'nullable|string|max:500',
             'return_muc_dich_su_dung' => 'nullable|string|max:120',
         ], [
-            'nguyen_lieu_id.required' => 'Vui lòng chọn nguyên liệu.',
-            'so_luong.required'       => 'Vui lòng nhập số lượng.',
-            'so_luong.min'            => 'Số lượng phải lớn hơn 0.',
+            'items.*.nguyen_lieu_id.required' => 'Vui lòng chọn nguyên liệu.',
+            'items.*.so_luong.required'       => 'Vui lòng nhập số lượng.',
+            'items.*.so_luong.min'            => 'Số lượng phải lớn hơn 0.',
         ]);
 
-        $nguyenLieu = NguyenLieu::findOrFail($request->nguyen_lieu_id);
         $shiftId = $this->resolveExpenseShiftId();
         if (! $shiftId) {
             return back()
@@ -128,32 +128,42 @@ class InventoryController extends Controller
                 ->with('error', 'Không tìm thấy ca làm việc để ghi nhận chi tiêu. Vui lòng tạo ca trước khi nhập kho.');
         }
 
-        DB::transaction(function () use ($nguyenLieu, $request, $shiftId): void {
-            $unitPrice = $request->filled('don_gia') ? (float) $request->don_gia : null;
+        $totalItems = 0;
 
-            $history = LichSuKho::create([
-                'nguyen_lieu_id'   => $nguyenLieu->id,
-                'loai_giao_dich'   => 'nhập kho',
-                'tham_chieu_loai'  => 'chi_tieu',
-                'so_luong'         => $request->so_luong,
-                'gia_nhap'         => $unitPrice,
-                'nguoi_tao_id'     => Auth::id(),
-                'ghi_chu'          => $request->ghi_chu,
-                'created_at'       => now(),
-            ]);
+        DB::transaction(function () use ($request, $shiftId, &$totalItems): void {
+            foreach ($request->items as $index => $itemData) {
+                $nguyenLieu = NguyenLieu::find($itemData['nguyen_lieu_id']);
+                if (!$nguyenLieu) continue;
 
-            $expense = ChiTieu::create([
-                'ca_lam_viec_id' => $shiftId,
-                'nguoi_tao_id' => Auth::id(),
-                'nguyen_lieu_id' => $nguyenLieu->id,
-                'lich_su_kho_id' => $history->id,
-                'phuong_thuc_thanh_toan' => 'tiền mặt',
-                'ghi_chu' => $request->filled('ghi_chu') ? trim((string) $request->ghi_chu) : null,
-            ]);
+                $unitPrice = isset($itemData['don_gia']) && $itemData['don_gia'] !== '' ? (float) $itemData['don_gia'] : null;
+                $ghiChu = $itemData['ghi_chu'] ?? null;
 
-            $history->update([
-                'tham_chieu_id' => $expense->id,
-            ]);
+                $history = LichSuKho::create([
+                    'nguyen_lieu_id'   => $nguyenLieu->id,
+                    'loai_giao_dich'   => 'nhập kho',
+                    'tham_chieu_loai'  => 'chi_tieu',
+                    'so_luong'         => (float) $itemData['so_luong'],
+                    'gia_nhap'         => $unitPrice,
+                    'nguoi_tao_id'     => Auth::id(),
+                    'ghi_chu'          => $ghiChu,
+                    'created_at'       => now(),
+                ]);
+
+                $expense = ChiTieu::create([
+                    'ca_lam_viec_id' => $shiftId,
+                    'nguoi_tao_id' => Auth::id(),
+                    'nguyen_lieu_id' => $nguyenLieu->id,
+                    'lich_su_kho_id' => $history->id,
+                    'phuong_thuc_thanh_toan' => 'tiền mặt',
+                    'ghi_chu' => $ghiChu !== '' ? $ghiChu : null,
+                ]);
+
+                $history->update([
+                    'tham_chieu_id' => $expense->id,
+                ]);
+
+                $totalItems++;
+            }
         });
 
         $returnPurpose = $this->normalizePurposeFilter($request->input('return_muc_dich_su_dung'));
@@ -163,132 +173,10 @@ class InventoryController extends Controller
         }
 
         return redirect()->route('manager.inventory.index', $redirectParams)
-            ->with('success', "Đã nhập {$request->so_luong} {$nguyenLieu->don_vi_tinh} «{$nguyenLieu->ten_nguyen_lieu}».");
+            ->with('success', "Đã nhập {$totalItems} loại nguyên liệu thành công.");
     }
 
-    public function storeImportExcel(Request $request)
-    {
-        $request->validate([
-            'excel_file' => 'required|file|mimes:xlsx,xls,csv,txt|max:5120',
-            'return_muc_dich_su_dung' => 'nullable|string|max:120',
-        ], [
-            'excel_file.required' => 'Vui lòng chọn file Excel để nhập kho.',
-            'excel_file.mimes' => 'File không hợp lệ. Chỉ chấp nhận xlsx, xls hoặc csv.',
-            'excel_file.max' => 'Kích thước file tối đa là 5MB.',
-        ]);
 
-        $file = $request->file('excel_file');
-        $shiftId = $this->resolveExpenseShiftId();
-        if (! $shiftId) {
-            return redirect()
-                ->route('manager.inventory.import')
-                ->with('error', 'Không tìm thấy ca làm việc để ghi nhận chi tiêu. Vui lòng tạo ca trước khi nhập kho.');
-        }
-
-        try {
-            $spreadsheet = IOFactory::load($file->getRealPath());
-        } catch (\Throwable $exception) {
-            return redirect()
-                ->route('manager.inventory.import')
-                ->with('error', 'Không thể đọc file Excel. Vui lòng kiểm tra lại định dạng dữ liệu.');
-        }
-
-        $rows = $spreadsheet->getActiveSheet()->toArray(null, true, true, false);
-
-        $successCount = 0;
-        $failedCount = 0;
-        $errors = [];
-
-        foreach ($rows as $index => $row) {
-            $line = $index + 1;
-            $ingredientCell = trim((string) ($row[0] ?? ''));
-            $quantityCell = trim((string) ($row[1] ?? ''));
-            $unitPriceCell = trim((string) ($row[2] ?? ''));
-            $note = trim((string) ($row[3] ?? ''));
-
-            if ($line === 1 && $this->isHeaderRow([$ingredientCell, $quantityCell, $unitPriceCell])) {
-                continue;
-            }
-
-            if ($ingredientCell === '' && $quantityCell === '' && $unitPriceCell === '' && $note === '') {
-                continue;
-            }
-
-            $quantity = $this->parseDecimalValue($quantityCell);
-            if ($quantity === null || $quantity <= 0) {
-                $failedCount++;
-                $errors[] = "Dòng {$line}: Số lượng không hợp lệ.";
-                continue;
-            }
-
-            $unitPrice = null;
-            if ($unitPriceCell !== '') {
-                $unitPrice = $this->parseDecimalValue($unitPriceCell);
-                if ($unitPrice === null || $unitPrice < 0) {
-                    $failedCount++;
-                    $errors[] = "Dòng {$line}: Đơn giá không hợp lệ.";
-                    continue;
-                }
-            }
-
-            $nguyenLieu = $this->resolveNguyenLieu($ingredientCell);
-            if (!$nguyenLieu) {
-                $failedCount++;
-                $errors[] = "Dòng {$line}: Không tìm thấy nguyên liệu '{$ingredientCell}'.";
-                continue;
-            }
-
-            DB::transaction(function () use ($nguyenLieu, $quantity, $unitPrice, $note, $shiftId) {
-                $history = LichSuKho::create([
-                    'nguyen_lieu_id' => $nguyenLieu->id,
-                    'loai_giao_dich' => 'nhập kho',
-                    'tham_chieu_loai' => 'chi_tieu',
-                    'so_luong' => $quantity,
-                    'gia_nhap' => $unitPrice,
-                    'nguoi_tao_id' => Auth::id(),
-                    'ghi_chu' => $note !== '' ? $note : 'Nhập kho bằng file Excel',
-                    'created_at' => now(),
-                ]);
-
-                $expense = ChiTieu::create([
-                    'ca_lam_viec_id' => $shiftId,
-                    'nguoi_tao_id' => Auth::id(),
-                    'nguyen_lieu_id' => $nguyenLieu->id,
-                    'lich_su_kho_id' => $history->id,
-                    'phuong_thuc_thanh_toan' => 'tiền mặt',
-                    'ghi_chu' => $note !== '' ? $note : 'Nhập kho bằng file Excel',
-                ]);
-
-                $history->update([
-                    'tham_chieu_id' => $expense->id,
-                ]);
-            });
-
-            $successCount++;
-        }
-
-        $returnPurpose = $this->normalizePurposeFilter($request->input('return_muc_dich_su_dung'));
-        $redirectParams = ['tab' => 'stock'];
-        if ($returnPurpose !== null) {
-            $redirectParams['muc_dich_su_dung'] = $returnPurpose;
-        }
-        $redirect = redirect()->route('manager.inventory.index', $redirectParams);
-
-        if ($successCount === 0) {
-            $sampleErrors = implode(' ', array_slice($errors, 0, 3));
-            return $redirect->with('error', 'Không có dòng nào hợp lệ để nhập kho. ' . $sampleErrors);
-        }
-
-        $successMessage = "Đã nhập kho thành công {$successCount} dòng từ file.";
-        if ($failedCount > 0) {
-            $sampleErrors = implode(' ', array_slice($errors, 0, 3));
-            return $redirect
-                ->with('success', $successMessage)
-                ->with('warning', "Có {$failedCount} dòng bị bỏ qua. {$sampleErrors}");
-        }
-
-        return $redirect->with('success', $successMessage);
-    }
 
     public function export(Request $request)
     {
@@ -311,30 +199,45 @@ class InventoryController extends Controller
     public function storeExport(Request $request)
     {
         $request->validate([
-            'nguyen_lieu_id' => 'required|exists:nguyen_lieu,id',
-            'so_luong'       => 'required|numeric|min:0.01',
-            'ly_do'          => 'nullable|string|max:500',
+            'items' => 'required|array|min:1',
+            'items.*.nguyen_lieu_id' => 'required|exists:nguyen_lieu,id',
+            'items.*.so_luong' => 'required|numeric|min:0.01',
+            'items.*.ly_do' => 'nullable|string|max:500',
             'return_muc_dich_su_dung' => 'nullable|string|max:120',
         ]);
 
-        $nguyenLieu = NguyenLieu::findOrFail($request->nguyen_lieu_id);
-        $currentStock = $this->currentStock((int) $nguyenLieu->id);
+        $errors = [];
+        $totalItems = 0;
 
-        if ((float) $request->so_luong > $currentStock) {
-            return back()->withErrors(['so_luong' => 'Số lượng xuất vượt tồn kho hiện tại.'])
-                ->withInput();
-        }
+        DB::transaction(function () use ($request, &$errors, &$totalItems): void {
+            foreach ($request->items as $index => $itemData) {
+                $nguyenLieu = NguyenLieu::find($itemData['nguyen_lieu_id']);
+                if (!$nguyenLieu) continue;
 
-        DB::transaction(function () use ($nguyenLieu, $request): void {
-            LichSuKho::create([
-                'nguyen_lieu_id'   => $nguyenLieu->id,
-                'loai_giao_dich'   => 'xuất kho',
-                'so_luong'         => $request->so_luong,
-                'nguoi_tao_id'     => Auth::id(),
-                'ghi_chu'          => $request->ly_do,
-                'created_at'       => now(),
-            ]);
+                $currentStock = $this->currentStock((int) $nguyenLieu->id);
+                $soLuong = (float) $itemData['so_luong'];
+
+                if ($soLuong > $currentStock) {
+                    $errors[] = "Số lượng xuất của {$nguyenLieu->ten_nguyen_lieu} vượt tồn kho hiện tại.";
+                    continue;
+                }
+
+                LichSuKho::create([
+                    'nguyen_lieu_id'   => $nguyenLieu->id,
+                    'loai_giao_dich'   => 'xuất kho',
+                    'so_luong'         => $soLuong,
+                    'nguoi_tao_id'     => Auth::id(),
+                    'ghi_chu'          => $itemData['ly_do'] ?? null,
+                    'created_at'       => now(),
+                ]);
+                
+                $totalItems++;
+            }
         });
+
+        if (count($errors) > 0) {
+            return back()->withErrors($errors)->withInput();
+        }
 
         $returnPurpose = $this->normalizePurposeFilter($request->input('return_muc_dich_su_dung'));
         $redirectParams = ['tab' => 'stock'];
@@ -343,7 +246,104 @@ class InventoryController extends Controller
         }
 
         return redirect()->route('manager.inventory.index', $redirectParams)
-            ->with('success', "Đã xuất {$request->so_luong} {$nguyenLieu->don_vi_tinh} «{$nguyenLieu->ten_nguyen_lieu}».");
+            ->with('success', "Đã xuất {$totalItems} loại nguyên liệu thành công.");
+    }
+
+    public function storeExportExcel(Request $request)
+    {
+        $request->validate([
+            'excel_file' => 'required|file|mimes:xlsx,xls,csv,txt|max:5120',
+            'return_muc_dich_su_dung' => 'nullable|string|max:120',
+        ], [
+            'excel_file.required' => 'Vui lòng chọn file Excel để xuất kho.',
+            'excel_file.mimes' => 'File không hợp lệ. Chỉ chấp nhận xlsx, xls hoặc csv.',
+            'excel_file.max' => 'Kích thước file tối đa là 5MB.',
+        ]);
+
+        $file = $request->file('excel_file');
+
+        try {
+            $spreadsheet = IOFactory::load($file->getRealPath());
+        } catch (\Throwable $exception) {
+            return back()->with('error', 'Không thể đọc file Excel. Vui lòng kiểm tra lại định dạng dữ liệu.');
+        }
+
+        $rows = $spreadsheet->getActiveSheet()->toArray(null, true, true, false);
+
+        $successCount = 0;
+        $failedCount = 0;
+        $errors = [];
+
+        foreach ($rows as $index => $row) {
+            $line = $index + 1;
+            $ingredientCell = trim((string) ($row[0] ?? ''));
+            $quantityCell = trim((string) ($row[1] ?? ''));
+            $note = trim((string) ($row[2] ?? ''));
+
+            if ($line === 1 && $this->isHeaderRow([$ingredientCell, $quantityCell, ''])) {
+                continue;
+            }
+
+            if ($ingredientCell === '' && $quantityCell === '' && $note === '') {
+                continue;
+            }
+
+            $quantity = $this->parseDecimalValue($quantityCell);
+            if ($quantity === null || $quantity <= 0) {
+                $failedCount++;
+                $errors[] = "Dòng {$line}: Số lượng không hợp lệ.";
+                continue;
+            }
+
+            $nguyenLieu = $this->resolveNguyenLieu($ingredientCell);
+            if (!$nguyenLieu) {
+                $failedCount++;
+                $errors[] = "Dòng {$line}: Không tìm thấy nguyên liệu '{$ingredientCell}'.";
+                continue;
+            }
+
+            $currentStock = $this->currentStock((int) $nguyenLieu->id);
+            if ($quantity > $currentStock) {
+                $failedCount++;
+                $errors[] = "Dòng {$line}: Số lượng xuất vượt tồn kho hiện tại ({$currentStock}).";
+                continue;
+            }
+
+            DB::transaction(function () use ($nguyenLieu, $quantity, $note) {
+                LichSuKho::create([
+                    'nguyen_lieu_id' => $nguyenLieu->id,
+                    'loai_giao_dich' => 'xuất kho',
+                    'so_luong' => $quantity,
+                    'nguoi_tao_id' => Auth::id(),
+                    'ghi_chu' => $note !== '' ? $note : 'Xuất kho bằng file Excel',
+                    'created_at' => now(),
+                ]);
+            });
+
+            $successCount++;
+        }
+
+        $returnPurpose = $this->normalizePurposeFilter($request->input('return_muc_dich_su_dung'));
+        $redirectParams = ['tab' => 'stock'];
+        if ($returnPurpose !== null) {
+            $redirectParams['muc_dich_su_dung'] = $returnPurpose;
+        }
+        $redirect = redirect()->route('manager.inventory.index', $redirectParams);
+
+        if ($successCount === 0) {
+            $sampleErrors = implode(' ', array_slice($errors, 0, 3));
+            return $redirect->with('error', 'Không có dòng nào hợp lệ để xuất kho. ' . $sampleErrors);
+        }
+
+        $successMessage = "Đã xuất kho thành công {$successCount} dòng từ file.";
+        if ($failedCount > 0) {
+            $sampleErrors = implode(' ', array_slice($errors, 0, 3));
+            return $redirect
+                ->with('success', $successMessage)
+                ->with('warning', "Có {$failedCount} dòng bị bỏ qua. {$sampleErrors}");
+        }
+
+        return $redirect->with('success', $successMessage);
     }
 
     public function storeAdjustment(Request $request)
@@ -541,7 +541,7 @@ class InventoryController extends Controller
 
         if ($managerName !== '') {
             $query->whereHas('nguoiTao', function (Builder $subQuery) use ($managerName) {
-                $subQuery->where('ho_ten', 'like', '%' . $managerName . '%');
+                $subQuery->where('email', 'like', '%' . $managerName . '%');
             });
         }
 
@@ -758,7 +758,6 @@ class InventoryController extends Controller
                 'Đơn vị',
                 'Giá nhập',
                 'Tổng tiền',
-                'Tham chiếu',
                 'Người nhập',
                 'Ghi chú',
             ];
@@ -777,8 +776,7 @@ class InventoryController extends Controller
                     $log->nguyenLieu->don_vi_tinh ?? '',
                     $unitPrice,
                     $unitPrice !== null ? $unitPrice * $quantity : null,
-                    $this->formatReference($log->tham_chieu_loai, $log->tham_chieu_id),
-                    $log->nguoiTao->ho_ten ?? '—',
+                    $log->nguoiTao->ho_ten ?? $log->nguoiTao->email ?? '—',
                     $log->ghi_chu,
                 ];
             }
@@ -794,7 +792,6 @@ class InventoryController extends Controller
             'Loại giao dịch',
             'Số lượng biến động',
             'Đơn vị',
-            'Tham chiếu',
             'Người thao tác',
             'Lý do / Ghi chú',
         ];
@@ -808,8 +805,7 @@ class InventoryController extends Controller
                 $log->loai_giao_dich,
                 (float) $log->so_luong,
                 $log->nguyenLieu->don_vi_tinh ?? '',
-                $this->formatReference($log->tham_chieu_loai, $log->tham_chieu_id),
-                $log->nguoiTao->ho_ten ?? '—',
+                $log->nguoiTao->ho_ten ?? $log->nguoiTao->email ?? '—',
                 $log->ghi_chu,
             ];
         }

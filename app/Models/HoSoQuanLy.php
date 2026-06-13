@@ -13,18 +13,17 @@ class HoSoQuanLy extends Model
         'nguoi_dung_id',
         'cua_hang_id',
         'chuc_vu_id',
-        'ma_quan_ly',
-        'loai_hinh_lam_viec',
-        'luong_co_ban',
-        'luong_theo_gio',
+        'ho_ten',
+        'ngay_sinh',
+        'dia_chi_tam_chu',
+        'so_dien_thoai',
         'ngay_vao_lam',
+        'anh_dai_dien',
     ];
 
     protected function casts(): array
     {
         return [
-            'luong_co_ban' => 'decimal:2',
-            'luong_theo_gio' => 'decimal:2',
             'ngay_vao_lam' => 'date',
         ];
     }

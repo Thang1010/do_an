@@ -16,13 +16,15 @@ return new class extends Migration
             $table->foreignId('danh_muc_id')
                 ->constrained('danh_muc')
                 ->restrictOnDelete();
-            $table->string('ten_san_pham', 150);
+            $table->string('ten_san_pham', 50);
             $table->string('slug', 180)->nullable()->unique();
-            $table->text('mo_ta')->nullable();
-            $table->decimal('gia_goc', 12, 2);
-            $table->decimal('gia_khuyen_mai', 12, 2)->nullable();
+            $table->string('mo_ta', 150)->nullable();
+            $table->string('mo_ta_chi_tiet', 300)->nullable();
+            $table->float('gia_goc')->default(0);
+            $table->float('gia_khuyen_mai')->default(0);
             $table->string('hinh_anh_chinh')->nullable();
             $table->enum('trang_thai_ban', ['đang bán', 'ngừng bán'])->default('đang bán');
+            $table->set('nhiet_do', ['nóng', 'lạnh'])->nullable();
             $table->enum('loai_quan_ly_kho', ['theo nguyên liệu', 'theo số lượng'])->default('theo nguyên liệu');
             $table->boolean('noi_bat')->default(false);
             $table->timestamps();

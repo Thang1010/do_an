@@ -74,6 +74,23 @@
                                 </option>
                             </select>
                         </div>
+                        <div class="form-group form-group-flat">
+                            <label class="form-label">Nhiệt độ (Tùy chọn)</label>
+                            @php
+                                $nhietDoArr = old('nhiet_do', isset($product) ? (isset($product->nhiet_do) && $product->nhiet_do ? explode(',', $product->nhiet_do) : []) : ['lạnh']);
+                            @endphp
+                            <div style="display: flex; gap: 16px; margin-top: 8px;">
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="nhiet_do[]" value="nóng" {{ in_array('nóng', $nhietDoArr) ? 'checked' : '' }}>
+                                    Nóng
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" name="nhiet_do[]" value="lạnh" {{ in_array('lạnh', $nhietDoArr) ? 'checked' : '' }}>
+                                    Lạnh
+                                </label>
+                            </div>
+                            @error('nhiet_do')<div class="form-error">{{ $message }}</div>@enderror
+                        </div>
                     </div>
                 </div>
             </div>
@@ -85,14 +102,14 @@
                     <div class="form-grid-2">
                         <div class="form-group form-group-flat">
                             <label class="form-label">Giá gốc (đ) <span>*</span></label>
-                            <input type="number" name="gia_goc" class="form-control @error('gia_goc') is-invalid @enderror"
+                            <input type="text" name="gia_goc" class="form-control format-money @error('gia_goc') is-invalid @enderror"
                                    placeholder="35000"
                                    value="{{ old('gia_goc', $product->gia_goc ?? '') }}" min="0" required>
                             @error('gia_goc')<div class="form-error">{{ $message }}</div>@enderror
                         </div>
                         <div class="form-group form-group-flat">
                             <label class="form-label">Giá khuyến mãi (đ)</label>
-                            <input type="number" name="gia_khuyen_mai" class="form-control"
+                            <input type="text" name="gia_khuyen_mai" class="form-control format-money"
                                    placeholder="Để trống nếu không KM"
                                    value="{{ old('gia_khuyen_mai', $product->gia_khuyen_mai ?? '') }}" min="0">
                             <div class="form-hint">Giá này sẽ hiển thị thay thế giá gốc</div>
@@ -111,13 +128,11 @@
                         @php
                             $sizes = old('sizes');
                             if ($sizes === null) {
-                                if (isset($product) && $product->sanPhamKichCo->isNotEmpty()) {
-                                    $basePrice = (float) ($product->gia_goc ?? 0);
-                                    $sizes = $product->sanPhamKichCo->map(function ($spkc) use ($basePrice) {
-                                        $giaBan = (float) ($spkc->gia_ban ?? 0);
+                                if (isset($product) && $product->kichCo->isNotEmpty()) {
+                                    $sizes = $product->kichCo->map(function ($kc) {
                                         return [
-                                            'kich_co_id' => $spkc->kich_co_id,
-                                            'he_so_gia' => $basePrice > 0 ? round($giaBan / $basePrice, 2) : 1,
+                                            'kich_co_id' => $kc->id,
+                                            'he_so_gia' => $kc->he_so_gia ?? 1,
                                             'ma_kich_co_moi' => '',
                                             'ten_kich_co_moi' => '',
                                             'mo_ta_kich_co_moi' => '',
@@ -140,22 +155,22 @@
                             <div class="form-grid-2">
                                 <div class="form-group form-group-flat">
                                 <label class="form-label">Tên size</label>
-                                    <select name="sizes[{{ $i }}][kich_co_id]" class="form-control size-select" onchange="toggleOtherFields(this)">
+                                    <select name="sizes[{{ $i }}][kich_co_id]" class="form-control size-select" onchange="handleSizeChange(this)">
                                         <option value="">-- Chọn size --</option>
                                         @foreach(($kichCos ?? []) as $kc)
-                                            <option value="{{ $kc->id }}" {{ (string)($size['kich_co_id'] ?? '') === (string)$kc->id ? 'selected' : '' }}>
+                                            <option value="{{ $kc->id }}" data-he-so-gia="{{ $kc->he_so_gia ?? 1 }}" {{ (string)($size['kich_co_id'] ?? '') === (string)$kc->id ? 'selected' : '' }}>
                                                 {{ $kc->ten_kich_co }} ({{ $kc->ma_kich_co ?? 'không mã' }})
                                             </option>
                                         @endforeach
-                                        <option value="khac" {{ $isOther ? 'selected' : '' }}>Khác</option>
+                                        <option value="khac" data-he-so-gia="1" {{ $isOther ? 'selected' : '' }}>Khác</option>
                                     </select>
                                     @error("sizes.$i.kich_co_id")<div class="form-error">{{ $message }}</div>@enderror
                                 </div>
                                 <div class="form-group size-field-flex">
                                     <div class="flex-1">
                                         <label class="form-label">Hệ số giá</label>
-                                        <input type="number" name="sizes[{{ $i }}][he_so_gia]" class="form-control"
-                                               step="0.1" min="1" placeholder="1.0" value="{{ $size['he_so_gia'] ?? 1 }}">
+                                        <input type="number" name="sizes[{{ $i }}][he_so_gia]" class="form-control hs-gia-input"
+                                               step="0.1" min="1" placeholder="1.0" value="{{ $size['he_so_gia'] ?? 1 }}" {{ !$isOther ? 'readonly' : '' }}>
                                         @error("sizes.$i.he_so_gia")<div class="form-error">{{ $message }}</div>@enderror
                                     </div>
                                     <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.size-row').remove()">Xóa</button>
@@ -272,7 +287,7 @@
                 <div class="card-body">
                     <div class="img-upload-area" id="upload-area" onclick="document.getElementById('img-input').click()">
                         <img id="img-preview"
-                             src="{{ old('anh_chinh') ? '' : (isset($product) && $product->hinh_anh_chinh ? asset('storage/' . $product->hinh_anh_chinh) : '') }}"
+                             src="{{ old('anh_chinh') ? '' : (isset($product) && $product->hinh_anh_chinh ? $product->image_url : '') }}"
                              class="img-preview-upload {{ isset($product) && $product->hinh_anh_chinh ? '' : 'hidden' }}">
                         <p>Nhấn để tải ảnh lên</p>
                         <p class="img-upload-hint">JPG, PNG, WEBP — tối đa 2MB</p>
@@ -313,7 +328,8 @@ function addSizeRow() {
     const container = document.getElementById('sizes-container');
     const options = `{!! collect($kichCos ?? [])->map(function($kc){
         $label = e($kc->ten_kich_co . ' (' . ($kc->ma_kich_co ?? 'không mã') . ')');
-        return '<option value="' . $kc->id . '">' . $label . '</option>';
+        $hs = $kc->he_so_gia ?? 1;
+        return '<option value="' . $kc->id . '" data-he-so-gia="' . $hs . '">' . $label . '</option>';
     })->implode('') !!}`;
     const row = document.createElement('div');
     row.className = 'size-row';
@@ -321,10 +337,10 @@ function addSizeRow() {
         <div class="form-grid-2">
             <div class="form-group form-group-flat">
                 <label class="form-label">Tên size</label>
-                <select name="sizes[${sizeIndex}][kich_co_id]" class="form-control size-select" onchange="toggleOtherFields(this)">
+                <select name="sizes[${sizeIndex}][kich_co_id]" class="form-control size-select" onchange="handleSizeChange(this)">
                     <option value="">-- Chọn size --</option>
                     ${options}
-                    <option value="khac">Khác</option>
+                    <option value="khac" data-he-so-gia="1">Khác</option>
                 </select>
             </div>
             <div class="form-group size-field-flex">
@@ -353,20 +369,31 @@ function addSizeRow() {
     sizeIndex++;
 }
 
-function toggleOtherFields(selectEl) {
+function handleSizeChange(selectEl) {
     const row = selectEl.closest('.size-row');
-    const wrapper = row.querySelector('.other-size-fields');
-    const isOther = selectEl.value === 'khac';
-    if (isOther) {
-        wrapper.classList.add('visible');
-        wrapper.style.display = 'grid';
+    const heSoGiaInput = row.querySelector('input[name$="[he_so_gia]"]');
+    const otherFields = row.querySelector('.other-size-fields');
+    const selectedOption = selectEl.options[selectEl.selectedIndex];
+    
+    if (selectEl.value === 'khac') {
+        otherFields.style.display = 'grid';
+        otherFields.classList.add('visible');
+        if(heSoGiaInput) {
+            heSoGiaInput.readOnly = false;
+        }
     } else {
-        wrapper.classList.remove('visible');
-        wrapper.style.display = 'none';
+        otherFields.style.display = 'none';
+        otherFields.classList.remove('visible');
+        if(heSoGiaInput) {
+            heSoGiaInput.readOnly = true;
+            if(selectedOption && selectedOption.dataset.heSoGia) {
+                heSoGiaInput.value = selectedOption.dataset.heSoGia;
+            }
+        }
     }
 }
 
-document.querySelectorAll('.size-select').forEach(toggleOtherFields);
+document.querySelectorAll('.size-select').forEach(handleSizeChange);
 
 function previewImage(input) {
     if (input.files && input.files[0]) {

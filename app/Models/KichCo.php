@@ -13,11 +13,13 @@ class KichCo extends Model
         'ten_kich_co',
         'ma_kich_co',
         'mo_ta',
+        'he_so_gia',
     ];
 
-    public function sanPhamKichCo()
+    public function sanPham()
     {
-        return $this->hasMany(SanPhamKichCo::class, 'kich_co_id');
+        return $this->belongsToMany(SanPham::class, 'san_pham_kich_co', 'kich_co_id', 'san_pham_id')
+                    ->withTimestamps();
     }
 
     public function chiTietDonHang()

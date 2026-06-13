@@ -8,6 +8,23 @@ use App\Models\DonHang;
 
 class TableStatusService
 {
+    private const BOOKING_NOTE_PREFIX = 'Hẹn đến lúc:';
+
+    public static function isBookingOrder(DonHang $order): bool
+    {
+        return $order->loai_don === 'đặt hàng trước';
+    }
+
+    public static function isBookingNote(?string $note): bool
+    {
+        // Legacy check kept for compatibility but ghi_chu was removed from don_hang
+        if (!$note) {
+            return false;
+        }
+
+        return str_contains($note, self::BOOKING_NOTE_PREFIX);
+    }
+
     public static function refreshForTable(?int $tableId): void
     {
         if (!$tableId) {
@@ -15,38 +32,38 @@ class TableStatusService
         }
 
         $table = BanAn::query()->find($tableId);
-        if (!$table) {
+        if (!$table || $table->trang_thai === TableStatus::NGUNG_SU_DUNG->value) {
             return;
         }
 
-        $hasConfirmed = DonHang::query()
+        // trang_thai_thanh_toan is now on chi_tiet_don_hang
+        $baseQuery = DonHang::query()
             ->where('ban_an_id', $tableId)
-            ->where('trang_thai_don', 'đã xác nhận')
+            ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
+            ->whereNotNull('nhan_vien_id');
+
+        // Bàn có đơn hàng nào chưa thanh toán VÀ có chứa ít nhất 1 món ăn không?
+        $hasUnpaidItems = (clone $baseQuery)
+            ->whereHas('chiTietDonHang')
             ->exists();
 
-        if ($hasConfirmed) {
-            if ($table->trang_thai !== TableStatus::DANG_PHUC_VU->value) {
-                $table->update(['trang_thai' => TableStatus::DANG_PHUC_VU->value]);
+        if ($hasUnpaidItems) {
+            if ($table->trang_thai !== TableStatus::DANG_PHUC_VU->value && $table->trang_thai !== TableStatus::DA_DAT->value) {
+                // Booking orders use loai_don = 'đặt hàng trước'
+                $hasBookingUnpaid = (clone $baseQuery)
+                    ->whereHas('chiTietDonHang', fn($q) => $q->where('loai_don', 'đặt hàng trước'))
+                    ->exists();
+
+                if ($hasBookingUnpaid && !$table->trang_thai === TableStatus::DA_DAT->value) {
+                    $table->update(['trang_thai' => TableStatus::DA_DAT->value]);
+                } else if (!$hasBookingUnpaid) {
+                    $table->update(['trang_thai' => TableStatus::DANG_PHUC_VU->value]);
+                }
             }
             return;
         }
 
-        $hasPending = DonHang::query()
-            ->where('ban_an_id', $tableId)
-            ->whereIn('trang_thai_don', ['chờ xác nhận', 'cho_xac_nhan'])
-            ->exists();
-
-        if ($hasPending) {
-            if ($table->trang_thai !== TableStatus::DANG_CHO_DUYET->value) {
-                $table->update(['trang_thai' => TableStatus::DANG_CHO_DUYET->value]);
-            }
-            return;
-        }
-
-        if (in_array($table->trang_thai, [TableStatus::NGUNG_SU_DUNG->value, TableStatus::DA_DAT->value], true)) {
-            return;
-        }
-
+        // Bàn không có đơn hàng nào có món -> trống
         if ($table->trang_thai !== TableStatus::TRONG->value) {
             $table->update(['trang_thai' => TableStatus::TRONG->value]);
         }

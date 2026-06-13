@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Manager;
 
-use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Enums\TableStatus;
@@ -16,7 +15,6 @@ use App\Models\KichCo;
 use App\Models\LichSuKho;
 use App\Models\NguoiDung;
 use App\Models\SanPham;
-use App\Models\SanPhamKichCo;
 use App\Models\ThanhToan;
 use App\Notifications\OrderUpdatedNotification;
 use App\Http\Requests\Manager\StoreOrderRequest;
@@ -34,6 +32,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Gate;
 
 class OrderController extends Controller
 {
@@ -42,12 +41,8 @@ class OrderController extends Controller
     public function __construct(
         private readonly PaymentService $paymentService,
         private readonly OrderInventoryService $inventoryService,
-    ) {}
-    private function normalizeOrderStatus(?string $status): ?string
-    {
-        return OrderStatus::normalize($status)?->value;
+    ) {
     }
-
     // normalizePaymentStatus(), normalizePaymentMethod(), toPaymentRecordStatus()
     // => Đã chuyển sang NormalizesPayment trait
 
@@ -55,23 +50,16 @@ class OrderController extends Controller
 
     public function index(Request $request)
     {
-        $query = DonHang::with(['nguoiDung', 'nhanVien', 'banAn']);
+        $query = DonHang::with(['nguoiDung', 'nhanVien', 'banAn', 'chiTietDonHang']);
 
-        $today = now()->toDateString();
         if (!$request->filled('tu_ngay') && !$request->filled('den_ngay')) {
+            $now = now();
+            $defaultStart = $now->copy()->startOfMonth()->toDateString();
+            $defaultEnd = $now->copy()->endOfMonth()->toDateString();
             $request->merge([
-                'tu_ngay' => $today,
-                'den_ngay' => $today,
+                'tu_ngay' => $defaultStart,
+                'den_ngay' => $defaultEnd,
             ]);
-        }
-
-        // Lọc theo trạng thái
-        $normalizedStatus = null;
-        if ($request->filled('status')) {
-            $normalizedStatus = $this->normalizeOrderStatus($request->status);
-            if ($normalizedStatus !== null) {
-                $query->where('trang_thai_don', $normalizedStatus);
-            }
         }
 
         // Tìm kiếm
@@ -79,9 +67,7 @@ class OrderController extends Controller
             $s = $request->search;
             $query->where(function ($q) use ($s) {
                 $q->where('ma_don_hang', 'like', "%$s%")
-                    ->orWhere('ten_khach_hang', 'like', "%$s%")
-                    ->orWhere('so_dien_thoai_khach', 'like', "%$s%")
-                    ->orWhereHas('nguoiDung', fn($u) => $u->where('ho_ten', 'like', "%$s%"));
+                    ->orWhereHas('nguoiDung', fn($u) => $u->where('email', 'like', "%$s%"));
             });
         }
 
@@ -122,29 +108,29 @@ class OrderController extends Controller
             $query->where('nhan_vien_id', $request->nhan_vien_id);
         }
 
-        if ($normalizedStatus === null) {
-            $query->orderByRaw("CASE WHEN trang_thai_don = 'đã hủy' THEN 2 WHEN trang_thai_thanh_toan = 'chưa thanh toán' THEN 0 ELSE 1 END");
+        // Lọc theo trạng thái thanh toán (tab) - now on chi_tiet_don_hang
+        if ($request->filled('pay_status')) {
+            $query->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', $request->pay_status));
         }
 
         $orders = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
 
-        // Đếm từng trạng thái
+        // Đếm tổng - use chi_tiet_don_hang for payment status
         $countAll = DonHang::count();
-        $countPending = DonHang::where('trang_thai_don', 'chờ xác nhận')->count();
-        $countConfirmed = DonHang::where('trang_thai_don', 'đã xác nhận')->count();
-        $countCancelled = DonHang::where('trang_thai_don', 'đã hủy')->count();
+        $countUnpaid = DonHang::whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))->count();
+        $countPaid = DonHang::whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'đã thanh toán'))->count();
 
         // Danh sách nhân viên cho filter
         $nhanViens = NguoiDung::where('vai_tro', 'nhân viên')
             ->where('trang_thai', 'hoạt động')
-            ->orderBy('ho_ten')
+            ->orderBy('email')
             ->get();
 
         $customers = NguoiDung::query()
             ->where('vai_tro', 'khách hàng')
             ->where('trang_thai', 'hoạt động')
-            ->orderBy('ho_ten')
-            ->get(['id', 'ho_ten', 'so_dien_thoai']);
+            ->orderBy('email')
+            ->get(['id', 'email']);
 
         $banAns = BanAn::query()
             ->orderBy('so_ban')
@@ -152,22 +138,17 @@ class OrderController extends Controller
 
         $availableProducts = SanPham::query()
             ->where('trang_thai_ban', 'đang bán')
-            ->with([
-                'sanPhamKichCo' => function ($q) {
-                    $q->where('trang_thai', 'đang bán')
-                        ->with('kichCo:id,ten_kich_co');
-                }
-            ])
+            ->with(['kichCo'])
             ->orderBy('ten_san_pham')
             ->get(['id', 'ten_san_pham', 'gia_goc', 'gia_khuyen_mai']);
 
         $productSizeMap = [];
         foreach ($availableProducts as $product) {
             $sizes = [];
-            foreach ($product->sanPhamKichCo ?? [] as $sizeLink) {
+            foreach ($product->kichCo ?? [] as $sizeItem) {
                 $sizes[] = [
-                    'id' => $sizeLink->kich_co_id,
-                    'name' => $sizeLink->kichCo?->ten_kich_co ?? ('Size #' . $sizeLink->kich_co_id),
+                    'id' => $sizeItem->id,
+                    'name' => $sizeItem->ten_kich_co ?? ('Size #' . $sizeItem->id),
                 ];
             }
 
@@ -187,9 +168,8 @@ class OrderController extends Controller
             'availableProducts',
             'productSizeMap',
             'countAll',
-            'countPending',
-            'countConfirmed',
-            'countCancelled'
+            'countUnpaid',
+            'countPaid'
         ));
     }
 
@@ -197,7 +177,7 @@ class OrderController extends Controller
     {
         $validated = $request->validated();
 
-        if ($validated['loai_don'] !== 'đặt online' && empty($validated['ban_an_id'])) {
+        if ($validated['loai_don'] !== 'đặt hàng trước' && empty($validated['ban_an_id'])) {
             return back()->withErrors([
                 'ban_an_id' => 'Đơn tại quán hoặc gọi tại bàn bằng QR bắt buộc chọn bàn ăn.',
             ])->withInput();
@@ -214,20 +194,17 @@ class OrderController extends Controller
             $unitPrice = 0.0;
 
             if ($sizeId) {
-                $sizePrice = SanPhamKichCo::query()
-                    ->with('kichCo:id,ten_kich_co')
-                    ->where('san_pham_id', $product->id)
-                    ->where('kich_co_id', $sizeId)
-                    ->first();
+                $sizeItem = $product->kichCo()->find($sizeId);
 
-                if (!$sizePrice) {
+                if (!$sizeItem) {
                     throw ValidationException::withMessages([
-                        "items.{$index}.kich_co_id" => 'Kích cỡ đã chọn không thuộc sản phẩm tương ứng.',
+                        "items.{$index}.kich_co_id" => 'Kích cỡ đã chọn không tồn tại.',
                     ]);
                 }
 
-                $sizeName = $sizePrice->kichCo?->ten_kich_co;
-                $unitPrice = (float) ($sizePrice->gia_khuyen_mai ?? $sizePrice->gia_ban ?? 0);
+                $sizeName = $sizeItem->ten_kich_co;
+                $basePrice = (float) ($product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc);
+                $unitPrice = $basePrice * (float) ($sizeItem->he_so_gia ?? 1);
             } else {
                 $unitPrice = (float) ($product->gia_khuyen_mai ?? $product->gia_goc ?? 0);
             }
@@ -262,15 +239,9 @@ class OrderController extends Controller
         $orderId = null;
 
         DB::transaction(function () use ($validated, $selectedCustomer, $preparedItems, $tamTinh, &$orderId): void {
-            $banAnId = $validated['loai_don'] === 'đặt online'
+            $banAnId = $validated['loai_don'] === 'đặt hàng trước'
                 ? null
                 : ($validated['ban_an_id'] ?? null);
-
-            // Đơn do chủ cửa hàng / quản lý / nhân viên tạo → tự động xác nhận
-            // Chỉ đơn khách hàng đặt mới cần chờ xác nhận
-            $currentUser = Auth::user();
-            $isStaffOrder = $currentUser && in_array($currentUser->vai_tro, UserRole::staffRoleValues(), true);
-            $orderStatus = $isStaffOrder ? OrderStatus::DA_XAC_NHAN->value : OrderStatus::CHO_XAC_NHAN->value;
 
             $order = DonHang::create([
                 'ma_don_hang' => $this->generateOrderCode(),
@@ -278,25 +249,13 @@ class OrderController extends Controller
                 'nhan_vien_id' => Auth::id(),
                 'ban_an_id' => $banAnId,
                 'voucher_nguoi_dung_id' => null,
-                'loai_don' => $validated['loai_don'],
-                'trang_thai_don' => $orderStatus,
-                'trang_thai_thanh_toan' => 'chưa thanh toán',
-                'phuong_thuc_thanh_toan' => $validated['phuong_thuc_thanh_toan'] ?? null,
-                'tam_tinh' => $tamTinh,
-                'so_tien_giam' => 0,
-                'tong_tien' => $tamTinh,
-                'ghi_chu' => $this->normalizeNullable($validated['ghi_chu'] ?? null),
-                'ten_khach_hang' => $this->normalizeNullable($validated['ten_khach_hang'] ?? null)
-                    ?? $selectedCustomer?->ho_ten,
-                'so_dien_thoai_khach' => $this->normalizeNullable($validated['so_dien_thoai_khach'] ?? null)
-                    ?? $selectedCustomer?->so_dien_thoai,
-                'dia_chi_giao_hang' => $this->normalizeNullable($validated['dia_chi_giao_hang'] ?? null),
             ]);
+
+            $loaiDon = $validated['loai_don'] ?? 'sử dụng ngay';
 
             foreach ($preparedItems as $item) {
                 ChiTietDonHang::create([
                     'don_hang_id' => $order->id,
-                    'ban_an_id' => $order->ban_an_id,
                     'san_pham_id' => $item['san_pham_id'],
                     'kich_co_id' => $item['kich_co_id'],
                     'ten_san_pham' => $item['ten_san_pham'],
@@ -305,27 +264,24 @@ class OrderController extends Controller
                     'so_luong' => $item['so_luong'],
                     'ghi_chu_mon' => $item['ghi_chu_mon'],
                     'thanh_tien' => $item['thanh_tien'],
+                    'loai_don' => $loaiDon,
+                    'trang_thai_thanh_toan' => 'chưa thanh toán',
+                    'phuong_thuc_thanh_toan' => $validated['phuong_thuc_thanh_toan'] ?? null,
+                    'so_tien_giam' => 0,
+                    'tong_tien' => $item['thanh_tien'],
                     'created_at' => now(),
                 ]);
             }
 
-            // Tự động xuất kho nếu đơn được xác nhận ngay
-            if ($isStaffOrder) {
-                $this->inventoryService->exportIngredientsForOrder($order);
-            }
+            // Đơn đã xác nhận ngay -> xuất kho
+            $this->inventoryService->exportIngredientsForOrder($order);
 
-            if ($order->ban_an_id) {
-                BanAn::query()->whereKey($order->ban_an_id)->update([
-                    'trang_thai' => 'đang phục vụ',
-                ]);
-            }
+            TableStatusService::refreshForTable($order->ban_an_id);
 
             $orderId = $order->id;
         });
 
-        $statusMsg = (Auth::user() && in_array(Auth::user()->vai_tro, UserRole::staffRoleValues(), true))
-            ? "Đã tạo và xác nhận đơn hàng #{$orderId} thành công."
-            : "Đã tạo đơn hàng #{$orderId}, đang chờ xác nhận.";
+        $statusMsg = "Đã tạo đơn hàng #{$orderId} thành công.";
 
         return redirect()->route('manager.orders.index')
             ->with('success', $statusMsg);
@@ -356,12 +312,12 @@ class OrderController extends Controller
             'chiTietDonHang.kichCo',
         ])->findOrFail($id);
 
-        $this->authorize('update', $order);
-
+        // Đơn đã thanh toán không thể sửa: chuyển hướng "mềm" về trang chi tiết thay vì
+        // ném 403. (Quyền vai trò đã được middleware role:quản lý,chủ cửa hàng đảm bảo.)
         if (!(new \App\Policies\OrderPolicy)->isEditable($order)) {
             return redirect()
                 ->route('manager.orders.show', $order->id)
-                ->with('error', 'Chỉ có thể chỉnh sửa đơn đã xác nhận và chưa thanh toán.');
+                ->with('warning', 'Đơn này đã thanh toán nên không thể chỉnh sửa.');
         }
 
         $banAns = BanAn::query()
@@ -370,22 +326,17 @@ class OrderController extends Controller
 
         $availableProducts = SanPham::query()
             ->where('trang_thai_ban', 'đang bán')
-            ->with([
-                'sanPhamKichCo' => function ($q) {
-                    $q->where('trang_thai', 'đang bán')
-                        ->with('kichCo:id,ten_kich_co');
-                }
-            ])
+            ->with(['kichCo'])
             ->orderBy('ten_san_pham')
             ->get(['id', 'ten_san_pham', 'gia_goc', 'gia_khuyen_mai']);
 
         $productSizeMap = [];
         foreach ($availableProducts as $product) {
             $sizes = [];
-            foreach ($product->sanPhamKichCo ?? [] as $sizeLink) {
+            foreach ($product->kichCo ?? [] as $sizeItem) {
                 $sizes[] = [
-                    'id' => $sizeLink->kich_co_id,
-                    'name' => $sizeLink->kichCo?->ten_kich_co ?? ('Size #' . $sizeLink->kich_co_id),
+                    'id' => $sizeItem->id,
+                    'name' => $sizeItem->ten_kich_co ?? ('Size #' . $sizeItem->id),
                 ];
             }
 
@@ -405,7 +356,7 @@ class OrderController extends Controller
     public function update(UpdateOrderRequest $request, int $id)
     {
         $order = DonHang::with('chiTietDonHang')->findOrFail($id);
-        $this->authorize('update', $order);
+        Gate::authorize('update', $order);
 
         if (!(new \App\Policies\OrderPolicy)->isEditable($order)) {
             return back()->with('error', 'Chỉ có thể chỉnh sửa đơn đã xác nhận và chưa thanh toán.');
@@ -413,7 +364,7 @@ class OrderController extends Controller
 
         $validated = $request->validated();
 
-        if ($order->loai_don !== 'đặt online' && empty($validated['ban_an_id'])) {
+        if ($order->loai_don !== 'đặt hàng trước' && empty($validated['ban_an_id'])) {
             return back()->withErrors([
                 'ban_an_id' => 'Đơn tại quán hoặc gọi tại bàn bằng QR bắt buộc chọn bàn ăn.',
             ])->withInput();
@@ -430,20 +381,17 @@ class OrderController extends Controller
             $unitPrice = 0.0;
 
             if ($sizeId) {
-                $sizePrice = SanPhamKichCo::query()
-                    ->with('kichCo:id,ten_kich_co')
-                    ->where('san_pham_id', $product->id)
-                    ->where('kich_co_id', $sizeId)
-                    ->first();
+                $sizeItem = $product->kichCo()->find($sizeId);
 
-                if (!$sizePrice) {
+                if (!$sizeItem) {
                     throw ValidationException::withMessages([
-                        "items.{$index}.kich_co_id" => 'Kích cỡ đã chọn không thuộc sản phẩm tương ứng.',
+                        "items.{$index}.kich_co_id" => 'Kích cỡ đã chọn không tồn tại.',
                     ]);
                 }
 
-                $sizeName = $sizePrice->kichCo?->ten_kich_co;
-                $unitPrice = (float) ($sizePrice->gia_khuyen_mai ?? $sizePrice->gia_ban ?? 0);
+                $sizeName = $sizeItem->ten_kich_co;
+                $basePrice = (float) ($product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc);
+                $unitPrice = $basePrice * (float) ($sizeItem->he_so_gia ?? 1);
             } else {
                 $unitPrice = (float) ($product->gia_khuyen_mai ?? $product->gia_goc ?? 0);
             }
@@ -472,15 +420,13 @@ class OrderController extends Controller
 
         $oldBanAnId = $order->ban_an_id;
         $oldUsage = $this->inventoryService->ingredientUsageForOrder($order->id);
-        $selectedBanAnId = $order->loai_don === 'đặt online'
+        $selectedBanAnId = $order->loai_don === 'đặt hàng trước'
             ? null
             : ($validated['ban_an_id'] ?? null);
 
         DB::transaction(function () use ($order, $preparedItems, $tamTinh, $oldBanAnId, $oldUsage, $selectedBanAnId): void {
             $order->update([
                 'ban_an_id' => $selectedBanAnId,
-                'tam_tinh' => $tamTinh,
-                'tong_tien' => max($tamTinh - (float) ($order->so_tien_giam ?? 0), 0),
                 'nhan_vien_id' => Auth::id() ?? $order->nhan_vien_id,
             ]);
 
@@ -489,7 +435,6 @@ class OrderController extends Controller
             foreach ($preparedItems as $item) {
                 ChiTietDonHang::create([
                     'don_hang_id' => $order->id,
-                    'ban_an_id' => $order->ban_an_id,
                     'san_pham_id' => $item['san_pham_id'],
                     'kich_co_id' => $item['kich_co_id'],
                     'ten_san_pham' => $item['ten_san_pham'],
@@ -498,21 +443,17 @@ class OrderController extends Controller
                     'so_luong' => $item['so_luong'],
                     'ghi_chu_mon' => $item['ghi_chu_mon'],
                     'thanh_tien' => $item['thanh_tien'],
+                    'tong_tien' => $item['thanh_tien'],
                     'created_at' => now(),
                 ]);
             }
 
-            if ($order->ban_an_id) {
-                BanAn::query()->whereKey($order->ban_an_id)->update([
-                    'trang_thai' => TableStatus::DANG_PHUC_VU->value,
-                ]);
-            }
+            TableStatusService::refreshForTable($order->ban_an_id);
 
             if ($oldBanAnId && $oldBanAnId !== $order->ban_an_id) {
                 $hasActiveOrders = DonHang::query()
                     ->where('ban_an_id', $oldBanAnId)
-                    ->where('trang_thai_don', '!=', 'đã hủy')
-                    ->where('trang_thai_thanh_toan', 'chưa thanh toán')
+                    ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
                     ->exists();
 
                 if (!$hasActiveOrders) {
@@ -526,7 +467,7 @@ class OrderController extends Controller
             $this->inventoryService->applyIngredientDelta($oldUsage, $newUsage, $order->id);
         });
 
-        if ($order->nguoiDung && Schema::hasTable('notifications')) {
+        if ($order->nguoiDung && Schema::hasTable('thong_bao')) {
             try {
                 $order->nguoiDung->notify(new OrderUpdatedNotification($order->fresh(), Auth::user()));
             } catch (\Throwable $e) {
@@ -539,55 +480,15 @@ class OrderController extends Controller
             ->with('success', "Đã cập nhật đơn hàng #{$order->id}.");
     }
 
-    public function updateStatus(Request $request, int $id)
-    {
-        $request->validate([
-            'trang_thai' => 'required|in:đã xác nhận,đã hủy',
-        ]);
-
-        $order = DonHang::findOrFail($id);
-
-        if ($order->trang_thai_don !== 'chờ xác nhận') {
-            return back()->with('error', 'Chỉ có thể xác nhận hoặc hủy đơn đang chờ xác nhận.');
-        }
-
-        if ($request->trang_thai === 'đã xác nhận' && !$order->chiTietDonHang()->exists()) {
-            return back()->with('error', 'Không thể xác nhận đơn khi chưa có món nào trong chi tiết đơn hàng.');
-        }
-
-        if ($request->trang_thai === 'đã xác nhận' && !$order->ban_an_id) {
-            return back()->with('error', 'Vui lòng chọn bàn trước khi xác nhận đơn hàng.');
-        }
-
-        try {
-            DB::transaction(function () use ($order, $request): void {
-                if ($request->trang_thai === 'đã xác nhận') {
-                    $this->inventoryService->exportIngredientsForOrder($order);
-                }
-
-                $order->update([
-                    'trang_thai_don' => $request->trang_thai,
-                    'nhan_vien_id' => Auth::id() ?? $order->nhan_vien_id,
-                    'ghi_chu' => $request->ghi_chu ?? $order->ghi_chu,
-                ]);
-            });
-        } catch (ValidationException $exception) {
-            return back()->withErrors($exception->errors())->withInput();
-        }
-
-        TableStatusService::refreshForTable($order->ban_an_id);
-
-        return redirect()->route('manager.orders.index')->with('success', "Đơn hàng #{$order->id} đã được cập nhật trạng thái.");
-    }
-
     public function updatePayment(Request $request, int $id)
     {
         $order = DonHang::findOrFail($id);
-        $this->authorize('updatePayment', $order);
+        Gate::authorize('updatePayment', $order);
 
         $request->validate([
             'phuong_thuc_thanh_toan' => 'required|string|max:50',
             'trang_thai_thanh_toan' => 'required|string|max:50',
+            'email_khach_hang' => 'nullable|email|max:255',
         ]);
 
         $paymentMethod = $this->normalizePaymentMethod($request->input('phuong_thuc_thanh_toan'));
@@ -603,51 +504,56 @@ class OrderController extends Controller
 
         $user = Auth::user();
 
-        DB::transaction(function () use ($order, $paymentMethod, $paymentStatus, $user): void {
-            $order->update([
+        DB::transaction(function () use ($order, $paymentMethod, $paymentStatus, $user, $request): void {
+            // Update payment on chi_tiet_don_hang
+            $order->chiTietDonHang()->update([
                 'phuong_thuc_thanh_toan' => $paymentMethod,
                 'trang_thai_thanh_toan' => $paymentStatus,
+            ]);
+
+            $order->update([
                 'nhan_vien_id' => $user?->id,
+                'email_khach_hang' => $request->input('email_khach_hang') ?? $order->email_khach_hang,
             ]);
 
             $this->paymentService->syncThanhToanRecord($order->fresh(), $paymentMethod, $paymentStatus);
 
             if ($paymentStatus === 'đã thanh toán') {
-                $this->paymentService->freeTableIfAllPaid($order->ban_an_id);
+                $order = $order->fresh();
+                $this->paymentService->applyTableStatusAfterPayment($order);
+                
+                if ($order->email_khach_hang) {
+                    \Illuminate\Support\Facades\Mail::to($order->email_khach_hang)->queue(new \App\Mail\CustomerOrderPaidMail($order));
+                } elseif ($order->nguoiDung && $order->nguoiDung->email) {
+                    \Illuminate\Support\Facades\Mail::to($order->nguoiDung->email)->queue(new \App\Mail\CustomerOrderPaidMail($order));
+                }
             }
         });
 
         return redirect()->route('manager.orders.index')->with('success', "Đã cập nhật thanh toán cho đơn #{$order->id}.");
     }
 
-    public function generatePaymentQr(Request $request, int $id): JsonResponse
+
+
+    public function destroy(int $id)
     {
-        $order = DonHang::with('banAn')->findOrFail($id);
+        $order = DonHang::findOrFail($id);
 
-        if ($order->trang_thai_thanh_toan === 'đã thanh toán') {
-            return response()->json([
-                'message' => 'Đơn hàng đã được thanh toán.',
-            ], 422);
+        $banAnId = $order->ban_an_id;
+
+        DB::transaction(function () use ($order) {
+            $this->inventoryService->restoreIngredientsForOrder($order);
+
+            $order->chiTietDonHang()->delete();
+            $order->thanhToan()->delete();
+            $order->delete();
+        });
+
+        if ($banAnId) {
+            TableStatusService::refreshForTable($banAnId);
         }
 
-        $storeId = $request->user()?->cua_hang_id;
-        $store = $this->paymentService->resolveStoreForPayment($storeId);
-
-        if (!$store || !$store->chu_cua_hang_id || !$store->so_tai_khoan || !$store->ngan_hang) {
-            return response()->json([
-                'message' => 'Chưa có thông tin tài khoản thanh toán của chủ cửa hàng để tạo QR.',
-            ], 422);
-        }
-
-        $qrData = $this->paymentService->generateQrDataWithCache($order, $store);
-
-        if (!$qrData) {
-            return response()->json([
-                'message' => 'Thông tin ngân hàng hoặc số tài khoản chưa hợp lệ hoặc đơn hàng chưa có tổng tiền.',
-            ], 422);
-        }
-
-        return response()->json($qrData);
+        return redirect()->route('manager.orders.index')->with('success', "Đã xóa đơn hàng #{$order->id} và cập nhật lại kho, bàn.");
     }
 
     // resolveVietQrBankCode() => Đã chuyển sang PaymentService

@@ -1,23 +1,23 @@
 @extends('manager.layout.app')
 
-@section('title', 'Chi tiết voucher')
+@section('title', 'Chi tiết mã giảm giá')
 @section('breadcrumb')
-Kinh doanh / <a href="{{ route('manager.vouchers.index') }}">Voucher & Khuyến mãi</a> / <strong>Chi tiết voucher</strong>
+Kinh doanh / <a href="{{ route('manager.vouchers.index') }}">Mã giảm giá & Khuyến mãi</a> / <strong>Chi tiết mã giảm giá</strong>
 @endsection
 
 @section('content')
 
 <div class="page-header">
     <div>
-        <h1 class="page-title">Chi tiết voucher {{ $voucher->ma_voucher }}</h1>
-        <p class="page-subtitle">Theo dõi danh sách người dùng đã nhận voucher và trạng thái đã dùng/chưa dùng</p>
+        <h1 class="page-title">Chi tiết mã giảm giá {{ $voucher->ma_voucher }}</h1>
+        <p class="page-subtitle">Theo dõi danh sách người dùng đã nhận mã giảm giá và trạng thái đã dùng/chưa dùng</p>
     </div>
     <div class="page-actions">
         <a href="{{ route('manager.vouchers.index') }}" class="btn btn-secondary">Quay lại danh sách</a>
-        <a
-            href="{{ route('manager.vouchers.export-users', array_merge(['id' => $voucher->id], request()->query())) }}"
-            class="btn btn-primary"
-        >Xuất Excel (CSV)</a>
+        <a href="{{ route('manager.vouchers.export-users', array_merge(['id' => $voucher->id], request()->query())) }}" class="btn btn-success" style="background-color: #27AE60; border-color: #27AE60; color: white; display: flex; align-items: center; gap: 4px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            Xuất Excel (CSV)
+        </a>
     </div>
 </div>
 
@@ -39,12 +39,12 @@ Kinh doanh / <a href="{{ route('manager.vouchers.index') }}">Voucher & Khuyến 
 
 <div class="card mb-20">
     <div class="card-header">
-        <span class="card-title">Thông tin voucher</span>
+        <span class="card-title">Thông tin mã giảm giá</span>
     </div>
     <div class="card-body">
         <div class="grid-3">
             <div>
-                <div class="text-12 text-muted">Tên voucher</div>
+                <div class="text-12 text-muted">Tên chương trình</div>
                 <div class="font-600">{{ $voucher->ten_voucher }}</div>
             </div>
             <div>
@@ -63,7 +63,7 @@ Kinh doanh / <a href="{{ route('manager.vouchers.index') }}">Voucher & Khuyến 
             </div>
             <div>
                 <div class="text-12 text-muted">Đơn tối thiểu</div>
-                <div class="font-600">{{ $voucher->don_toi_thieu > 0 ? number_format($voucher->don_toi_thieu, 0, ',', '.') . 'đ' : '—' }}</div>
+                <div class="font-600">{{ number_format((float)($voucher->don_toi_thieu ?? 0), 0, ',', '.') }}đ</div>
             </div>
             <div>
                 <div class="text-12 text-muted">Bắt đầu</div>
@@ -101,7 +101,7 @@ Kinh doanh / <a href="{{ route('manager.vouchers.index') }}">Voucher & Khuyến 
 
 <div class="card">
     <div class="card-header">
-        <span class="card-title">Danh sách người dùng đã nhận voucher</span>
+        <span class="card-title">Danh sách người dùng đã nhận mã giảm giá</span>
     </div>
 
     <div class="table-wrap">
@@ -113,7 +113,6 @@ Kinh doanh / <a href="{{ route('manager.vouchers.index') }}">Voucher & Khuyến 
                     <th>Số điện thoại</th>
                     <th>Email</th>
                     <th>Trạng thái</th>
-                    <th>Đã dùng?</th>
                     <th>Nhận lúc</th>
                     <th>Dùng lúc</th>
                 </tr>
@@ -125,7 +124,7 @@ Kinh doanh / <a href="{{ route('manager.vouchers.index') }}">Voucher & Khuyến 
                     @endphp
                     <tr>
                         <td>{{ $danhSachNguoiNhan->firstItem() + $index }}</td>
-                        <td class="font-600">{{ $item->nguoiDung->ho_ten ?? 'Không xác định' }}</td>
+                        <td class="font-600">{{ $item->nguoiDung?->hoSoKhachHang?->ho_ten ?? $item->nguoiDung?->email ?? 'Không xác định' }}</td>
                         <td>{{ $item->nguoiDung->so_dien_thoai ?? '—' }}</td>
                         <td>{{ $item->nguoiDung->email ?? '—' }}</td>
                         <td>
@@ -137,19 +136,12 @@ Kinh doanh / <a href="{{ route('manager.vouchers.index') }}">Voucher & Khuyến 
                                 <span class="badge badge-default">Chưa dùng</span>
                             @endif
                         </td>
-                        <td>
-                            @if($isUsed)
-                                <span class="badge badge-done">Có</span>
-                            @else
-                                <span class="badge badge-default">Chưa</span>
-                            @endif
-                        </td>
                         <td>{{ $item->duoc_cap_luc ? \Carbon\Carbon::parse($item->duoc_cap_luc)->format('d/m/Y H:i') : '—' }}</td>
                         <td>{{ $item->da_dung_luc ? \Carbon\Carbon::parse($item->da_dung_luc)->format('d/m/Y H:i') : '—' }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8" class="empty-state-sm">Chưa có người dùng nào nhận voucher này.</td>
+                        <td colspan="7" class="empty-state-sm">Chưa có người dùng nào nhận mã giảm giá này.</td>
                     </tr>
                 @endforelse
             </tbody>

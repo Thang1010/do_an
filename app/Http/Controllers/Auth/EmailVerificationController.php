@@ -67,7 +67,6 @@ class EmailVerificationController extends Controller
             $store = CuaHang::query()->orderBy('id')->first();
             $nguoiDung = NguoiDung::create([
                 'cua_hang_id' => $store?->id,
-                'ho_ten' => $pending->ho_ten,
                 'email' => $pending->email,
                 'mat_khau' => $pending->mat_khau_ma_hoa,
                 'vai_tro' => 'khách hàng',
@@ -75,9 +74,10 @@ class EmailVerificationController extends Controller
                 'email_da_xac_thuc_luc' => now(),
             ]);
 
-            $nguoiDung->hoSoKhachHang()->firstOrCreate([
-                'nguoi_dung_id' => $nguoiDung->id,
-            ]);
+            $nguoiDung->hoSoKhachHang()->firstOrCreate(
+                ['nguoi_dung_id' => $nguoiDung->id],
+                ['ho_ten' => $pending->ho_ten]
+            );
 
             $pending->delete();
         });

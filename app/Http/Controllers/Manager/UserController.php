@@ -6,8 +6,8 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Manager\StoreUserRequest;
 use App\Http\Requests\Manager\UpdateUserRoleRequest;
-use App\Models\CuaHang;
 use App\Models\ChucVu;
+use App\Models\ChiTietDonHang;
 use App\Models\DonHang;
 use App\Models\HoSoKhachHang;
 use App\Models\HoSoNhanVien;
@@ -28,7 +28,7 @@ class UserController extends Controller
     {
         $query = NguoiDung::query()
             ->with('hoSoKhachHang')
-            ->withSum('donHang as tong_chi_tieu_tai_khoan', 'tong_tien')
+
             ->where('vai_tro', 'khách hàng');
 
         $this->applyStoreScope($query);
@@ -36,14 +36,12 @@ class UserController extends Controller
         if ($request->filled('search')) {
             $s = $request->search;
             $query->where(function ($q) use ($s) {
-                $q->where('ho_ten', 'like', "%$s%")
-                  ->orWhere('email', 'like', "%$s%")
-                  ->orWhere('so_dien_thoai', 'like', "%$s%");
+                $q->where('email', 'like', "%$s%");
             });
         }
 
         if ($request->filled('trang_thai')) {
-            $map = ['hoat_dong' => 'hoạt động', 'bi_khoa' => 'bị khóa'];
+            $map = ['hoat_dong' => 'hoạt động', 'ngung_hoat_dong' => 'ngưng hoạt động'];
             $query->where('trang_thai', $map[$request->trang_thai] ?? $request->trang_thai);
         }
 
@@ -67,14 +65,12 @@ class UserController extends Controller
         if ($request->filled('search')) {
             $s = $request->search;
             $query->where(function ($q) use ($s) {
-                $q->where('ho_ten', 'like', "%$s%")
-                  ->orWhere('email', 'like', "%$s%")
-                  ->orWhere('so_dien_thoai', 'like', "%$s%");
+                $q->where('email', 'like', "%$s%");
             });
         }
 
         if ($request->filled('trang_thai')) {
-            $map = ['hoat_dong' => 'hoạt động', 'bi_khoa' => 'bị khóa'];
+            $map = ['hoat_dong' => 'hoạt động', 'ngung_hoat_dong' => 'ngưng hoạt động'];
             $query->where('trang_thai', $map[$request->trang_thai] ?? $request->trang_thai);
         }
 
@@ -96,7 +92,7 @@ class UserController extends Controller
     /** Danh sách quản lý / admin */
     public function admins(Request $request)
     {
-        if (! $this->actorCanManageAdmins()) {
+        if (!$this->actorCanManageAdmins()) {
             abort(403, 'Bạn không có quyền truy cập danh sách quản lý.');
         }
 
@@ -109,21 +105,19 @@ class UserController extends Controller
         if ($request->filled('search')) {
             $s = $request->search;
             $query->where(function ($q) use ($s) {
-                $q->where('ho_ten', 'like', "%$s%")
-                  ->orWhere('email', 'like', "%$s%")
-                  ->orWhere('so_dien_thoai', 'like', "%$s%");
+                $q->where('email', 'like', "%$s%");
             });
         }
 
         if ($request->filled('trang_thai')) {
-            $map = ['hoat_dong' => 'hoạt động', 'bi_khoa' => 'bị khóa'];
+            $map = ['hoat_dong' => 'hoạt động', 'ngung_hoat_dong' => 'ngưng hoạt động'];
             $query->where('trang_thai', $map[$request->trang_thai] ?? $request->trang_thai);
         }
 
         $admins = $query->orderByRaw("CASE WHEN vai_tro = 'chủ cửa hàng' THEN 1 ELSE 2 END")
-                        ->latest()
-                        ->paginate(20)
-                        ->withQueryString();
+            ->latest()
+            ->paginate(20)
+            ->withQueryString();
         $totalAdminsQuery = NguoiDung::query()->whereIn('vai_tro', ['quản lý', 'chủ cửa hàng']);
         $this->applyStoreScope($totalAdminsQuery);
         $totalAdmins = $totalAdminsQuery->count();
@@ -136,11 +130,11 @@ class UserController extends Controller
     public function show(int $id)
     {
         $user = NguoiDung::with([
-                'hoSoKhachHang',
+            'hoSoKhachHang',
             'hoSoNhanVien.chucVu',
-                'hoSoQuanLy.chucVu',
-                'cuaHang',
-            ])
+            'hoSoQuanLy.chucVu',
+            'cuaHang',
+        ])
             ->findOrFail($id);
 
         $this->ensureUserInCurrentStore($user);
@@ -166,16 +160,19 @@ class UserController extends Controller
         $this->ensureUserInCurrentStore($user);
         $this->ensureCanManageTargetUser($user);
 
-        if ($user->vai_tro === 'chủ cửa hàng') {
-            return back()->with('error', 'Không thể khóa tài khoản chủ cửa hàng.');
+        if ($user->vai_tro === 'chủ cửa hàng' && $user->trang_thai === 'hoạt động') {
+            $activeOwnerCount = \App\Models\NguoiDung::where('vai_tro', 'chủ cửa hàng')->where('trang_thai', 'hoạt động')->count();
+            if ($activeOwnerCount <= 1) {
+                return back()->with('error', 'Phải có ít nhất 1 tài khoản chủ cửa hàng đang hoạt động. Không thể khóa tài khoản này.');
+            }
         }
 
-        $newStatus = $user->trang_thai === 'hoạt động' ? 'bị khóa' : 'hoạt động';
+        $newStatus = $user->trang_thai === 'hoạt động' ? 'ngưng hoạt động' : 'hoạt động';
         $user->update(['trang_thai' => $newStatus]);
 
-        $action = $newStatus === 'bị khóa' ? 'khóa' : 'mở khóa';
+        $action = $newStatus === 'ngưng hoạt động' ? 'khóa' : 'mở khóa';
         $redirectRoute = $this->resolveListRouteByOrigin($request->input('from'), $user->vai_tro);
-        return redirect()->route($redirectRoute)->with('success', "Đã {$action} tài khoản của {$user->ho_ten}.");
+        return redirect()->route($redirectRoute)->with('success', "Đã {$action} tài khoản {$user->email}.");
     }
 
     /** Xóa tài khoản người dùng */
@@ -187,7 +184,10 @@ class UserController extends Controller
         $this->ensureCanManageTargetUser($user);
 
         if ($user->vai_tro === 'chủ cửa hàng') {
-            return back()->with('error', 'Không thể xóa tài khoản chủ cửa hàng khỏi cửa hàng.');
+            $ownerCount = \App\Models\NguoiDung::where('vai_tro', 'chủ cửa hàng')->count();
+            if ($ownerCount <= 1) {
+                return back()->with('error', 'Phải có ít nhất 1 tài khoản chủ cửa hàng trong hệ thống. Không thể xóa.');
+            }
         }
 
         if ((int) Auth::id() === (int) $user->id) {
@@ -196,7 +196,7 @@ class UserController extends Controller
 
         $from = $this->normalizeListOrigin($request->input('from'));
         $redirectRoute = $this->resolveListRouteByOrigin($from, $user->vai_tro);
-        $name = $user->ho_ten;
+        $name = $user->ho_ten ?? $user->email;
 
         try {
             DB::transaction(function () use ($user): void {
@@ -217,7 +217,7 @@ class UserController extends Controller
 
         $this->ensureUserInCurrentStore($targetUser);
 
-        if (! $this->canConfirmRole($targetUser->vai_tro)) {
+        if (!$this->canConfirmRole($targetUser->vai_tro)) {
             return back()->with('error', 'Bạn không có quyền xác nhận tài khoản với vai trò này.');
         }
 
@@ -233,7 +233,7 @@ class UserController extends Controller
             'trang_thai' => 'hoạt động',
         ]);
 
-        return redirect()->route('manager.users.pending-approvals')->with('success', "Đã xác nhận tài khoản {$targetUser->ho_ten} ({$targetUser->vai_tro}).");
+        return redirect()->route('manager.users.pending-approvals')->with('success', "Đã xác nhận tài khoản {$targetUser->email} ({$targetUser->vai_tro}).");
     }
 
     /** Danh sách tài khoản chờ xác nhận */
@@ -271,8 +271,8 @@ class UserController extends Controller
             $idsToConfirm = (clone $baseQuery)->pluck('id');
         } else {
             $selectedIds = collect($request->input('user_ids', []))
-                ->map(fn ($id) => (int) $id)
-                ->filter(fn ($id) => $id > 0)
+                ->map(fn($id) => (int) $id)
+                ->filter(fn($id) => $id > 0)
                 ->unique()
                 ->values();
 
@@ -323,7 +323,6 @@ class UserController extends Controller
 
         if ($this->actorCanManageAdmins()) {
             $roleOptions['quản lý'] = 'Quản lý';
-            $roleOptions['chủ cửa hàng'] = 'Chủ cửa hàng';
         }
 
         $viewGroup = $this->resolveUserViewGroup($user->vai_tro);
@@ -343,19 +342,22 @@ class UserController extends Controller
         $newStatus = $request->input('trang_thai');
         $from = $this->normalizeListOrigin($request->input('from'));
 
-        if (! $newRole) {
+        if (!$newRole) {
             return back()->with('error', 'Vai trò không hợp lệ.');
         }
 
-        if (! $this->canManageRole($newRole)) {
+        if (!$this->canManageRole($newRole)) {
             return back()->with('error', 'Bạn không có quyền gán vai trò này.');
         }
 
         if ($user->vai_tro === 'chủ cửa hàng' && $newRole !== 'chủ cửa hàng') {
-            return back()->with('error', 'Không thể hạ quyền tài khoản chủ cửa hàng bằng thao tác này.');
+            $ownerCount = \App\Models\NguoiDung::where('vai_tro', 'chủ cửa hàng')->count();
+            if ($ownerCount <= 1) {
+                return back()->with('error', 'Phải có ít nhất 1 tài khoản chủ cửa hàng trong hệ thống. Không thể hạ quyền tài khoản này.');
+            }
         }
 
-        if ($newRole === 'chủ cửa hàng' && ! $this->actorCanManageAdmins()) {
+        if ($newRole === 'chủ cửa hàng' && !$this->actorCanManageAdmins()) {
             return back()->with('error', 'Bạn không có quyền gán vai trò chủ cửa hàng.');
         }
 
@@ -368,6 +370,13 @@ class UserController extends Controller
         $roleChanged = $oldRole !== $newRole;
         $statusChanged = $oldStatus !== $newStatus;
 
+        if ($user->vai_tro === 'chủ cửa hàng' && $newStatus !== 'hoạt động' && $statusChanged) {
+            $activeOwnerCount = \App\Models\NguoiDung::where('vai_tro', 'chủ cửa hàng')->where('trang_thai', 'hoạt động')->count();
+            if ($activeOwnerCount <= 1) {
+                return back()->with('error', 'Phải có ít nhất 1 tài khoản chủ cửa hàng đang hoạt động trong hệ thống.');
+            }
+        }
+
         DB::transaction(function () use ($request, $user, $newRole, $newStatus, $roleChanged, $statusChanged): void {
             if ($roleChanged || $statusChanged) {
                 $payload = [];
@@ -376,7 +385,7 @@ class UserController extends Controller
                     $payload['vai_tro'] = $newRole;
                 }
 
-                if ($statusChanged) {
+                if ($statusChanged)
                     $payload['trang_thai'] = $newStatus;
                 }
 
@@ -394,42 +403,38 @@ class UserController extends Controller
             if ($newRole === 'quản lý') {
                 $this->updateAdminProfile($request, $user);
             }
-
-            if ($newRole === 'chủ cửa hàng') {
-                $this->syncStoreOwner($user, $request);
-            }
         });
 
         $redirectRoute = $this->resolveListRouteByOrigin($from, $oldRole);
 
         if ($roleChanged && $statusChanged) {
             return redirect()->route($redirectRoute)
-                ->with('success', "Đã cập nhật quyền và trạng thái tài khoản của {$user->ho_ten}.");
+                ->with('success', "Đã cập nhật quyền và trạng thái tài khoản {$user->email}.");
         }
 
         if ($roleChanged) {
             return redirect()->route($redirectRoute)
-                ->with('success', "Đã đổi quyền {$user->ho_ten} từ {$oldRole} sang {$newRole}.");
+                ->with('success', "Đã đổi quyền {$user->email} từ {$oldRole} sang {$newRole}.");
         }
 
         if ($statusChanged) {
             return redirect()->route($redirectRoute)
-                ->with('success', "Đã cập nhật trạng thái tài khoản của {$user->ho_ten}.");
+                ->with('success', "Đã cập nhật trạng thái tài khoản {$user->email}.");
         }
 
         if ($newRole === 'nhân viên') {
             return redirect()->route($redirectRoute)
-                ->with('success', "Đã cập nhật thông tin nhân viên của {$user->ho_ten}.");
+                ->with('success', "Đã cập nhật thông tin nhân viên {$user->email}.");
         }
 
         if ($newRole === 'quản lý') {
             return redirect()->route($redirectRoute)
-                ->with('success', "Đã cập nhật thông tin quản lý của {$user->ho_ten}.");
+                ->with('success', "Đã cập nhật thông tin quản lý {$user->email}.");
         }
 
         if ($newRole === 'chủ cửa hàng') {
             return redirect()->route($redirectRoute)
-                ->with('success', "Đã cập nhật thông tin chủ cửa hàng của {$user->ho_ten}.");
+                ->with('success', "Đã cập nhật thông tin chủ cửa hàng {$user->email}.");
         }
 
         return redirect()->route($redirectRoute)
@@ -440,27 +445,25 @@ class UserController extends Controller
     public function store(StoreUserRequest $request)
     {
         $request->merge([
-            'ho_ten'        => trim((string) $request->input('ho_ten')),
-            'email'         => $this->normalizeNullable($request->input('email')),
-            'so_dien_thoai' => $this->normalizeNullable($request->input('so_dien_thoai')),
-            'ngay_vao_lam'  => now()->toDateString(),
+            'email' => $this->normalizeNullable($request->input('email')),
+            'ngay_vao_lam' => now()->toDateString(),
         ]);
 
         $validated = $request->validated();
 
 
-        if (! $validated['email'] && ! $validated['so_dien_thoai']) {
+        if (!$validated['email']) {
             return back()
-                ->withErrors(['contact' => 'Vui lòng nhập ít nhất email hoặc số điện thoại.'])
+                ->withErrors(['email' => 'Vui lòng nhập email.'])
                 ->withInput();
         }
 
         $role = $this->normalizeRole($validated['vai_tro']);
-        if (! $role) {
+        if (!$role) {
             return back()->withErrors(['vai_tro' => 'Vai trò tài khoản không hợp lệ.'])->withInput();
         }
 
-        if (! $this->canManageRole($role)) {
+        if (!$this->canManageRole($role)) {
             return back()->withErrors(['vai_tro' => 'Bạn không có quyền tạo tài khoản với vai trò này.'])->withInput();
         }
 
@@ -476,9 +479,7 @@ class UserController extends Controller
         DB::transaction(function () use ($validated, $role, $request, &$createdUser): void {
             $createdUser = NguoiDung::create([
                 'cua_hang_id' => $this->currentStoreId(),
-                'ho_ten' => $validated['ho_ten'],
                 'email' => $validated['email'],
-                'so_dien_thoai' => $validated['so_dien_thoai'],
                 'mat_khau' => Hash::make($validated['password']),
                 'vai_tro' => $role,
                 'trang_thai' => 'hoạt động',
@@ -493,18 +494,14 @@ class UserController extends Controller
             if ($role === 'quản lý') {
                 $this->updateAdminProfile($request, $createdUser);
             }
-
-            if ($role === 'chủ cửa hàng') {
-                $this->syncStoreOwner($createdUser, $request);
-            }
         });
 
-        if (! $createdUser) {
+        if (!$createdUser) {
             return back()->with('error', 'Không thể tạo tài khoản mới, vui lòng thử lại.');
         }
 
         return redirect()->route($redirectRoute)
-            ->with('success', "Đã thêm tài khoản {$createdUser->ho_ten} ({$role}).");
+            ->with('success', "Đã thêm tài khoản {$createdUser->email} ({$role}).");
     }
 
     private function paidPaymentStatuses(): array
@@ -522,15 +519,18 @@ class UserController extends Controller
 
     private function paidOrdersByUserQuery(NguoiDung $user): Builder
     {
-        $query = DonHang::query();
-        $this->applyPaidStatusConstraint($query);
-
-        return $query->where('nguoi_dung_id', $user->id);
+        return DonHang::query()
+            ->where('nguoi_dung_id', $user->id)
+            ->whereHas('chiTietDonHang', function ($q) {
+                $this->applyPaidStatusConstraint($q, 'chi_tiet_don_hang.trang_thai_thanh_toan');
+            });
     }
 
     private function calculateCustomerSpending(NguoiDung $user): float
     {
-        return (float) $user->donHang()->sum('tong_tien');
+        $query = ChiTietDonHang::whereIn('don_hang_id', $user->donHang()->select('id'));
+        $this->applyPaidStatusConstraint($query, 'chi_tiet_don_hang.trang_thai_thanh_toan');
+        return (float) $query->sum('tong_tien');
     }
 
     private function applyPaidStatusConstraint(Builder $query, string $column = 'trang_thai_thanh_toan'): Builder
@@ -569,7 +569,6 @@ class UserController extends Controller
             HoSoNhanVien::firstOrCreate(
                 ['nguoi_dung_id' => $user->id],
                 [
-                    'ma_nhan_vien' => 'NV' . str_pad((string) $user->id, 5, '0', STR_PAD_LEFT),
                     'chuc_vu_id' => null,
                 ]
             );
@@ -582,7 +581,6 @@ class UserController extends Controller
                 ['nguoi_dung_id' => $user->id],
                 [
                     'chuc_vu_id' => $this->defaultManagerPositionId(),
-                    'ma_quan_ly' => 'QL' . str_pad((string) $user->id, 5, '0', STR_PAD_LEFT),
                 ]
             );
         }
@@ -619,7 +617,6 @@ class UserController extends Controller
         $staffProfile = HoSoNhanVien::firstOrCreate(
             ['nguoi_dung_id' => $user->id],
             [
-                'ma_nhan_vien' => 'NV' . str_pad((string) $user->id, 5, '0', STR_PAD_LEFT),
                 'chuc_vu_id' => null,
             ]
         );
@@ -630,16 +627,18 @@ class UserController extends Controller
 
         $positionId = $this->resolvePositionIdForRole($positionId, 'nhân viên');
 
-        if ($request->filled('chuc_vu_id') && ! $positionId) {
+        if ($request->filled('chuc_vu_id') && !$positionId) {
             throw ValidationException::withMessages([
                 'chuc_vu_id' => 'Chức vụ đã chọn không thuộc vai trò nhân viên.',
             ]);
         }
 
         $staffProfile->update([
+            'ho_ten' => $this->normalizeNullable($request->input('ho_ten')),
+            'ngay_sinh' => $this->normalizeNullable($request->input('ngay_sinh')),
+            'dia_chi_tam_chu' => $this->normalizeNullable($request->input('dia_chi_tam_chu')),
+            'so_dien_thoai' => $this->normalizeNullable($request->input('so_dien_thoai')),
             'chuc_vu_id' => $positionId,
-            'loai_hinh_lam_viec' => $request->filled('loai_hinh_lam_viec') ? $request->input('loai_hinh_lam_viec') : ($staffProfile->loai_hinh_lam_viec ?? 'toàn thời gian'),
-            'luong_co_ban' => $request->filled('luong_co_ban') ? (float) $request->input('luong_co_ban') : ($staffProfile->luong_co_ban ?? 0),
             'ngay_vao_lam' => $this->normalizeNullable($request->input('ngay_vao_lam')),
         ]);
     }
@@ -650,7 +649,6 @@ class UserController extends Controller
             ['nguoi_dung_id' => $user->id],
             [
                 'chuc_vu_id' => $this->defaultManagerPositionId(),
-                'ma_quan_ly' => 'QL' . str_pad((string) $user->id, 5, '0', STR_PAD_LEFT),
             ]
         );
 
@@ -660,7 +658,7 @@ class UserController extends Controller
 
         $positionId = $this->resolvePositionIdForRole($requestedPositionId, 'quản lý');
 
-        if ($request->filled('chuc_vu_id') && ! $positionId) {
+        if ($request->filled('chuc_vu_id') && !$positionId) {
             throw ValidationException::withMessages([
                 'chuc_vu_id' => 'Chức vụ đã chọn không thuộc vai trò quản lý.',
             ]);
@@ -669,8 +667,11 @@ class UserController extends Controller
         $positionId = $positionId ?: $this->defaultManagerPositionId();
 
         $adminProfile->update([
+            'ho_ten' => $this->normalizeNullable($request->input('ho_ten')),
+            'ngay_sinh' => $this->normalizeNullable($request->input('ngay_sinh')),
+            'dia_chi_tam_chu' => $this->normalizeNullable($request->input('dia_chi_tam_chu')),
+            'so_dien_thoai' => $this->normalizeNullable($request->input('so_dien_thoai')),
             'chuc_vu_id' => $positionId,
-            'loai_hinh_lam_viec' => $request->filled('loai_hinh_lam_viec') ? $request->input('loai_hinh_lam_viec') : ($adminProfile->loai_hinh_lam_viec ?? 'toàn thời gian'),
             'ngay_vao_lam' => $this->normalizeNullable($request->input('ngay_vao_lam')),
         ]);
     }
@@ -688,7 +689,7 @@ class UserController extends Controller
 
     private function resolvePositionIdForRole(?int $positionId, string $role): ?int
     {
-        if (! $positionId) {
+        if (!$positionId) {
             return null;
         }
 
@@ -714,7 +715,7 @@ class UserController extends Controller
 
     private function normalizeListOrigin(?string $origin): ?string
     {
-        if (! $origin) {
+        if (!$origin) {
             return null;
         }
 
@@ -760,7 +761,8 @@ class UserController extends Controller
 
     private function actorCanManageAdmins(): bool
     {
-        return Auth::guard('nguoi_dung')->user()?->vai_tro === 'chủ cửa hàng';
+        $actor = Auth::guard('nguoi_dung')->user() ?? Auth::user();
+        return $actor && $actor->vai_tro === 'chủ cửa hàng';
     }
 
     private function canManageRole(string $role): bool
@@ -810,9 +812,7 @@ class UserController extends Controller
         $search = trim((string) $request->input('search', ''));
         if ($search !== '') {
             $query->where(function (Builder $subQuery) use ($search) {
-                $subQuery->where('ho_ten', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('so_dien_thoai', 'like', "%{$search}%");
+                $subQuery->where('email', 'like', "%{$search}%");
             });
         }
 
@@ -826,8 +826,8 @@ class UserController extends Controller
 
     private function currentStoreId(): ?int
     {
-        $actor = Auth::guard('nguoi_dung')->user();
-        if (! $actor) {
+        $actor = Auth::guard('nguoi_dung')->user() ?? Auth::user();
+        if (!$actor) {
             return null;
         }
 
@@ -838,9 +838,9 @@ class UserController extends Controller
     {
         $storeId = $this->currentStoreId();
         if ($storeId) {
-            $query->where(function($q) use ($column, $storeId) {
+            $query->where(function ($q) use ($column, $storeId) {
                 $q->where($column, $storeId)
-                  ->orWhereNull($column);
+                    ->orWhereNull($column);
             });
         }
 
@@ -849,13 +849,17 @@ class UserController extends Controller
 
     private function ensureUserInCurrentStore(NguoiDung $user): void
     {
+        if ($this->actorCanManageAdmins()) {
+            return; // Chủ cửa hàng (full quyền) được phép xem ở bất kỳ đâu
+        }
+
         $storeId = $this->currentStoreId();
-        if (! $storeId) {
+        if (!$storeId) {
             return;
         }
 
         if ((int) ($user->cua_hang_id ?? 0) !== (int) $storeId) {
-            abort(403, 'Bạn không có quyền thao tác tài khoản thuộc cửa hàng khác.');
+            abort(403, 'Bạn không có quyền thao tác tại trang này.');
         }
     }
 
@@ -873,41 +877,13 @@ class UserController extends Controller
     private function attachUserToCurrentStore(NguoiDung $user): void
     {
         $storeId = $this->currentStoreId();
-        if (! $storeId) {
+        if (!$storeId) {
             return;
         }
 
         if ((int) ($user->cua_hang_id ?? 0) !== (int) $storeId) {
             $user->update(['cua_hang_id' => $storeId]);
         }
-    }
-
-    private function syncStoreOwner(NguoiDung $ownerUser, Request $request): void
-    {
-        $storeId = $this->currentStoreId() ?? $ownerUser->cua_hang_id;
-
-        $store = CuaHang::query()
-            ->when($storeId, fn($q) => $q->where('id', $storeId))
-            ->when(!$storeId, fn($q) => $q->where('chu_cua_hang_id', $ownerUser->id))
-            ->first() ?? CuaHang::first();
-
-        if (! $store) {
-            return;
-        }
-
-        $payload = [
-            'chu_cua_hang_id' => $ownerUser->id,
-        ];
-
-        if ($request->has('so_tai_khoan')) {
-            $payload['so_tai_khoan'] = $this->normalizeNullable($request->input('so_tai_khoan'));
-        }
-
-        if ($request->has('ngan_hang')) {
-            $payload['ngan_hang'] = $this->normalizeNullable($request->input('ngan_hang'));
-        }
-
-        $store->update($payload);
     }
 
     private function normalizeNullable(?string $value): ?string

@@ -61,7 +61,7 @@
                         <div class="action-row">
                             @if($isStoreOwner)
                                 <a href="{{ route('manager.ingredients.edit', ['id' => $ingredient->id]) }}" class="btn btn-warning btn-sm">Sửa</a>
-                                <form method="POST" action="{{ route('manager.ingredients.destroy', ['id' => $ingredient->id]) }}" onsubmit="return confirm('Xóa nguyên liệu {{ addslashes($ingredient->ten_nguyen_lieu) }}?')">
+                                <form method="POST" action="{{ route('manager.ingredients.destroy', ['id' => $ingredient->id]) }}" onsubmit="return confirmDelete(this, 'Xóa nguyên liệu {{ addslashes($ingredient->ten_nguyen_lieu) }}?')">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="btn btn-danger btn-sm">Xóa</button>

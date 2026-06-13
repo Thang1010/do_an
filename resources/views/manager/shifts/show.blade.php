@@ -69,8 +69,8 @@ Nhân sự / <a href="{{ route('manager.shifts.index') }}">Quản lý ca làm vi
                     <th>Email</th>
                     <th>Nhân sự</th>
                     <th>Vai trò</th>
-                    <th>Check-in</th>
-                    <th>Check-out</th>
+                    <th>Chấm công vào</th>
+                    <th>Chấm công ra</th>
                     <th>Số giờ</th>
                     <th>Ghi chú</th>
                     <th>Thao tác</th>
@@ -83,31 +83,43 @@ Nhân sự / <a href="{{ route('manager.shifts.index') }}">Quản lý ca làm vi
                 @endphp
                 <tr>
                     <td>{{ $stt }}</td>
-                    <td>{{ $member['email'] ?: '—' }}</td>
+                    <td>{{ $member['email'] ?? '—' }}</td>
                     <td>
-                        <div class="font-600">{{ $member['nhan_su'] ?: '—' }}</div>
-                        <div class="text-12 text-muted">{{ $member['ma_nhan_vien'] ?: 'Không có mã' }}</div>
+                        <div class="font-600">{{ $member['nhan_su'] ?? '—' }}</div>
+                        <div class="text-12 text-muted">{{ $member['ma_nhan_vien'] ?? 'Không có mã' }}</div>
                     </td>
-                    <td>{{ $member['vai_tro'] ?: '—' }}</td>
+                    <td>{{ $member['vai_tro'] ?? '—' }}</td>
                     <td>{{ $member['check_in'] ? $member['check_in']->format('d/m H:i') : '—' }}</td>
                     <td>{{ $member['check_out'] ? $member['check_out']->format('d/m H:i') : '—' }}</td>
                     <td>{{ number_format((float) ($member['so_gio'] ?? 0), 2, ',', '.') }} giờ</td>
                     <td>{{ \Illuminate\Support\Str::limit($member['ghi_chu'] ?? '—', 100) }}</td>
-                    <td>
-                        @if($member['can_force_checkout'] ?? false)
-                            <form method="POST" action="{{ route('manager.shifts.force-checkout', ['id' => $shift->id, 'userId' => $member['nguoi_dung_id']]) }}"
-                                  onsubmit="return confirmDelete(this, 'Xác nhận kết thúc ca hộ cho nhân sự này?')">
-                                @csrf
-                                <button type="submit" class="btn btn-secondary btn-sm">Kết thúc ca hộ</button>
-                            </form>
-                        @else
-                            <span class="text-muted text-12">Đã kết ca</span>
-                        @endif
+                                        <td>
+                        <div class="action-row" style="display: flex; gap: 8px; justify-content: center;">
+                            @if(isset($isShiftActive) && $isShiftActive)
+                                @if($member['can_force_checkin'] ?? false)
+                                    <form method="POST" action="{{ route('manager.shifts.force-checkin', ['id' => $shift->id, 'userId' => $member['nguoi_dung_id']]) }}"
+                                          onsubmit="return confirmDelete(this, 'Xác nhận chấm công vào hộ cho nhân sự này?')">
+                                        @csrf
+                                        <button type="submit" class="btn btn-primary btn-sm">Chấm công vào</button>
+                                    </form>
+                                @elseif($member['can_force_checkout'] ?? false)
+                                    <form method="POST" action="{{ route('manager.shifts.force-checkout', ['id' => $shift->id, 'userId' => $member['nguoi_dung_id']]) }}"
+                                          onsubmit="return confirmDelete(this, 'Xác nhận kết thúc ca hộ cho nhân sự này?')">
+                                        @csrf
+                                        <button type="submit" class="btn btn-warning btn-sm">Chấm công ra</button>
+                                    </form>
+                                @else
+                                    <a href="{{ route('manager.users.show', $member['nguoi_dung_id']) }}" class="btn btn-secondary btn-sm">Chi tiết</a>
+                                @endif
+                            @else
+                                <a href="{{ route('manager.users.show', $member['nguoi_dung_id']) }}" class="btn btn-secondary btn-sm">Chi tiết</a>
+                            @endif
+                        </div>
                     </td>
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="9" class="empty-state">Ca làm việc này chưa có nhân sự được phân công.</td>
+                    <td colspan="8" class="empty-state">Ca làm việc này chưa có nhân sự được phân công.</td>
                 </tr>
                 @endforelse
             </tbody>
@@ -123,11 +135,11 @@ Nhân sự / <a href="{{ route('manager.shifts.index') }}">Quản lý ca làm vi
         </div>
         <div class="modal-body" style="text-align:center;">
             <div class="text-12 text-muted" style="margin-bottom:8px;">
-                Nhân sự thuộc ca có thể quét QR để check-in nhanh.
+                Nhân sự thuộc ca có thể quét QR để chấm công vào nhanh.
             </div>
             <img src="{{ $checkinQrImageUrl }}" alt="QR chấm công" style="width:320px; max-width:100%; height:auto; border:1px solid #e5e7eb; border-radius:10px; padding:8px; background:#fff;">
             <div class="form-group" style="margin-top:12px; text-align:left;">
-                <label class="form-label">Link check-in</label>
+                <label class="form-label">Link chấm công vào</label>
                 <input type="text" class="form-control" value="{{ $checkinQrUrl }}" readonly onclick="this.select()">
             </div>
         </div>

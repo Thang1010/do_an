@@ -2,23 +2,27 @@
 
 namespace App\Http\Controllers\Customer;
 
-use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Models\BanAn;
 use App\Models\ChiTietDonHang;
 use App\Models\DonHang;
+use App\Models\KichCo;
 use App\Models\SanPham;
 use App\Services\OrderNotificationService;
 use App\Services\PaymentService;
 use App\Services\TableStatusService;
+use App\Services\OrderInventoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class CartController extends Controller
 {
     public function __construct(
         private readonly PaymentService $paymentService,
-    ) {}
+        private readonly OrderInventoryService $inventoryService,
+    ) {
+    }
     // ── Helpers ──────────────────────────────────────────────────
     private function getCart(): array
     {
@@ -45,12 +49,13 @@ class CartController extends Controller
         return $key;
     }
 
-    private function findMergeKey(array $cart, int $productId, ?int $sizeId = null): ?string
+    private function findMergeKey(array $cart, int $productId, ?int $sizeId = null, string $nhietDo = ''): ?string
     {
         foreach ($cart as $key => $item) {
             $itemSize = $item['size_id'] ?? null;
-            $itemNote = trim((string) ($item['note'] ?? ''));
-            if ($item['product_id'] === $productId && $itemSize === $sizeId && $itemNote === '') {
+            $itemNhietDo = $item['nhiet_do'] ?? '';
+            // We ignore note when merging. If they add a note later, it applies to the merged item.
+            if ($item['product_id'] === $productId && $itemSize === $sizeId && $itemNhietDo === $nhietDo) {
                 return $key;
             }
         }
@@ -70,11 +75,20 @@ class CartController extends Controller
             if (!$product)
                 continue;
 
+            $sizeCode = null;
+            if (!empty($item['size_id'])) {
+                $kichCo = KichCo::find($item['size_id']);
+                if ($kichCo) {
+                    $sizeCode = $kichCo->ma_kich_co;
+                }
+            }
+
             $subtotal = $item['price'] * $item['qty'];
             $total += $subtotal;
             $items[$key] = array_merge($item, [
                 'product' => $product,
                 'subtotal' => $subtotal,
+                'size_code' => $sizeCode,
             ]);
         }
 
@@ -86,13 +100,12 @@ class CartController extends Controller
         // Danh sách đơn hàng theo ngày lọc (mặc định hôm nay) nếu đã đăng nhập
         $ordersToday = collect();
         $filterDate = request()->input('date', today()->toDateString());
-        
+
         if (auth()->check()) {
             $ordersToday = DonHang::with(['chiTietDonHang', 'banAn', 'voucherNguoiDung.voucher'])
                 ->where('nguoi_dung_id', auth()->id())
                 ->whereDate('created_at', $filterDate)
-                ->orderByRaw("CASE WHEN trang_thai_don = 'chờ xác nhận' THEN 0 ELSE 1 END")
-                ->orderBy('created_at', 'desc')
+                ->orderByDesc('created_at')
                 ->get();
         }
 
@@ -106,32 +119,46 @@ class CartController extends Controller
             'product_id' => 'required|integer|exists:san_pham,id',
             'size_id' => 'nullable|integer',
             'qty' => 'nullable|integer|min:1',
+            'nhiet_do' => 'nullable|string',
         ]);
 
         $productId = (int) $request->product_id;
         $sizeId = $request->size_id ? (int) $request->size_id : null;
         $qty = (int) ($request->qty ?? 1);
+        $nhietDo = $request->nhiet_do ?? '';
 
         $product = SanPham::findOrFail($productId);
-        $price = (float) ($product->gia_khuyen_mai ?? $product->gia_goc);
+        $price = (float) ($product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc);
+
+        // Resolve size name and size-specific price (using he_so_gia as additional amount)
+        $sizeName = null;
+        if ($sizeId) {
+            $kichCo = $product->kichCo()->find($sizeId);
+            if ($kichCo) {
+                $sizeName = $kichCo->ten_kich_co;
+                $price = $price * (float) ($kichCo->he_so_gia ?? 1);
+            }
+        }
 
         $cart = $this->getCart();
-        $mergeKey = $this->findMergeKey($cart, $productId, $sizeId);
+        $mergeKey = $this->findMergeKey($cart, $productId, $sizeId, $nhietDo);
 
         if ($mergeKey !== null) {
             $cart[$mergeKey]['qty'] += $qty;
         } else {
-            $key = $this->cartItemKey($productId, $sizeId);
+            $key = $this->cartItemKey($productId, $sizeId) . ($nhietDo ? '_' . Str::slug($nhietDo) : '');
             if (isset($cart[$key])) {
                 $key = $this->uniqueCartKey($cart, $productId, $sizeId);
             }
             $cart[$key] = [
                 'product_id' => $productId,
                 'size_id' => $sizeId,
+                'size_name' => $sizeName,
                 'name' => $product->ten_san_pham,
                 'image' => $product->image_url,
                 'price' => $price,
                 'qty' => $qty,
+                'nhiet_do' => $nhietDo,
                 'note' => '',
             ];
         }
@@ -239,132 +266,118 @@ class CartController extends Controller
             $loaiDonUi = $loaiDonLegacy === 'dat_hang' ? 'goi_mon' : 'dat_ban';
         }
 
-        // ── Khách CHƯA đăng nhập ─────────────────────────────────
+        // ── Khách vãng lai ───────────────────────────────────────
         if (!auth()->check()) {
-            $request->validate([
-                'ten_khach_hang' => 'required|string|max:100',
-                'so_dien_thoai_khach' => 'required|string|max:20',
-                'loai_don_hidden' => 'required|in:goi_mon',
-            ]);
-
-            if ($loaiDonUi !== 'goi_mon') {
-                return back()->with('error', 'Khách vãng lai chỉ được gọi món tại bàn.');
+            if ($loaiDonUi === 'dat_ban') {
+                return back()->with('error', 'Bạn cần đăng nhập để đặt bàn trước.');
             }
 
-            // Gọi món tại bàn (Đã ở quán)
             $request->validate([
                 'ban_an_id_goi_mon' => 'required|exists:ban_an,id',
-                'phuong_thuc_thanh_toan_goi_mon' => 'required|string|in:chuyển khoản',
+                'email_khach_hang' => 'required|email|max:255',
             ]);
 
             $order = $this->createOrder([
-                'loai_don' => 'mua tại quán',
+                'nguoi_dung_id' => null,
+                'email_khach_hang' => $request->email_khach_hang,
+                'loai_don' => 'sử dụng ngay',
                 'ban_an_id' => $request->ban_an_id_goi_mon,
-                'trang_thai_don' => 'chờ xác nhận',
                 'trang_thai_thanh_toan' => 'chưa thanh toán',
                 'phuong_thuc_thanh_toan' => 'chuyển khoản',
-                'ten_khach_hang' => $request->ten_khach_hang,
-                'so_dien_thoai_khach' => $request->so_dien_thoai_khach,
-            ], $cart);
+            ], $cart, null);
 
             session()->forget('cart');
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'order_code' => $order->ma_don_hang
+                ]);
+            }
             return redirect()->route('cart.payment', $order->ma_don_hang);
         }
 
         // ── Khách ĐÃ đăng nhập ───────────────────────────────────
-        // Hỗ trợ 2 mode: đặt 1 đơn từ giỏ hoặc multi-order theo danh sách bàn
         if (!$request->filled('orders')) {
             $request->validate([
                 'loai_don_hidden' => 'nullable|in:dat_ban,goi_mon|required_without:loai_don',
                 'loai_don' => 'nullable|in:dat_ban,dat_hang|required_without:loai_don_hidden',
-                'so_dien_thoai_khach' => 'nullable|string|max:20',
+                'email_khach' => 'nullable|email|max:255',
             ]);
+
+            if (empty(auth()->user()->email) && $request->filled('email_khach')) {
+                auth()->user()->update(['email' => $request->email_khach]);
+            }
 
             if ($loaiDonUi === 'dat_ban') {
                 $request->validate([
-                    'thoi_gian_den' => 'required|date',
+                    'thoi_gian_den' => 'required|date_format:H:i',
                     'ban_an_id_dat_ban' => 'nullable|exists:ban_an,id',
                 ]);
 
-                $ghiChu = 'Hẹn đến lúc: ' . date('H:i d/m/Y', strtotime($request->thoi_gian_den));
+                $thoiGianDen = \Carbon\Carbon::createFromFormat('H:i', $request->thoi_gian_den)->setDateFrom(now());
+                if ($thoiGianDen->isPast()) {
+                    return back()->with('error', 'Thời gian đến phải lớn hơn thời gian hiện tại.');
+                }
+
                 $banId = $request->ban_an_id_dat_ban;
-                $loaiDon = $banId ? 'mua tại quán' : 'đặt online';
+                $loaiDon = 'đặt hàng trước';
+
+                $voucherId = null;
+                if ($request->filled('voucher_nguoi_dung_id')) {
+                    $ids = explode(',', $request->voucher_nguoi_dung_id);
+                    $voucherId = (int) $ids[0];
+                }
 
                 $order = $this->createOrder([
                     'nguoi_dung_id' => auth()->id(),
                     'loai_don' => $loaiDon,
                     'ban_an_id' => $banId,
-                    'trang_thai_don' => 'chờ xác nhận',
+                    'thoi_gian_den' => $thoiGianDen->format('Y-m-d H:i:s'),
                     'trang_thai_thanh_toan' => 'chưa thanh toán',
                     'phuong_thuc_thanh_toan' => 'chuyển khoản',
-                    'ghi_chu' => $ghiChu,
-                    'so_dien_thoai_khach' => $request->so_dien_thoai_khach,
-                ], $cart);
+                ], $cart, $voucherId);
 
                 session()->forget('cart');
+                if ($request->ajax()) {
+                    return response()->json([
+                        'success' => true,
+                        'order_code' => $order->ma_don_hang
+                    ]);
+                }
                 return redirect()->route('cart.payment', $order->ma_don_hang);
             }
 
             $request->validate([
                 'ban_an_id_goi_mon' => 'required|exists:ban_an,id',
-                'phuong_thuc_thanh_toan_goi_mon' => 'required|string|in:tiền mặt,chuyển khoản',
+                'phuong_thuc_thanh_toan_goi_mon' => 'required|string|in:chuyển khoản',
             ]);
 
-            $order = $this->createOrder([
-                'nguoi_dung_id' => auth()->id(),
-                'loai_don' => 'mua tại quán',
-                'ban_an_id' => $request->ban_an_id_goi_mon,
-                'trang_thai_don' => 'chờ xác nhận',
-                'trang_thai_thanh_toan' => 'chưa thanh toán',
-                'phuong_thuc_thanh_toan' => $request->phuong_thuc_thanh_toan_goi_mon,
-                'so_dien_thoai_khach' => $request->so_dien_thoai_khach,
-            ], $cart);
-
-            session()->forget('cart');
-            return redirect()->route('cart.success')->with('order_code', $order->ma_don_hang);
-        }
-
-        // Có thể tạo nhiều đơn cùng lúc theo danh sách bàn được chọn
-        $request->validate([
-            'orders' => 'required|array|min:1',
-            'orders.*.ban_an_id' => 'nullable|exists:ban_an,id',
-            'orders.*.thoi_gian_den' => 'nullable|date',
-            'orders.*.keys' => 'required|array|min:1',   // các key item trong giỏ
-        ]);
-
-        $createdOrders = [];
-
-        foreach ($request->orders as $orderData) {
-            $selectedKeys = $orderData['keys'];
-            $subCart = array_intersect_key($cart, array_flip($selectedKeys));
-
-            if (empty($subCart))
-                continue;
-
-            $banId = $orderData['ban_an_id'] ?? null;
-            $loaiDon = $banId ? 'mua tại quán' : 'đặt online';
-
-            $ghiChu = null;
-            if (!empty($orderData['thoi_gian_den'])) {
-                $ghiChu = 'Hẹn đến lúc: ' . date('H:i d/m/Y', strtotime($orderData['thoi_gian_den']));
+            $voucherId = null;
+            if ($request->filled('voucher_nguoi_dung_id')) {
+                $ids = explode(',', $request->voucher_nguoi_dung_id);
+                $voucherId = (int) $ids[0];
             }
 
             $order = $this->createOrder([
                 'nguoi_dung_id' => auth()->id(),
-                'loai_don' => $loaiDon,
-                'ban_an_id' => $banId,
-                'trang_thai_don' => 'chờ xác nhận',
+                'loai_don' => 'sử dụng ngay',
+                'ban_an_id' => $request->ban_an_id_goi_mon,
                 'trang_thai_thanh_toan' => 'chưa thanh toán',
-                'phuong_thuc_thanh_toan' => null,
-                'ghi_chu' => $ghiChu,
-            ], $subCart);
+                'phuong_thuc_thanh_toan' => 'chuyển khoản',
+            ], $cart, $voucherId);
 
-            $createdOrders[] = $order->ma_don_hang;
+            session()->forget('cart');
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'order_code' => $order->ma_don_hang
+                ]);
+            }
+            return redirect()->route('cart.payment', $order->ma_don_hang);
         }
 
-        session()->forget('cart');
-
-        return redirect()->route('cart.success')->with('order_codes', $createdOrders);
+        // Có thể tạo nhiều đơn cùng lúc theo danh sách bàn được chọn
+        return back()->with('error', 'Vui lòng thanh toán từng đơn để hoàn tất đặt hàng.');
     }
 
     // ── Trang success ─────────────────────────────────────────────
@@ -398,22 +411,191 @@ class CartController extends Controller
             ->where('ma_don_hang', $orderCode)
             ->firstOrFail();
 
-        if ($order->trang_thai_don === 'đã hủy') {
-            return redirect()->route('menu.index')->with('error', 'Đơn hàng đã bị hủy.');
-        }
-
         if ($order->trang_thai_thanh_toan === 'đã thanh toán') {
             return redirect()->route('cart.success')->with('order_code', $order->ma_don_hang);
+        }
+
+        if (request()->has('email')) {
+            $order->update(['email_khach_hang' => request()->input('email')]);
+        }
+
+        if ($order->nguoi_dung_id && (!auth()->check() || (auth()->id() !== $order->nguoi_dung_id && !in_array(auth()->user()->vai_tro, ['nhân viên', 'quản lý', 'chủ cửa hàng'])))) {
+            abort(403);
+        }
+
+        $clientId = env('PAYOS_CLIENT_ID');
+        $apiKey = env('PAYOS_API_KEY');
+        $checksumKey = env('PAYOS_CHECKSUM_KEY');
+
+        if (!$clientId || !$apiKey || !$checksumKey) {
+            return back()->with('error', 'Chưa cấu hình PayOS. Vui lòng liên hệ quản trị viên.');
+        }
+
+        $payOS = new \PayOS\PayOS($clientId, $apiKey, $checksumKey);
+
+        $items = [];
+        foreach ($order->chiTietDonHang as $ct) {
+            $items[] = [
+                "name" => substr($ct->ten_san_pham, 0, 255),
+                "quantity" => (int) $ct->so_luong,
+                "price" => (int) $ct->don_gia,
+            ];
+        }
+
+        $orderCodeInt = intval($order->id . time());
+        // Lấy 15 ký tự để tránh vượt quá limit (tuỳ chỉnh an toàn)
+        $orderCodeInt = (int) substr((string) $orderCodeInt, 0, 15);
+
+        $source = request()->query('source');
+        $data = [
+            "orderCode" => $orderCodeInt,
+            "amount" => (int) $order->tong_tien,
+            "description" => substr("TT don " . $orderCode, 0, 25),
+            "items" => $items,
+            "returnUrl" => route('cart.payos.return', ['orderCode' => $orderCode, 'source' => $source]),
+            "cancelUrl" => route('cart.payos.cancel', ['orderCode' => $orderCode, 'source' => $source]),
+        ];
+
+        try {
+            // Bypass SSL error using Http client without verification
+            $signature = \PayOS\Utils\PayOSSignatureUtils::createSignatureOfPaymentRequest($checksumKey, $data);
+            $data['signature'] = $signature;
+
+            $response = \Illuminate\Support\Facades\Http::withoutVerifying()
+                ->withHeaders([
+                    'x-client-id' => $clientId,
+                    'x-api-key' => $apiKey,
+                ])
+                ->post('https://api-merchant.payos.vn/v2/payment-requests', $data);
+
+            if ($response->failed() || $response->json('code') !== '00') {
+                throw new \Exception($response->json('desc') ?? 'Lỗi kết nối PayOS');
+            }
+
+            $checkoutUrl = $response->json('data.checkoutUrl');
+            $payosOrderId = $orderCodeInt;
+
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'checkoutUrl' => $checkoutUrl,
+                    'payosOrderId' => $payosOrderId,
+                ]);
+            }
+
+            return redirect($checkoutUrl);
+        } catch (\Exception $e) {
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Lỗi tạo link thanh toán PayOS: ' . $e->getMessage()
+                ]);
+            }
+            return back()->with('error', 'Lỗi tạo link thanh toán PayOS: ' . $e->getMessage());
+        }
+    }
+
+    public function paymentStatusAjax(Request $request, string $orderCode)
+    {
+        $order = DonHang::where('ma_don_hang', $orderCode)->firstOrFail();
+        
+        if ($order->trang_thai_thanh_toan === 'đã thanh toán') {
+            return response()->json(['success' => true, 'status' => 'đã thanh toán']);
+        }
+
+        $payosOrderId = $request->query('payosOrderId');
+        if (!$payosOrderId) {
+            return response()->json(['success' => false, 'status' => $order->trang_thai_thanh_toan]);
+        }
+
+        $clientId = config('services.payos.client_id', env('PAYOS_CLIENT_ID'));
+        $apiKey = config('services.payos.api_key', env('PAYOS_API_KEY'));
+        $checksumKey = config('services.payos.checksum_key', env('PAYOS_CHECKSUM_KEY'));
+
+        if ($clientId && $apiKey && $checksumKey) {
+            try {
+                // Thay vì dùng SDK có thể bị lỗi SSL nội bộ XAMPP, dùng Http::withoutVerifying() giống như lúc tạo link
+                $response = \Illuminate\Support\Facades\Http::withoutVerifying()
+                    ->withHeaders([
+                        'x-client-id' => $clientId,
+                        'x-api-key' => $apiKey,
+                    ])
+                    ->get("https://api-merchant.payos.vn/v2/payment-requests/{$payosOrderId}");
+
+                if ($response->successful() && $response->json('code') === '00') {
+                    $status = $response->json('data.status');
+                    if ($status === 'PAID') {
+                        $order->updatePaymentStatus('đã thanh toán', 'chuyển khoản');
+                        $this->paymentService->syncThanhToanRecord($order, 'chuyển khoản', 'đã thanh toán');
+                        $this->paymentService->applyTableStatusAfterPayment($order->fresh());
+                        return response()->json(['success' => true, 'status' => 'đã thanh toán']);
+                    }
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('PayOS Polling Error: ' . $e->getMessage());
+                // Ignore exception, continue polling
+            }
+        }
+
+        return response()->json(['success' => true, 'status' => $order->trang_thai_thanh_toan]);
+    }
+
+    public function payosReturn(Request $request, string $orderCode)
+    {
+        $order = DonHang::where('ma_don_hang', $orderCode)->firstOrFail();
+        $source = $request->query('source');
+
+        if ($request->code === '00' && $order->trang_thai_thanh_toan !== 'đã thanh toán') {
+            $order->updatePaymentStatus('đã thanh toán', 'chuyển khoản');
+            $this->paymentService->syncThanhToanRecord($order, 'chuyển khoản', 'đã thanh toán');
+            $this->paymentService->applyTableStatusAfterPayment($order->fresh());
+        }
+
+        if ($source === 'staff' && $order->ban_an_id) {
+            return redirect()->route('staff.tables.index', ['table' => $order->ban_an_id])->with('success', 'Đã thanh toán thành công qua PayOS.');
+        } elseif ($source === 'manager' && $order->ban_an_id) {
+            return redirect()->route('manager.tables.index', ['table' => $order->ban_an_id])->with('success', 'Đã thanh toán thành công qua PayOS.');
+        }
+
+        return redirect()->route('cart.success')->with('order_code', $orderCode);
+    }
+
+    public function payosCancel(Request $request, string $orderCode)
+    {
+        $order = DonHang::where('ma_don_hang', $orderCode)->firstOrFail();
+        $source = $request->query('source');
+
+        if ($source === 'staff' && $order->ban_an_id) {
+            return redirect()->route('staff.tables.index', ['table' => $order->ban_an_id])->with('error', 'Hủy thanh toán PayOS.');
+        } elseif ($source === 'manager' && $order->ban_an_id) {
+            return redirect()->route('manager.tables.index', ['table' => $order->ban_an_id])->with('error', 'Hủy thanh toán PayOS.');
+        }
+
+        return redirect()->route('menu.index')->with('error', 'Bạn đã hủy thanh toán đơn hàng ' . $orderCode);
+    }
+
+    public function cancelGuest(Request $request)
+    {
+        $request->validate(['order_code' => 'required|string']);
+
+        $order = DonHang::where('ma_don_hang', $request->order_code)->firstOrFail();
+
+        if ($order->trang_thai_thanh_toan === 'đã thanh toán') {
+            return back()->with('error', 'Đơn hàng đã thanh toán, không thể hủy.');
         }
 
         if ($order->nguoi_dung_id && (!auth()->check() || auth()->id() !== $order->nguoi_dung_id)) {
             abort(403);
         }
 
-        $store = $this->paymentService->resolveStoreForPayment($order->nguoiDung?->cua_hang_id);
-        $qrData = $store ? $this->paymentService->generateQrData($order, $store) : null;
+        $banAnId = $order->ban_an_id;
+        $order->delete();
 
-        return view('customer.cart.payment', compact('order', 'qrData', 'store'));
+        if ($banAnId) {
+            TableStatusService::refreshForTable($banAnId);
+        }
+
+        return redirect()->route('menu.index')->with('success', 'Đã hủy đơn hàng.');
     }
 
     public function confirmPayment(Request $request, string $orderCode)
@@ -428,78 +610,96 @@ class CartController extends Controller
 
         $order = DonHang::where('ma_don_hang', $orderCode)->firstOrFail();
 
-        if ($order->trang_thai_don === 'đã hủy') {
-            return redirect()->route('menu.index')->with('error', 'Đơn hàng đã bị hủy.');
-        }
-
         if ($order->trang_thai_thanh_toan !== 'đã thanh toán') {
-            $order->update([
-                'phuong_thuc_thanh_toan' => 'chuyển khoản',
-                'trang_thai_thanh_toan' => 'đã thanh toán',
-                'trang_thai_don' => in_array($order->trang_thai_don, ['chờ xác nhận', 'cho_xac_nhan'], true)
-                    ? 'đã xác nhận'
-                    : $order->trang_thai_don,
-            ]);
+            $order->updatePaymentStatus('đã thanh toán', 'chuyển khoản');
             $this->paymentService->syncThanhToanRecord($order, 'chuyển khoản', 'đã thanh toán');
-            TableStatusService::refreshForTable($order->ban_an_id);
+            $this->paymentService->applyTableStatusAfterPayment($order->fresh());
+
+            if ($order->nguoiDung && $order->nguoiDung->email) {
+                \Illuminate\Support\Facades\Mail::to($order->nguoiDung->email)->send(new \App\Mail\CustomerOrderPaidMail($order));
+            } elseif ($order->email_khach_hang) {
+                \Illuminate\Support\Facades\Mail::to($order->email_khach_hang)->send(new \App\Mail\CustomerOrderPaidMail($order));
+            }
         }
 
         return redirect()->route('cart.success')->with('order_code', $order->ma_don_hang);
     }
 
-    // ── Khách vãng lai hủy đơn ───────────────────────────────────────────
-    public function cancelGuest(Request $request)
-    {
-        $request->validate(['order_code' => 'required|string']);
-
-        $order = DonHang::where('ma_don_hang', $request->order_code)->first();
-
-        if (!$order) {
-            return back()->with('error', 'Không tìm thấy đơn hàng.');
-        }
-
-        if (!in_array($order->trang_thai_don, ['chờ xác nhận', 'cho_xac_nhan'], true)) {
-            return back()->with('error', 'Chỉ có thể hủy đơn khi ở trạng thái chờ xác nhận.');
-        }
-
-        $order->update([
-            'trang_thai_don' => 'đã hủy',
-            'ghi_chu' => trim($order->ghi_chu . "\n(Khách hàng đã hủy đơn)"),
-        ]);
-
-        OrderNotificationService::notifyCustomerCancelled($order->fresh());
-        TableStatusService::refreshForTable($order->ban_an_id);
-
-        return redirect()->route('menu.index')->with('success', 'Đã hủy đơn hàng ' . $order->ma_don_hang . ' thành công. Bạn có thể chọn món lại.');
-    }
-
     // ── Internal helper ───────────────────────────────────────────
-    private function createOrder(array $attrs, array $cart): DonHang
+    private function createOrder(array $attrs, array $cart, ?int $voucherNguoiDungId = null): DonHang
     {
-        $tamTinh = array_sum(array_map(fn($i) => $i['price'] * $i['qty'], $cart));
+        return DB::transaction(function () use ($attrs, $cart, $voucherNguoiDungId) {
+            $tamTinh = array_sum(array_map(fn($i) => $i['price'] * $i['qty'], $cart));
+            $soTienGiam = 0;
 
-        $order = DonHang::create(array_merge([
-            'ma_don_hang' => 'ORD-' . strtoupper(Str::random(8)),
-            'tam_tinh' => $tamTinh,
-            'so_tien_giam' => 0,
-            'tong_tien' => $tamTinh,
-        ], $attrs));
+            if ($voucherNguoiDungId) {
+                $vu = \App\Models\VoucherNguoiDung::with('voucher')->find($voucherNguoiDungId);
+                if ($vu && $vu->trang_thai === 'chưa dùng' && $vu->voucher) {
+                    $v = $vu->voucher;
+                    if ($v->trang_thai === 'đang hoạt động' && now()->between($v->ngay_bat_dau, $v->ngay_ket_thuc)) {
+                        if ($tamTinh >= $v->don_toi_thieu) {
+                            if ($v->loai_giam === 'phần trăm') {
+                                $soTienGiam = $tamTinh * ($v->gia_tri_giam / 100);
+                                if ($v->giam_toi_da) {
+                                    $soTienGiam = min($soTienGiam, $v->giam_toi_da);
+                                }
+                            } else {
+                                $soTienGiam = $v->gia_tri_giam;
+                            }
+                            $soTienGiam = min($soTienGiam, $tamTinh);
+                            $vu->update(['trang_thai' => 'đã dùng', 'da_dung_luc' => now()]);
+                        } else {
+                            $voucherNguoiDungId = null;
+                        }
+                    } else {
+                        $voucherNguoiDungId = null;
+                    }
+                } else {
+                    $voucherNguoiDungId = null;
+                }
+            }
 
-        foreach ($cart as $item) {
-            ChiTietDonHang::create([
-                'don_hang_id' => $order->id,
-                'ban_an_id' => $order->ban_an_id,
-                'san_pham_id' => $item['product_id'],
-                'kich_co_id' => $item['size_id'] ?? null,
-                'ten_san_pham' => $item['name'],
-                'ten_kich_co' => null,
-                'don_gia' => $item['price'],
-                'so_luong' => $item['qty'],
-                'thanh_tien' => $item['price'] * $item['qty'],
-                'ghi_chu_mon' => $item['note'] ?? null,
+            // Extract columns that belong to don_hang only
+            $loaiDon = $attrs['loai_don'] ?? 'đặt hàng trước';
+            $trangThaiThanhToan = $attrs['trang_thai_thanh_toan'] ?? 'chưa thanh toán';
+            $phuongThucThanhToan = $attrs['phuong_thuc_thanh_toan'] ?? null;
+
+            $order = DonHang::create([
+                'ma_don_hang' => 'ORD-' . strtoupper(Str::random(8)),
+                'voucher_nguoi_dung_id' => $voucherNguoiDungId,
+                'nguoi_dung_id' => $attrs['nguoi_dung_id'] ?? null,
+                'email_khach_hang' => $attrs['email_khach_hang'] ?? null,
+                'nhan_vien_id' => $attrs['nhan_vien_id'] ?? null,
+                'ban_an_id' => $attrs['ban_an_id'] ?? null,
             ]);
-        }
 
-        return $order;
+            foreach ($cart as $item) {
+                $thanhTien = $item['price'] * $item['qty'];
+                $itemDiscount = $tamTinh > 0 ? round($soTienGiam * $thanhTien / $tamTinh, 2) : 0;
+                $tongTienItem = max(0, $thanhTien - $itemDiscount);
+
+                ChiTietDonHang::create([
+                    'don_hang_id' => $order->id,
+                    'san_pham_id' => $item['product_id'],
+                    'kich_co_id' => $item['size_id'] ?? null,
+                    'ten_san_pham' => $item['name'],
+                    'ten_kich_co' => $item['size_name'] ?? null,
+                    'don_gia' => $item['price'],
+                    'so_luong' => $item['qty'],
+                    'thanh_tien' => $thanhTien,
+                    'ghi_chu_mon' => trim(($item['nhiet_do'] ? "({$item['nhiet_do']}) " : '') . ($item['note'] ?? '')),
+                    'loai_don' => $loaiDon,
+                    'thoi_gian_den' => $attrs['thoi_gian_den'] ?? null,
+                    'trang_thai_thanh_toan' => $trangThaiThanhToan,
+                    'phuong_thuc_thanh_toan' => $phuongThucThanhToan,
+                    'so_tien_giam' => $itemDiscount,
+                    'tong_tien' => $tongTienItem,
+                ]);
+            }
+
+            $this->inventoryService->exportIngredientsForOrder($order);
+
+            return $order;
+        });
     }
 }

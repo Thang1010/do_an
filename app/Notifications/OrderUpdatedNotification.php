@@ -19,7 +19,7 @@ class OrderUpdatedNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return [\App\Channels\CustomDatabaseChannel::class];
     }
 
     public function toArray(object $notifiable): array

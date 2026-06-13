@@ -11,9 +11,11 @@ class HoSoKhachHang extends Model
 
     protected $fillable = [
         'nguoi_dung_id',
+        'ho_ten',
         'gioi_tinh',
         'ngay_sinh',
         'dia_chi',
+        'anh_dai_dien',
     ];
 
     public function nguoiDung()

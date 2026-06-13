@@ -13,14 +13,13 @@ return new class extends Migration
     {
         Schema::create('voucher', function (Blueprint $table) {
             $table->id();
-            $table->string('ma_voucher', 50)->unique();
-            $table->string('ten_voucher', 150);
+            $table->string('ma_voucher', 30)->unique();
+            $table->string('ten_voucher', 50)->unique();
             $table->enum('loai_giam', ['phần trăm', 'tiền mặt']);
-            $table->decimal('gia_tri_giam', 12, 2);
-            $table->decimal('don_toi_thieu', 12, 2)->default(0);
-            $table->decimal('giam_toi_da', 12, 2)->nullable();
+            $table->float('gia_tri_giam')->default(0);
+            $table->float('don_toi_thieu')->default(0);
+            $table->float('giam_toi_da')->default(0);
             $table->integer('so_luong')->default(0);
-            $table->integer('da_su_dung')->default(0);
             $table->dateTime('ngay_bat_dau')->nullable();
             $table->dateTime('ngay_ket_thuc')->nullable();
             $table->enum('trang_thai', ['đang hoạt động', 'ngưng hoạt động', 'hết hạn'])->default('đang hoạt động');

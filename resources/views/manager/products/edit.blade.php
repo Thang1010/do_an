@@ -83,21 +83,19 @@
                     <div class="form-grid-2">
                         <div class="form-group form-group-flat">
                             <label class="form-label">Giá gốc (đ) <span>*</span></label>
-                            <input type="number"
+                            <input type="text"
                                    name="gia_goc"
-                                   class="form-control @error('gia_goc') is-invalid @enderror"
+                                   class="form-control format-money @error('gia_goc') is-invalid @enderror"
                                    value="{{ old('gia_goc', $product->gia_goc) }}"
-                                   min="0"
                                    required>
                             @error('gia_goc')<div class="form-error">{{ $message }}</div>@enderror
                         </div>
                         <div class="form-group form-group-flat">
                             <label class="form-label">Giá khuyến mãi (đ)</label>
-                            <input type="number"
+                            <input type="text"
                                    name="gia_khuyen_mai"
-                                   class="form-control @error('gia_khuyen_mai') is-invalid @enderror"
-                                   value="{{ old('gia_khuyen_mai', $product->gia_khuyen_mai) }}"
-                                   min="0">
+                                   class="form-control format-money @error('gia_khuyen_mai') is-invalid @enderror"
+                                   value="{{ old('gia_khuyen_mai', $product->gia_khuyen_mai) }}">
                             @error('gia_khuyen_mai')<div class="form-error">{{ $message }}</div>@enderror
                         </div>
                     </div>
@@ -111,7 +109,7 @@
                 <div class="card-body">
                     <div class="img-upload-area" onclick="document.getElementById('img-input').click()">
                         <img id="img-preview"
-                             src="{{ old('anh_chinh') ? '' : ($product->hinh_anh_chinh ? asset('storage/' . $product->hinh_anh_chinh) : '') }}"
+                             src="{{ old('anh_chinh') ? '' : ($product->hinh_anh_chinh ? $product->image_url : '') }}"
                              class="img-preview-upload {{ $product->hinh_anh_chinh ? '' : 'hidden' }}">
                         <p>Nhấn để sửa hình ảnh</p>
                         <p class="img-upload-hint">Sửa ảnh sản phẩm</p>

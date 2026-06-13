@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
-use App\Models\DonHang;
+use App\Models\ChiTietDonHang;
 use App\Models\Voucher;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -107,9 +107,7 @@ class VoucherController extends Controller
             $keyword = trim((string) $request->search);
 
             $query->whereHas('nguoiDung', function (Builder $q) use ($keyword) {
-                $q->where('ho_ten', 'like', '%' . $keyword . '%')
-                    ->orWhere('so_dien_thoai', 'like', '%' . $keyword . '%')
-                    ->orWhere('email', 'like', '%' . $keyword . '%');
+                $q->where('email', 'like', '%' . $keyword . '%');
             });
         }
 
@@ -150,9 +148,8 @@ class VoucherController extends Controller
             })
             ->count();
 
-        $discountToday = DonHang::query()
+        $discountToday = ChiTietDonHang::query()
             ->whereDate('created_at', today())
-            ->whereNotIn('trang_thai_don', ['huy', 'đã hủy'])
             ->sum('so_tien_giam');
 
         $expiringSoon = Voucher::query()
@@ -241,8 +238,8 @@ class VoucherController extends Controller
                     $index + 1,
                     $voucher->ma_voucher,
                     $voucher->ten_voucher,
-                    $item->nguoiDung->ho_ten ?? 'Khong xac dinh',
-                    $item->nguoiDung->so_dien_thoai ?? '',
+                    $item->nguoiDung->ho_ten ?? $item->nguoiDung->email ?? 'Khong xac dinh',
+                    '',
                     $item->nguoiDung->email ?? '',
                     $item->trang_thai,
                     $isUsed ? 'Da dung' : 'Chua dung',
@@ -264,9 +261,9 @@ class VoucherController extends Controller
             'ten_voucher'   => 'nullable|string|max:200',
             'loai_giam'     => 'required|string|max:50',
             'gia_tri_giam'  => 'required|numeric|min:0',
-            'giam_toi_da'   => 'nullable|numeric|min:0',
-            'don_toi_thieu' => 'nullable|numeric|min:0',
-            'so_luong'      => 'nullable|integer|min:1',
+            'giam_toi_da'   => 'required|numeric|min:0',
+            'don_toi_thieu' => 'required|numeric|min:0',
+            'so_luong'      => 'required|integer|min:0',
             'ngay_bat_dau'  => 'required|date',
             'ngay_ket_thuc' => 'required|date|after_or_equal:ngay_bat_dau',
             'trang_thai'    => ['nullable', 'string', 'max:50', Rule::in(['đang hoạt động', 'ngưng hoạt động', 'hoat_dong', 'vo_hieu'])],
@@ -302,7 +299,7 @@ class VoucherController extends Controller
             'giam_toi_da'   => $validated['giam_toi_da'] ?? null,
             'don_toi_thieu' => $validated['don_toi_thieu'] ?? 0,
             'so_luong'      => $usageLimit,
-            'da_su_dung'    => 0,
+
             'ngay_bat_dau'  => $validated['ngay_bat_dau'],
             'ngay_ket_thuc' => $validated['ngay_ket_thuc'],
             'trang_thai'    => $status,
@@ -320,9 +317,9 @@ class VoucherController extends Controller
             'ten_voucher'   => 'nullable|string|max:200',
             'loai_giam'     => 'required|string|max:50',
             'gia_tri_giam'  => 'required|numeric|min:0',
-            'giam_toi_da'   => 'nullable|numeric|min:0',
-            'don_toi_thieu' => 'nullable|numeric|min:0',
-            'so_luong'      => 'nullable|integer|min:1',
+            'giam_toi_da'   => 'required|numeric|min:0',
+            'don_toi_thieu' => 'required|numeric|min:0',
+            'so_luong'      => 'required|integer|min:0',
             'ngay_bat_dau'  => 'required|date',
             'ngay_ket_thuc' => 'required|date|after_or_equal:ngay_bat_dau',
             'trang_thai'    => ['required', 'string', 'max:50', Rule::in(['đang hoạt động', 'ngưng hoạt động', 'hoat_dong', 'vo_hieu'])],
@@ -367,7 +364,7 @@ class VoucherController extends Controller
     {
         $voucher = Voucher::withCount('voucherNguoiDung')->findOrFail($id);
 
-        if ($voucher->voucher_nguoi_dung_count > 0 || (int) $voucher->da_su_dung > 0) {
+        if ($voucher->voucher_nguoi_dung_count > 0) {
             return back()->with('error', 'Không thể xóa voucher đã được cấp hoặc đã sử dụng.');
         }
 

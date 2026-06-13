@@ -13,9 +13,9 @@ return new class extends Migration
     {
         Schema::create('nguyen_lieu', function (Blueprint $table) {
             $table->id();
-            $table->string('ten_nguyen_lieu', 150);
+            $table->string('ten_nguyen_lieu', 40);
             $table->enum('don_vi_tinh', ['gram', 'gói', 'hộp', 'ml', 'chai']);
-            $table->string('muc_dich_su_dung', 120)->nullable();
+            $table->string('muc_dich_su_dung', 40)->nullable();
             $table->timestamp('created_at')->useCurrent();
 
             $table->index('ten_nguyen_lieu');

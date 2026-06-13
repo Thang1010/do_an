@@ -151,7 +151,7 @@
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal('create-table-modal')">Hủy</button>
-            <button class="btn btn-primary" onclick="document.getElementById('create-table-form').submit()">Lưu bàn ăn</button>
+            <button type="submit" form="create-table-form" class="btn btn-primary">Lưu bàn ăn</button>
         </div>
     </div>
 </div>
@@ -184,7 +184,7 @@
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal('edit-table-modal-{{ $table->id }}')">Hủy</button>
-            <button class="btn btn-primary" onclick="document.getElementById('edit-table-form-{{ $table->id }}').submit()">Cập nhật</button>
+            <button type="submit" form="edit-table-form-{{ $table->id }}" class="btn btn-primary">Cập nhật</button>
         </div>
     </div>
 </div>

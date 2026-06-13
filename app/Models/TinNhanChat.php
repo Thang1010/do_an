@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class TinNhanChat extends Model
 {
-
     protected $table = 'tin_nhan_chat';
 
     public $timestamps = false;
@@ -15,11 +14,11 @@ class TinNhanChat extends Model
         'phien_chat_id',
         'nguoi_gui',
         'noi_dung',
-        'loai_tin_nhan',
-        'y_dinh',
-        'so_token',
-        'thoi_gian_phan_hoi_ms',
         'created_at',
+    ];
+
+    protected $casts = [
+        'created_at' => 'datetime',
     ];
 
     public function phienChat()

@@ -20,8 +20,7 @@ class SalaryController extends Controller
      */
     public function index(Request $request)
     {
-        $search = trim((string) $request->input('search', ''));
-        $filterRole = $request->input('vai_tro', '');
+        $filterRole = $request->input('vai_tro');
         $thang = (int) ($request->input('thang') ?: now()->month);
         $nam = (int) ($request->input('nam') ?: now()->year);
 
@@ -31,9 +30,8 @@ class SalaryController extends Controller
             ->whereIn('vai_tro', ['nhân viên', 'quản lý'])
             ->where('trang_thai', 'hoạt động')
             ->with(['hoSoNhanVien.chucVu', 'hoSoQuanLy.chucVu'])
-            ->when($filterRole !== '', fn (Builder $q) => $q->where('vai_tro', $filterRole))
-            ->when($search !== '', fn (Builder $q) => $q->where('ho_ten', 'like', "%{$search}%"))
-            ->orderBy('ho_ten')
+            ->when(!empty($filterRole), fn (Builder $q) => $q->where('vai_tro', $filterRole))
+            ->orderBy('email')
             ->paginate(20)
             ->withQueryString();
 
@@ -45,7 +43,6 @@ class SalaryController extends Controller
 
         return view('manager.salary.index', [
             'users' => $salaryData,
-            'search' => $search,
             'filterRole' => $filterRole,
             'thang' => $thang,
             'nam' => $nam,
@@ -151,7 +148,7 @@ class SalaryController extends Controller
             ->whereIn('vai_tro', ['nhân viên', 'quản lý'])
             ->where('trang_thai', 'hoạt động')
             ->with(['hoSoNhanVien.chucVu', 'hoSoQuanLy.chucVu'])
-            ->orderBy('ho_ten')
+            ->orderBy('email')
             ->get();
 
         $rows = $users->map(fn (NguoiDung $user) => $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $totalRevenue));
@@ -176,7 +173,7 @@ class SalaryController extends Controller
             $sheet->setCellValue([5, $rowIndex], $row['loai_hinh']);
             $sheet->setCellValue([6, $rowIndex], $row['luong_co_ban']);
             $sheet->setCellValue([7, $rowIndex], $row['luong_theo_gio']);
-            $sheet->setCellValue([8, $rowIndex], round($row['tong_gio'], 2));
+            $sheet->setCellValue([8, $rowIndex], $row['tong_gio_format']);
             $sheet->setCellValue([9, $rowIndex], round($row['tong_luong'], 0));
             $rowIndex++;
         }
@@ -200,12 +197,12 @@ class SalaryController extends Controller
     // =========================================================================
 
     /**
-     * Xác định kỳ lương: 15/tháng → 15/tháng+1.
+     * Xác định kỳ lương: Ngày đầu tháng → Ngày cuối tháng của tháng đó.
      */
     private function salaryPeriod(int $month, int $year): array
     {
-        $start = Carbon::create($year, $month, 15)->startOfDay();
-        $end = $start->copy()->addMonth()->startOfDay();
+        $start = Carbon::create($year, $month, 1)->startOfDay();
+        $end = $start->copy()->endOfMonth()->endOfDay();
 
         return [$start, $end];
     }
@@ -225,41 +222,47 @@ class SalaryController extends Controller
     /**
      * Tổng giờ làm việc của user trong kỳ.
      */
-    private function totalHoursWorked(int $userId, Carbon $start, Carbon $end): float
+    private function totalMinutesWorked(int $userId, Carbon $start, Carbon $end): float
     {
         $records = ChamCong::query()
             ->where('nguoi_dung_id', $userId)
-            ->whereNotNull('check_in_luc')
-            ->whereNotNull('check_out_luc')
+            ->whereNotNull('cham_cong_vao')
+            ->whereNotNull('cham_cong_ra')
             ->whereHas('caLamViec', function (Builder $q) use ($start, $end) {
                 $q->whereBetween('ngay_lam', [$start->toDateString(), $end->toDateString()]);
             })
             ->get();
 
         $totalMinutes = $records->sum(function (ChamCong $record) {
-            $checkIn = Carbon::parse($record->check_in_luc);
-            $checkOut = Carbon::parse($record->check_out_luc);
+            $checkIn = Carbon::parse($record->cham_cong_vao);
+            $checkOut = Carbon::parse($record->cham_cong_ra);
 
             return $checkOut->greaterThan($checkIn) ? $checkIn->diffInMinutes($checkOut) : 0;
         });
 
-        return round($totalMinutes / 60, 2);
+        return $totalMinutes;
+    }
+
+    private function formatMinutesToHours(float $minutes): string
+    {
+        $h = floor($minutes / 60);
+        $m = $minutes % 60;
+        if ($h > 0 && $m > 0) {
+            return "{$h} giờ {$m} phút";
+        }
+        if ($h > 0) {
+            return "{$h} giờ";
+        }
+        return "{$m} phút";
     }
 
     /**
      * Tính lương cho 1 user.
      */
-    private function calculateSalary(NguoiDung $user, string $loaiHinh, ?float $luongCoBan, ?float $luongTheoGio, float $totalHours, float $totalRevenue): float
+    private function calculateSalary(NguoiDung $user, string $loaiHinh, ?float $luongCoBan, ?float $luongTheoGio, float $totalMinutes, float $totalRevenue): float
     {
-        if ($loaiHinh === 'bán thời gian') {
-            return ($luongTheoGio ?? 0) * $totalHours;
-        }
-
-        // Toàn thời gian
         $base = $luongCoBan ?? 0;
-        $commissionRate = $user->isQuanLy() ? 0.01 : 0.005;
-
-        return $base + ($totalRevenue * $commissionRate);
+        return $base + (($totalMinutes / 60) * ($luongTheoGio ?? 0));
     }
 
     /**
@@ -270,23 +273,24 @@ class SalaryController extends Controller
         $isNhanVien = $user->isNhanVien();
         $profile = $isNhanVien ? $user->hoSoNhanVien : $user->hoSoQuanLy;
 
-        $loaiHinh = $profile->loai_hinh_lam_viec ?? 'toàn thời gian';
-        $luongCoBan = $profile->luong_co_ban ?? null;
-        $luongTheoGio = $profile->luong_theo_gio ?? null;
+        $loaiHinh = $profile?->chucVu?->loai_hinh_lam_viec ?? 'toàn thời gian';
+        $luongCoBan = $profile?->chucVu?->luong_co_ban ?? 0;
+        $luongTheoGio = $profile?->chucVu?->luong_theo_gio ?? 0;
         $chucVu = $profile?->chucVu?->ten_chuc_vu ?? '—';
 
-        $totalHours = $this->totalHoursWorked($user->id, $periodStart, $periodEnd);
-        $totalSalary = $this->calculateSalary($user, $loaiHinh, $luongCoBan, $luongTheoGio, $totalHours, $totalRevenue);
+                $totalMinutes = $this->totalMinutesWorked($user->id, $periodStart, $periodEnd);
+        $totalSalary = $this->calculateSalary($user, $loaiHinh, $luongCoBan, $luongTheoGio, $totalMinutes, $totalRevenue);
 
         return [
             'id' => $user->id,
-            'ho_ten' => $user->ho_ten,
+            'ho_ten' => $user->ho_ten ?? $user->email,
             'vai_tro' => $user->vai_tro,
             'chuc_vu' => $chucVu,
             'loai_hinh' => $loaiHinh,
             'luong_co_ban' => $luongCoBan,
             'luong_theo_gio' => $luongTheoGio,
-            'tong_gio' => $totalHours,
+            'tong_phut' => $totalMinutes,
+            'tong_gio_format' => $this->formatMinutesToHours($totalMinutes),
             'tong_luong' => $totalSalary,
         ];
     }

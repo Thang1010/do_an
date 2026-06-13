@@ -17,13 +17,13 @@ class DashboardController extends Controller
         $today = Carbon::today();
 
         // ===== STAT CARDS =====
-        $doanhThuHomNay = DonHang::whereDate('created_at', $today)
-            ->whereNotIn('trang_thai_don', ['huy', 'đã hủy'])
-            ->sum('tong_tien');
+        $doanhThuHomNay = DonHang::join('chi_tiet_don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')
+            ->whereDate('don_hang.created_at', $today)
+            ->sum('chi_tiet_don_hang.tong_tien');
 
-        $doanhThuHomQua = DonHang::whereDate('created_at', $today->copy()->subDay())
-            ->whereNotIn('trang_thai_don', ['huy', 'đã hủy'])
-            ->sum('tong_tien');
+        $doanhThuHomQua = DonHang::join('chi_tiet_don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')
+            ->whereDate('don_hang.created_at', $today->copy()->subDay())
+            ->sum('chi_tiet_don_hang.tong_tien');
 
         $donHangHomNay = DonHang::whereDate('created_at', $today)->count();
         $donHangHomQua = DonHang::whereDate('created_at', $today->copy()->subDay())->count();
@@ -36,16 +36,18 @@ class DashboardController extends Controller
         $nguyenLieuSapHet = 0;
         $dsNguyenLieuSapHet = collect();
 
-        // ===== DOANH THU 7 NGÀY =====
+        // ===== DOANH THU TRONG TUẦN =====
+        $startOfWeek = $today->copy()->startOfWeek(); // Thứ Hai
         $doanhThu7NgayRaw = [];
-        for ($i = 6; $i >= 0; $i--) {
-            $date = $today->copy()->subDays($i);
+        for ($i = 0; $i < 7; $i++) {
+            $date = $startOfWeek->copy()->addDays($i);
             $doanhThu7NgayRaw[] = [
                 'ngay'  => $date->format('d/m'),
                 'thu'   => $date->locale('vi')->isoFormat('dd'),
-                'total' => DonHang::whereDate('created_at', $date)
-                    ->whereNotIn('trang_thai_don', ['huy', 'đã hủy'])
-                    ->sum('tong_tien'),
+                'total' => DonHang::join('chi_tiet_don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')
+                    ->whereDate('don_hang.created_at', $date)
+                    ->sum('chi_tiet_don_hang.tong_tien'),
+                'is_today' => $date->isToday(),
             ];
         }
         // Wrap vào Collection để view có thể dùng ->sum(), ->max() ...
@@ -64,7 +66,6 @@ class DashboardController extends Controller
             ->join('don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')
             ->join('san_pham', 'san_pham.id', '=', 'chi_tiet_don_hang.san_pham_id')
             ->where('don_hang.created_at', '>=', $today->copy()->startOfWeek())
-            ->whereNotIn('don_hang.trang_thai_don', ['huy', 'đã hủy'])
             ->select(
                 'san_pham.id',
                 'san_pham.ten_san_pham',

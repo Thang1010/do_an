@@ -16,13 +16,13 @@ class CustomerOrderCancelledNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return [\App\Channels\CustomDatabaseChannel::class];
     }
 
     public function toArray(object $notifiable): array
     {
         $customerName = $this->order->nguoiDung?->ho_ten
-            ?? $this->order->ten_khach_hang
+            ?? $this->order->email_khach_hang
             ?? 'Khách hàng';
 
         return [
@@ -36,7 +36,7 @@ class CustomerOrderCancelledNotification extends Notification
             'order_id' => $this->order->id,
             'order_code' => $this->order->ma_don_hang,
             'order_type' => $this->order->loai_don,
-            'status' => $this->order->trang_thai_don,
+            'status' => $this->order->trang_thai_thanh_toan,
             'customer_name' => $customerName,
             'target_url' => route('manager.orders.show', ['id' => $this->order->id]),
         ];

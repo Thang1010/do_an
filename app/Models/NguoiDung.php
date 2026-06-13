@@ -15,14 +15,11 @@ class NguoiDung extends Authenticatable
 
     protected $fillable = [
         'cua_hang_id',
-        'ho_ten',
         'email',
         'google_id',
-        'so_dien_thoai',
         'mat_khau',
         'vai_tro',
         'trang_thai',
-        'anh_dai_dien',
         'email_da_xac_thuc_luc',
     ];
 
@@ -64,15 +61,63 @@ class NguoiDung extends Authenticatable
     }
     public function isActive(): bool    { return $this->trang_thai === UserStatus::HOAT_DONG->value; }
 
+    public function notifications()
+    {
+        return $this->morphMany(ThongBao::class, 'doi_tuong', 'doi_tuong_loai', 'doi_tuong_id')->latest();
+    }
+
+    public function getHoTenAttribute(): ?string
+    {
+        $hoTen = null;
+        if ($this->isKhachHang()) {
+            $hoTen = $this->hoSoKhachHang?->ho_ten;
+        } elseif ($this->isNhanVien()) {
+            $hoTen = $this->hoSoNhanVien?->ho_ten;
+        } elseif ($this->isQuanLy() || $this->isChuCuaHang()) {
+            $hoTen = $this->hoSoQuanLy?->ho_ten;
+        }
+        
+        return $hoTen ?: $this->email;
+    }
+
+    public function getSoDienThoaiAttribute(): ?string
+    {
+        if ($this->isKhachHang()) {
+            return $this->hoSoKhachHang?->so_dien_thoai;
+        } elseif ($this->isNhanVien()) {
+            return $this->hoSoNhanVien?->so_dien_thoai;
+        } elseif ($this->isQuanLy() || $this->isChuCuaHang()) {
+            return $this->hoSoQuanLy?->so_dien_thoai;
+        }
+        return null;
+    }
+
     /**
-     * URL ảnh đại diện.
+     * URL ảnh đại diện - lấy từ hồ sơ tương ứng.
      */
     public function getAvatarUrlAttribute(): string
     {
-        if ($this->anh_dai_dien) {
-            return asset('storage/' . $this->anh_dai_dien);
+        $avatar = null;
+        if ($this->isKhachHang()) {
+            $avatar = $this->hoSoKhachHang?->anh_dai_dien;
+        } elseif ($this->isNhanVien()) {
+            $avatar = $this->hoSoNhanVien?->anh_dai_dien;
+        } elseif ($this->isQuanLy() || $this->isChuCuaHang()) {
+            $avatar = $this->hoSoQuanLy?->anh_dai_dien;
         }
-        return 'https://ui-avatars.com/api/?name=' . urlencode($this->ho_ten)
+
+        if ($avatar) {
+            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($avatar)) {
+                return asset('storage/' . $avatar);
+            }
+            try {
+                return \Illuminate\Support\Facades\Storage::disk('s3')->url($avatar);
+            } catch (\Exception $e) {
+                return asset('storage/' . $avatar);
+            }
+        }
+        $displayName = $this->ho_ten ?? $this->email;
+        return 'https://ui-avatars.com/api/?name=' . urlencode($displayName)
             . '&background=E2D9C8&color=30261C&bold=true';
     }
 
@@ -125,5 +170,13 @@ class NguoiDung extends Authenticatable
     {
         return $this->belongsToMany(SanPham::class, 'san_pham_yeu_thich', 'nguoi_dung_id', 'san_pham_id')
                     ->withTimestamps();
+    }
+
+    /**
+     * Override notification table name for thong_bao.
+     */
+    public function routeNotificationForDatabase()
+    {
+        return $this->notifications();
     }
 }

@@ -18,10 +18,6 @@ return new class extends Migration
             $table->string('phuong_thuc', 50)->nullable();
             $table->decimal('so_tien', 12, 2)->default(0);
             $table->string('trang_thai', 50)->nullable();
-            $table->string('ten_ngan_hang', 150)->nullable();
-            $table->string('ma_ngan_hang', 50)->nullable();
-            $table->string('so_tai_khoan', 50)->nullable();
-            $table->string('ten_chu_tai_khoan', 150)->nullable();
             $table->string('noi_dung_chuyen_khoan', 255)->nullable();
             $table->string('duong_dan_qr', 255)->nullable();
             $table->string('ma_giao_dich', 100)->nullable();

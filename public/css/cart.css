@@ -26,6 +26,7 @@
     -webkit-font-smoothing: antialiased;
     display: flex;
     flex-direction: column;
+    overflow-x: hidden;
 }
 
 .cart-page.cart-modal-open {
@@ -562,6 +563,70 @@
     background: rgba(240, 221, 184, 0.3);
     border-color: rgba(240, 221, 184, 0.9);
     color: #fff;
+}
+
+/* ─── Note wrap: ensure hidden class hides properly ─── */
+.cart-item-note-wrap.hidden {
+    display: none !important;
+}
+
+/* ─── Guest cart: full-height panel ─── */
+.cart-items-panel--full {
+    min-height: calc(100vh - 120px);
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    border-radius: 24px;
+    overflow: hidden;
+    position: relative;
+}
+
+.cart-items-panel--full #cart-items-list-inline {
+    flex: 1;
+    overflow-y: auto;
+    max-height: none !important;
+    padding: 16px 12px;
+}
+
+.cart-items-panel--full #cart-items-list-inline > .cart-item--stacked {
+    max-width: 95%;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 12px 16px;
+}
+
+/* ─── Centered price in guest cart ─── */
+.cart-item-price--center {
+    text-align: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: #F0DDB8;
+    padding: 5px 0;
+    letter-spacing: 0.01em;
+}
+
+/* ─── Image in stacked cart item ─── */
+.cart-item-img--stacked {
+    width: 60px;
+    height: 60px;
+    border-radius: 10px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+/* ─── Size badge in controls row ─── */
+.cart-item-size-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: #F0DDB8;
+    background: rgba(240, 221, 184, 0.15);
+    border: 1px solid rgba(240, 221, 184, 0.35);
+    padding: 3px 10px;
+    border-radius: 999px;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .cart-item-remove:hover {

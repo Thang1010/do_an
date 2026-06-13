@@ -57,6 +57,8 @@
                     <a href="{{ route('customer.profile') }}"
                         class="block px-4 py-2 text-sm text-[#30261C] hover:bg-[#F1F0EE] font-outfit">Hồ sơ cá
                         nhân</a>
+                    <a href="{{ route('customer.profile.password.edit') }}"
+                        class="block px-4 py-2 text-sm text-[#30261C] hover:bg-[#F1F0EE] font-outfit">Đổi mật khẩu</a>
                     <a href="{{ route('customer.orders') }}"
                         class="block px-4 py-2 text-sm text-[#30261C] hover:bg-[#F1F0EE] font-outfit">Lịch sử
                         đơn hàng</a>

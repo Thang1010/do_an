@@ -12,16 +12,16 @@ class ChamCong extends Model
     protected $fillable = [
         'nguoi_dung_id',
         'ca_lam_viec_id',
-        'check_in_luc',
-        'check_out_luc',
+        'cham_cong_vao',
+        'cham_cong_ra',
         'ghi_chu',
     ];
 
     protected function casts(): array
     {
         return [
-            'check_in_luc' => 'datetime',
-            'check_out_luc' => 'datetime',
+            'cham_cong_vao' => 'datetime',
+            'cham_cong_ra' => 'datetime',
         ];
     }
 

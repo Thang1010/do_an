@@ -45,7 +45,7 @@
             </div>
             <div>
                 <div class="text-12 text-muted mb-4">Tổng giờ làm tháng này</div>
-                <div class="font-600">{{ number_format($salaryRow['tong_gio'], 1) }} giờ</div>
+                <div class="font-600">{{ $salaryRow['tong_gio_format'] }}</div>
             </div>
             <div>
                 <div class="text-12 text-muted mb-4">Tạm tính lương tháng này</div>
@@ -67,11 +67,9 @@
             @if($isBanThoiGian)
                 <div class="form-group">
                     <label class="form-label">Lương theo giờ (đ/giờ) <span>*</span></label>
-                    <input type="number"
+                    <input type="text"
                            name="luong_theo_gio"
-                           class="form-control"
-                           min="0"
-                           step="0.01"
+                           class="form-control format-money"
                            required
                            value="{{ old('luong_theo_gio', $profile->luong_theo_gio ?? 0) }}"
                            style="max-width: 400px;">
@@ -82,11 +80,9 @@
             @else
                 <div class="form-group">
                     <label class="form-label">Lương cơ bản (đ/tháng) <span>*</span></label>
-                    <input type="number"
+                    <input type="text"
                            name="luong_co_ban"
-                           class="form-control"
-                           min="0"
-                           step="0.01"
+                           class="form-control format-money"
                            required
                            value="{{ old('luong_co_ban', $profile->luong_co_ban ?? 0) }}"
                            style="max-width: 400px;">

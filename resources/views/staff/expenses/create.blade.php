@@ -1,6 +1,8 @@
 @extends('staff.layout.app')
 @section('title', 'Thêm chi tiêu')
-@section('breadcrumb', 'Quản lý / Chi tiêu / <strong>Thêm chi tiêu</strong>')
+@section('breadcrumb')
+Nhân viên / Chi tiêu / <strong>Thêm chi tiêu</strong>
+@endsection
 
 @section('content')
 <div class="page-header">

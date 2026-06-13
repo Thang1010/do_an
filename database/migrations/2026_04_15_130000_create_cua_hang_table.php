@@ -14,27 +14,21 @@ return new class extends Migration
     {
         Schema::create('cua_hang', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('chu_cua_hang_id')->nullable()->constrained('nguoi_dung')->nullOnDelete();
-            $table->string('ten_cua_hang', 150);
-            $table->string('email', 150)->nullable();
-            $table->string('so_dien_thoai', 20)->nullable();
-            $table->string('dia_chi', 255)->nullable();
-            $table->string('so_tai_khoan', 50)->nullable();
-            $table->string('ngan_hang', 150)->nullable();
+            $table->string('ten_cua_hang', 30);
+            $table->string('so_dien_thoai', 10)->nullable();
+            $table->string('dia_chi', 150)->nullable();
+            $table->string('lien_ket_trang', 255)->nullable();
             $table->time('gio_mo_cua');
             $table->time('gio_dong_cua');
-            $table->text('mo_ta')->nullable();
+            $table->string('mo_ta', 150)->nullable();
             $table->timestamps();
         });
 
         $defaultStoreId = (int) DB::table('cua_hang')->insertGetId([
-            'chu_cua_hang_id' => null,
             'ten_cua_hang' => 'XM COOFEE',
-            'email' => null,
             'so_dien_thoai' => null,
             'dia_chi' => null,
-            'so_tai_khoan' => null,
-            'ngan_hang' => null,
+            'lien_ket_trang' => null,
             'gio_mo_cua' => '06:30:00',
             'gio_dong_cua' => '22:00:00',
             'mo_ta' => null,

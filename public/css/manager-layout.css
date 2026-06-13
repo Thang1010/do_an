@@ -638,17 +638,23 @@ textarea.form-control { resize: vertical; min-height: 100px; }
 /* ==============================
    MODAL
    ============================== */
+/* Modal đồng bộ style tối (glassmorphism) giống role nhân viên — luôn căn giữa màn hình */
 .modal-backdrop {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.45); backdrop-filter: blur(4px);
-    z-index: 500; display: none;
+    background: rgba(18,12,8,0.72); backdrop-filter: blur(2px);
+    z-index: 10001; display: none;
     align-items: center; justify-content: center; padding: 24px;
 }
 .modal-backdrop.open { display: flex; }
 .modal-box {
-    background: var(--bg-white);
-    border-radius: 16px; width: 100%;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    position: relative;
+    background: rgba(30,17,6,0.92);
+    border: 1px solid rgba(240,221,184,0.16);
+    backdrop-filter: blur(14px);
+    border-radius: 18px; width: 100%;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    color: #f1f0ee;
+    font-family: 'Outfit', sans-serif;
     overflow: hidden; animation: modalIn 0.2s ease;
 }
 .modal-sm  { max-width: 400px; }
@@ -660,22 +666,56 @@ textarea.form-control { resize: vertical; min-height: 100px; }
     to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 .modal-header {
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--border);
+    padding: 24px 26px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
     display: flex; align-items: center; justify-content: space-between;
 }
-.modal-title { font-size: 16px; font-weight: 700; color: var(--text-dark); }
+.modal-title { font-size: 18px; font-weight: 700; color: #F0DDB8; }
 .modal-close {
     background: none; border: none; cursor: pointer;
-    color: var(--text-muted); font-size: 20px; line-height: 1;
+    color: rgba(255,255,255,0.5); font-size: 24px; line-height: 1;
     padding: 4px; border-radius: 4px; transition: color 0.15s;
 }
-.modal-close:hover { color: var(--danger); }
-.modal-body { padding: 24px; overflow-y: auto; max-height: 70vh; }
+.modal-close:hover { color: #fff; }
+.modal-body { padding: 20px 26px; overflow-y: auto; max-height: 70vh; color: rgba(255,255,255,0.85); }
 .modal-footer {
-    padding: 16px 24px; border-top: 1px solid var(--border);
+    padding: 16px 26px 24px; border-top: 1px solid rgba(255,255,255,0.08);
     display: flex; align-items: center; justify-content: flex-end; gap: 10px;
 }
+
+/* ── Nội dung bên trong modal tối: form / bảng / chữ / nút đều phải đọc được ── */
+.modal-box .form-label,
+.modal-box label { color: rgba(241,240,238,0.9); }
+.modal-box .form-control {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(240,221,184,0.25);
+    color: #f1f0ee;
+}
+.modal-box .form-control::placeholder { color: rgba(241,240,238,0.45); }
+.modal-box .form-control:focus { border-color: #c49a6c; }
+.modal-box select.form-control option { background: #1f1710; color: #f1f0ee; }
+.modal-box .form-hint,
+.modal-box .text-muted,
+.modal-box small { color: rgba(241,240,238,0.55) !important; }
+.modal-box p,
+.modal-box span,
+.modal-box strong,
+.modal-box li,
+.modal-box td,
+.modal-box th { color: rgba(241,240,238,0.85); }
+.modal-box table,
+.modal-box th,
+.modal-box td { border-color: rgba(255,255,255,0.1); }
+.modal-box .form-label span { color: #ff8a8a; }
+/* Nút trong modal tối */
+.modal-box .btn-primary { background: #c49a6c; color: #1a120c; }
+.modal-box .btn-primary:hover { background: #b3895a; }
+.modal-box .btn-secondary {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(240,221,184,0.25);
+    color: #f1f0ee;
+}
+.modal-box .btn-secondary:hover { background: rgba(255,255,255,0.12); }
 
 /* ==============================
    CHART PLACEHOLDER
@@ -772,7 +812,8 @@ textarea.form-control { resize: vertical; min-height: 100px; }
 .img-upload-area p { color: var(--text-muted); font-size: 13px; margin-top: 8px; }
 
 /* Inline action row */
-.action-row { display: flex; gap: 6px; }
+.action-row { display: flex; gap: 6px; justify-content: center; }
+.action-row .btn, .action-row button, .table-wrap td .btn, .table-wrap td button { min-width: 72px; height: 28.8px; padding: 0 12px; justify-content: center; align-items: center; text-align: center; font-size: 12px; line-height: 1; }
 
 /* Low stock warning */
 .low-stock { color: var(--danger); font-weight: 600; }
@@ -871,9 +912,9 @@ textarea.form-control { resize: vertical; min-height: 100px; }
 
 /* Table column widths (via th) */
 th.col-stt { width: 56px; }
-th.col-action { width: 120px; }
-th.col-action-lg { width: 140px; }
-th.col-action-xl { width: 160px; }
+th.col-action { width: 120px; text-align: center; }
+th.col-action-lg { width: 140px; text-align: center; }
+th.col-action-xl { width: 160px; text-align: center; }
 
 /* Display */
 .hidden { display: none; }

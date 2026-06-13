@@ -9,7 +9,6 @@
     if (!is_array($oldIngredients) || count($oldIngredients) === 0) {
         $oldIngredients = [
             ['ten_nguyen_lieu' => '', 'don_vi_tinh' => ''],
-            ['ten_nguyen_lieu' => '', 'don_vi_tinh' => ''],
         ];
     }
     $hasPurposeOptions = !empty($purposeOptions);
@@ -109,12 +108,10 @@
                 </table>
             </div>
 
-            <div class="action-row mt-12">
-                <button type="button" class="btn btn-secondary" onclick="addIngredientRow()">Thêm</button>
-            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px;">
+                <button type="button" class="btn btn-secondary" onclick="addIngredientRow()">+ Thêm dòng mới</button>
 
-            <div class="action-row mt-16">
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary btn-lg">
                     {{ $isStoreOwner ? 'Lưu nguyên liệu' : 'Gửi yêu cầu xác nhận' }}
                 </button>
             </div>

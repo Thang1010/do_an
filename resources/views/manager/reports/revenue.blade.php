@@ -13,18 +13,17 @@
         <p class="page-subtitle">Phân tích toàn diện hoạt động kinh doanh</p>
     </div>
     <div class="page-actions">
-        <select class="form-control w-auto" id="report-period" onchange="changePeriod(this.value)">
-            <option value="today" {{ $period === 'today' ? 'selected' : '' }}>Hôm nay</option>
-            <option value="week" {{ $period === 'week' ? 'selected' : '' }}>7 ngày</option>
-            <option value="month" {{ $period === 'month' ? 'selected' : '' }}>Tháng này</option>
-            <option value="year" {{ $period === 'year' ? 'selected' : '' }}>Năm nay</option>
-            <option value="custom" {{ $period === 'custom' ? 'selected' : '' }}>Tùy chỉnh</option>
-        </select>
-        <div id="custom-date-range" class="flex-gap-8 {{ $period === 'custom' ? '' : 'hidden' }}">
-            <input type="date" class="form-control w-auto" id="date-from" value="{{ request('from') }}">
-            <input type="date" class="form-control w-auto" id="date-to" value="{{ request('to') }}">
-            <button class="btn btn-primary" onclick="applyCustomRange()">Áp dụng</button>
-        </div>
+        <form method="GET" action="{{ route('manager.reports.revenue') }}" class="flex-gap-8" style="align-items: center; display: flex;">
+            <input type="date" class="form-control w-auto" name="from" value="{{ request('from') ?? $from->format('Y-m-d') }}" required>
+            <span>-</span>
+            <input type="date" class="form-control w-auto" name="to" value="{{ request('to') ?? $to->format('Y-m-d') }}" required>
+            <button type="submit" class="btn btn-primary">Lọc</button>
+            <a href="{{ route('manager.reports.revenue') }}" class="btn btn-secondary">Xóa lọc</a>
+            <a href="{{ route('manager.reports.revenue.export', ['from' => request('from') ?? $from->format('Y-m-d'), 'to' => request('to') ?? $to->format('Y-m-d')]) }}" class="btn btn-success" style="background-color: #27AE60; border-color: #27AE60; color: white; display: flex; align-items: center; gap: 4px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                Xuất Excel
+            </a>
+        </form>
     </div>
 </div>
 
@@ -58,55 +57,77 @@
 
 {{-- Report Tabs --}}
 <div class="tab-card">
-    <div class="tab-list tab-list-inner">
-        <button class="tab-btn active" onclick="switchTab('tab-revenue', this)">Doanh thu</button>
-        <button class="tab-btn" onclick="switchTab('tab-orders', this)">Đơn hàng</button>
-        <button class="tab-btn" onclick="switchTab('tab-products', this)">Sản phẩm bán chạy</button>
-        <button class="tab-btn" onclick="switchTab('tab-hours', this)">Khung giờ đông khách</button>
-        <button class="tab-btn" onclick="switchTab('tab-staff', this)">Hiệu suất nhân viên</button>
-        <button class="tab-btn" onclick="switchTab('tab-inventory', this)">Tồn kho</button>
+    <div class="tab-list tab-list-inner" style="display: none;">
+        <button class="tab-btn active" onclick="switchTab('tab-revenue-orders', this)">Doanh thu & Đơn hàng</button>
     </div>
 
-    {{-- Tab: Doanh thu --}}
-    <div class="tab-panel active p-24" id="tab-revenue">
+    {{-- Tab: Doanh thu & Đơn hàng --}}
+    <div class="tab-panel active p-24" id="tab-revenue-orders">
         <div class="layout-2fr-1fr">
             <div>
-                <div class="form-label mb-12">Doanh thu theo ngày</div>
-                {{-- Bar chart --}}
-                <div class="chart-bar-container-180">
-                    @php $revMax = $revenueByDay->max('tong') ?: 1; @endphp
-                    @if($revenueByDay->count() > 0)
-                        @foreach($revenueByDay as $day)
-                        <div class="chart-bar-item-sm">
-                            <div class="chart-bar-fill"
-                                 data-bar-height="{{ round($day->tong / $revMax * 140) }}"
-                                 data-bar-color="{{ $day->tong == $revMax ? '#30261C' : '#E2D9C8' }}"
-                                 title="{{ number_format($day->tong, 0, ',', '.') }}đ"></div>
-                            <span class="chart-date-label">{{ \Carbon\Carbon::parse($day->ngay)->format('d/m') }}</span>
-                        </div>
-                        @endforeach
-                    @else
-                        <div class="text-muted text-12">Chưa có dữ liệu doanh thu.</div>
-                    @endif
+                <div class="form-label mb-12">Biểu đồ Doanh thu & Số lượng đơn hàng</div>
+                <div style="width: 100%; height: 350px;">
+                    <canvas id="revenueOrdersChart"></canvas>
                 </div>
-                <div class="chart-footer">
-                    <span>Đơn vị: đồng</span>
-                    <span>{{ $from->format('d/m/Y') }} – {{ $to->format('d/m/Y') }}</span>
+                <div class="mt-16">
+                    <div class="form-label mb-8">Ghi chú:</div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 24px; height: 2px; border-top: 2px dashed #95A5A6; display: inline-block;"></span>
+                            <span class="text-13 text-muted">Đường trung bình/ngày</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 24px; height: 2px; background-color: #2C3E50; display: inline-block;"></span>
+                            <span class="text-13 text-muted">Đường biểu diễn số lượng đơn</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 12px; height: 12px; border-radius: 50%; background-color: #2ECC71; display: inline-block; margin-left: 6px; margin-right: 6px;"></span>
+                            <span class="text-13 text-muted">Cột biểu diễn ngày có doanh thu cao nhất</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 12px; height: 12px; border-radius: 50%; background-color: #E74C3C; display: inline-block; margin-left: 6px; margin-right: 6px;"></span>
+                            <span class="text-13 text-muted">Cột biểu diễn ngày có doanh thu thấp nhất</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 12px; height: 12px; border-radius: 50%; background-color: #F1C40F; display: inline-block; margin-left: 6px; margin-right: 6px;"></span>
+                            <span class="text-13 text-muted">Cột biểu diễn các ngày có doanh thu bình thường</span>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="flex-col-14">
                 @php
                     $maxRevenueDay = $revenueByDay->sortByDesc('tong')->first();
-                    $minRevenueDay = $revenueByDay->sortBy('tong')->first();
                     $avgRevenueDay = $revenueByDay->count() ? round($revenueByDay->avg('tong')) : 0;
+                    $lastDay = $revenueByDay->last();
+                    
+                    $hieuSuat = "Chưa có dữ liệu";
+                    $hieuSuatColor = "text-muted";
+                    if ($lastDay && $avgRevenueDay > 0) {
+                        if ($lastDay->tong >= $avgRevenueDay * 1.2) {
+                            $hieuSuat = "Rất tốt (Tăng trưởng mạnh)";
+                            $hieuSuatColor = "text-success";
+                        } elseif ($lastDay->tong >= $avgRevenueDay) {
+                            $hieuSuat = "Tốt (Đang tăng)";
+                            $hieuSuatColor = "text-success";
+                        } elseif ($lastDay->tong >= $avgRevenueDay * 0.8) {
+                            $hieuSuat = "Ổn định";
+                            $hieuSuatColor = "text-warning";
+                        } else {
+                            $hieuSuat = "Giảm (Cần chú ý)";
+                            $hieuSuatColor = "text-danger";
+                        }
+                    }
+                    
+                    $orderStatuses = [
+                        ['key' => 'đã thanh toán', 'label' => 'Đã thanh toán', 'badge' => 'badge-done'],
+                        ['key' => 'chưa thanh toán', 'label' => 'Chưa thanh toán', 'badge' => 'badge-warning'],
+                    ];
                 @endphp
-                <div class="info-box">
-                    <div class="stat-label">Cao nhất / ngày</div>
-                    <div class="stat-value-large">
-                        {{ number_format($maxRevenueDay->tong ?? 0, 0, ',', '.') }}đ
-                    </div>
-                    <div class="text-12 text-muted">
-                        {{ $maxRevenueDay ? \Carbon\Carbon::parse($maxRevenueDay->ngay)->format('d/m/Y') : '—' }}
+                <div class="info-box" style="border-left: 4px solid #3498db;">
+                    <div class="stat-label">Đánh giá hiệu suất</div>
+                    <div class="stat-value-large {{ $hieuSuatColor }}" style="font-size: 16px;">
+                        {{ $hieuSuat }}
                     </div>
                 </div>
                 <div class="info-box">
@@ -116,170 +137,35 @@
                     </div>
                 </div>
                 <div class="info-box">
-                    <div class="stat-label">Thấp nhất / ngày</div>
+                    <div class="stat-label">Cao nhất / ngày</div>
                     <div class="stat-value-large">
-                        {{ number_format($minRevenueDay->tong ?? 0, 0, ',', '.') }}đ
+                        {{ number_format($maxRevenueDay->tong ?? 0, 0, ',', '.') }}đ
                     </div>
                     <div class="text-12 text-muted">
-                        {{ $minRevenueDay ? \Carbon\Carbon::parse($minRevenueDay->ngay)->format('d/m/Y') : '—' }}
+                        {{ $maxRevenueDay ? \Carbon\Carbon::parse($maxRevenueDay->ngay)->format('d/m/Y') : '—' }}
                     </div>
                 </div>
+                @foreach($orderStatuses as $s)
+                @php $count = $statusCounts[$s['key']] ?? 0; @endphp
+                <div class="info-box">
+                    <div class="stat-label">{{ $s['label'] }}</div>
+                    <div class="stat-value-large">
+                        {{ $count }} <span class="text-12 text-muted">đơn</span>
+                    </div>
+                </div>
+                @endforeach
             </div>
         </div>
     </div>
 
-    {{-- Tab: Đơn hàng --}}
-    <div class="tab-panel p-24" id="tab-orders">
-        <div class="grid-3 mb-20">
-            @php
-                $orderStatuses = [
-                    ['key' => 'chờ xác nhận', 'alt' => 'cho_xac_nhan', 'label' => 'Chờ xác nhận', 'badge' => 'badge-pending'],
-                    ['key' => 'đã xác nhận', 'alt' => 'dang_pha_che', 'label' => 'Đã xác nhận', 'badge' => 'badge-done'],
-                    ['key' => 'đã hủy', 'alt' => 'huy', 'label' => 'Đã hủy', 'badge' => 'badge-cancelled'],
-                ];
-            @endphp
-            @foreach($orderStatuses as $s)
-            @php $count = $statusCounts[$s['key']] ?? $statusCounts[$s['alt']] ?? 0; @endphp
-            <div class="status-count-card">
-                <span class="status-count-label">{{ $s['label'] }}</span>
-                <span class="badge {{ $s['badge'] }} badge-lg">
-                    {{ $count }}
-                </span>
-            </div>
-            @endforeach
-        </div>
-        <div class="chart-placeholder" style="height:160px;">Biểu đồ tròn — phân bố trạng thái đơn hàng</div>
-    </div>
 
-    {{-- Tab: Sản phẩm bán chạy --}}
-    <div class="tab-panel p-24" id="tab-products">
-        <div class="table-wrap">
-            <table>
-                <thead><tr>
-                    <th>Hạng</th><th>Sản phẩm</th><th>Danh mục</th>
-                    <th>Số lượng bán</th><th>Doanh thu</th><th>Tỷ lệ</th>
-                </tr></thead>
-                <tbody>
-                    @forelse($topProducts as $i => $p)
-                    @php $percent = $maxSold > 0 ? round($p->tong_so_luong / $maxSold * 100) : 0; @endphp
-                    <tr>
-                        <td><strong>#{{ $i+1 }}</strong></td>
-                        <td><strong>{{ $p->ten_san_pham }}</strong></td>
-                        <td>{{ $p->ten_danh_muc }}</td>
-                        <td>{{ $p->tong_so_luong }} ly</td>
-                        <td><strong>{{ number_format($p->tong_doanh_thu, 0, ',', '.') }}đ</strong></td>
-                        <td>
-                            <div class="progress-bar w-160">
-                                <div class="progress-fill" data-progress-width="{{ $percent }}"></div>
-                            </div>
-                        </td>
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="6" class="empty-state-sm">
-                            Chưa có dữ liệu sản phẩm.
-                        </td>
-                    </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    {{-- Tab: Khung giờ đông khách --}}
-    <div class="tab-panel p-24" id="tab-hours">
-        <div class="form-label mb-16">Phân bố đơn hàng theo giờ</div>
-        <div class="chart-bar-container">
-            @php $hours = range(6, 21); @endphp
-            @foreach($hours as $h)
-            @php
-                $count = $peakHours[$h] ?? 0;
-                $ratio = $maxHour > 0 ? $count / $maxHour : 0;
-                $height = round($ratio * 120);
-                $color = $ratio >= 0.7 ? '#30261C' : ($ratio >= 0.4 ? '#7a6555' : '#E2D9C8');
-            @endphp
-            <div class="chart-bar-item-sm">
-                <div class="chart-bar-fill"
-                     data-bar-height="{{ $height }}"
-                     data-bar-color="{{ $color }}"
-                     title="{{ $count }} đơn"></div>
-                <span class="chart-hour-label">{{ $h }}h</span>
-            </div>
-            @endforeach
-        </div>
-        <div class="chart-legend">
-            <span class="chart-legend-item"><span class="chart-legend-dot" style="background:#30261C;"></span> Rất đông (≥70%)</span>
-            <span class="chart-legend-item"><span class="chart-legend-dot" style="background:#7a6555;"></span> Đông (40–69%)</span>
-            <span class="chart-legend-item"><span class="chart-legend-dot" style="background:#E2D9C8;"></span> Bình thường (&lt;40%)</span>
-        </div>
-    </div>
-
-    {{-- Tab: Hiệu suất nhân viên --}}
-    <div class="tab-panel p-24" id="tab-staff">
-        <div class="table-wrap">
-            <table>
-                <thead><tr>
-                    <th>Nhân viên</th><th>Đơn xử lý</th>
-                    <th>Doanh thu</th><th>TB/đơn</th>
-                </tr></thead>
-                <tbody>
-                    @forelse($staffPerformance as $s)
-                    @php $avgOrder = $s->so_don > 0 ? round($s->tong_doanh_thu / $s->so_don) : 0; @endphp
-                    <tr>
-                        <td><strong>{{ $s->ho_ten }}</strong></td>
-                        <td>{{ $s->so_don }} đơn</td>
-                        <td><strong>{{ number_format($s->tong_doanh_thu, 0, ',', '.') }}đ</strong></td>
-                        <td>{{ number_format($avgOrder, 0, ',', '.') }}đ</td>
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="4" class="empty-state-sm">
-                            Chưa có dữ liệu nhân viên.
-                        </td>
-                    </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    {{-- Tab: Tồn kho --}}
-    <div class="tab-panel p-24" id="tab-inventory">
-        <div class="table-wrap">
-            <table>
-                <thead><tr>
-                    <th>Nguyên liệu</th><th>Tồn kho</th><th>Trạng thái</th>
-                </tr></thead>
-                <tbody>
-                    @forelse($inventoryReport as $item)
-                    <tr>
-                        <td><strong>{{ $item->ten_nguyen_lieu }}</strong></td>
-                        <td class="{{ $item->so_luong <= 0 ? 'low-stock' : '' }}">{{ $item->so_luong }} {{ $item->don_vi_tinh }}</td>
-                        <td>
-                            @if($item->so_luong <= 0)
-                                <span class="badge badge-inactive">Hết hàng</span>
-                            @else
-                                <span class="badge badge-active">Đủ hàng</span>
-                            @endif
-                        </td>
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="3" class="empty-state-sm">
-                            Chưa có dữ liệu tồn kho.
-                        </td>
-                    </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
 
 </div>
 
 @endsection
 
 @push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 function changePeriod(val) {
     const customRange = document.getElementById('custom-date-range');
@@ -287,6 +173,7 @@ function changePeriod(val) {
         customRange.classList.remove('hidden');
     } else {
         customRange.classList.add('hidden');
+        window.location.href = '?period=' + val;
     }
 }
 function applyCustomRange() {
@@ -315,6 +202,123 @@ document.addEventListener('DOMContentLoaded', function () {
         var width = Math.max(0, Math.min(100, rawWidth));
         el.style.width = width + '%';
     });
+
+    const chartData = {!! json_encode($revenueByDay->map(function($item) {
+        return [
+            'date' => \Carbon\Carbon::parse($item->ngay)->format('d/m'),
+            'revenue' => (float) $item->tong,
+            'orders' => (int) $item->so_don
+        ];
+    })) !!};
+
+    if (chartData.length > 0 && document.getElementById('revenueOrdersChart')) {
+        const ctx = document.getElementById('revenueOrdersChart').getContext('2d');
+        
+        const revenues = chartData.map(d => d.revenue);
+        const maxRev = Math.max(...revenues);
+        const minRev = Math.min(...revenues);
+        const avgRev = revenues.reduce((a, b) => a + b, 0) / revenues.length;
+        
+        const backgroundColors = chartData.map(d => {
+            if (chartData.length > 1 && d.revenue === maxRev) return '#2ECC71'; // Xanh lục cho ngày tốt nhất
+            if (chartData.length > 1 && d.revenue === minRev) return '#E74C3C'; // Đỏ cho ngày tệ nhất
+            return '#F1C40F'; // Vàng cho các ngày còn lại
+        });
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: chartData.map(d => d.date),
+                datasets: [
+                    {
+                        type: 'bar',
+                        label: 'Doanh thu (VNĐ)',
+                        data: chartData.map(d => d.revenue),
+                        backgroundColor: backgroundColors,
+                        borderWidth: 0,
+                        borderRadius: 4,
+                        yAxisID: 'y',
+                        order: 2
+                    },
+                    {
+                        type: 'line',
+                        label: 'Trung bình/ngày',
+                        data: chartData.map(() => avgRev),
+                        borderColor: '#95A5A6',
+                        backgroundColor: '#95A5A6',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        yAxisID: 'y',
+                        order: 0
+                    },
+                    {
+                        type: 'line',
+                        label: 'Số lượng đơn',
+                        data: chartData.map(d => d.orders),
+                        borderColor: '#2C3E50',
+                        backgroundColor: '#2C3E50',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#2C3E50',
+                        pointRadius: 4,
+                        yAxisID: 'y1',
+                        order: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: 'Doanh thu (VNĐ)' },
+                        ticks: {
+                            callback: function(value) {
+                                return value.toLocaleString('vi-VN');
+                            }
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        grid: { drawOnChartArea: false },
+                        title: { display: true, text: 'Số lượng đơn' }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.dataset.yAxisID === 'y') {
+                                    label += context.parsed.y.toLocaleString('vi-VN') + 'đ';
+                                } else {
+                                    label += context.parsed.y + ' đơn';
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
 });
 </script>
 @endpush

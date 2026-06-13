@@ -48,23 +48,6 @@
     </div>
 </div>
 
-@if(!empty($purposeTabs))
-<div class="tab-container">
-    <div class="tab-list">
-        @foreach($purposeTabs as $value => $info)
-            <a href="{{ route('manager.inventory.index', array_merge(request()->except('muc_dich_su_dung', 'page'), $value !== '' ? ['muc_dich_su_dung' => $value] : [])) }}"
-               class="tab-btn {{ (string) $currentPurposeValue === (string) $value ? 'active' : '' }}">
-                {{ $info['label'] }}
-                @if(($info['count'] ?? 0) > 0)
-                    <span class="tab-count {{ (string) $currentPurposeValue === (string) $value ? 'tab-count-active' : 'tab-count-default' }}">
-                        {{ $info['count'] }}
-                    </span>
-                @endif
-            </a>
-        @endforeach
-    </div>
-</div>
-@endif
 
 @if($lowCount > 0)
 <div class="alert alert-warning alert-row">
@@ -99,8 +82,10 @@
             <a href="{{ route('manager.inventory.stock.excel', array_filter(array_merge(
                 request()->except(['page', 'import_page', 'export_page']),
                 ['muc_dich_su_dung' => $currentPurposeValue]
-            ))) }}"
-               class="btn btn-primary">Xuất Excel tồn kho</a>
+            ))) }}" class="btn btn-success" style="background-color: #27AE60; border-color: #27AE60; color: white; display: flex; align-items: center; gap: 4px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                Xuất Excel tồn kho
+            </a>
         </form>
 
         <div class="table-wrap" id="low-stock-section">
@@ -132,10 +117,10 @@
                         <td>
                             <div class="action-row">
                                 <a href="{{ route('manager.inventory.import', array_filter(['nguyen_lieu_id' => $item->id, 'muc_dich_su_dung' => $currentPurposeValue])) }}" class="btn btn-secondary btn-sm">
-                                    Nhập thêm
+                                    Nhập
                                 </a>
                                 <a href="{{ route('manager.inventory.export', array_filter(['nguyen_lieu_id' => $item->id, 'muc_dich_su_dung' => $currentPurposeValue])) }}" class="btn btn-danger btn-sm">
-                                    Xuất bớt
+                                    Xuất
                                 </a>
                                 @if($isSupplyPurpose)
                                     @if($isSupplyPurpose)
@@ -196,7 +181,10 @@
                 'import_to_date' => request('import_to_date'),
                 'import_manager' => request('import_manager'),
                 'muc_dich_su_dung' => $currentPurposeValue,
-            ])) }}" class="btn btn-primary">Xuất Excel lịch sử nhập</a>
+            ])) }}" class="btn btn-success" style="background-color: #27AE60; border-color: #27AE60; color: white; display: flex; align-items: center; gap: 4px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                Xuất Excel lịch sử nhập
+            </a>
         </form>
 
         <div class="table-wrap">
@@ -299,7 +287,10 @@
                 'export_to_date' => request('export_to_date'),
                 'export_manager' => request('export_manager'),
                 'muc_dich_su_dung' => $currentPurposeValue,
-            ])) }}" class="btn btn-primary">Xuất Excel lịch sử xuất</a>
+            ])) }}" class="btn btn-success" style="background-color: #27AE60; border-color: #27AE60; color: white; display: flex; align-items: center; gap: 4px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                Xuất Excel lịch sử xuất
+            </a>
         </form>
 
         <div class="table-wrap">

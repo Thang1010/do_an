@@ -19,7 +19,7 @@ class QrOrderPendingNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return [\App\Channels\CustomDatabaseChannel::class];
     }
 
     /**
@@ -31,12 +31,12 @@ class QrOrderPendingNotification extends Notification
         $tableLabel = $tableNumber ? ('Bàn ' . $tableNumber) : 'Đơn';
 
         return [
-            'title' => 'Đơn QR mới chờ xác nhận',
-            'message' => sprintf('%s #%d (%s) vừa được tạo từ QR và đang chờ xác nhận.', $tableLabel, $this->order->id, $this->order->ma_don_hang),
+            'title' => 'Đơn QR mới',
+            'message' => sprintf('%s #%d (%s) vừa được tạo từ QR.', $tableLabel, $this->order->id, $this->order->ma_don_hang),
             'order_id' => $this->order->id,
             'order_code' => $this->order->ma_don_hang,
             'order_type' => $this->order->loai_don,
-            'status' => $this->order->trang_thai_don,
+            'status' => $this->order->trang_thai_thanh_toan,
             'table_id' => $this->order->ban_an_id,
             'table_number' => $tableNumber,
         ];

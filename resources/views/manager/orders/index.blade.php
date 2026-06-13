@@ -19,23 +19,16 @@
     <div class="tab-container">
         <div class="tab-list">
             @php
-                $statuses = [
+                $payStatuses = [
                     '' => ['label' => 'Tất cả', 'count' => $countAll ?? 0],
-                    'chờ xác nhận' => ['label' => 'Chờ xác nhận', 'count' => $countPending ?? 0],
-                    'đã xác nhận' => ['label' => 'Đã xác nhận', 'count' => $countConfirmed ?? 0],
-                    'đã hủy' => ['label' => 'Đã hủy', 'count' => $countCancelled ?? 0],
+                    'chưa thanh toán' => ['label' => 'Chưa thanh toán', 'count' => $countUnpaid ?? 0],
+                    'đã thanh toán' => ['label' => 'Đã thanh toán', 'count' => $countPaid ?? 0],
                 ];
-                $currentStatusRaw = request('status', '');
-                $currentStatus = match ($currentStatusRaw) {
-                    'cho_xac_nhan' => 'chờ xác nhận',
-                    'dang_pha_che', 'hoan_thanh', 'da_giao' => 'đã xác nhận',
-                    'huy' => 'đã hủy',
-                    default => $currentStatusRaw,
-                };
+                $currentPayStatus = request('pay_status', '');
             @endphp
-            @foreach($statuses as $val => $info)
-                <a href="{{ route('manager.orders.index', array_merge(request()->except('status', 'page'), $val ? ['status' => $val] : [])) }}"
-                    class="tab-btn {{ $currentStatus === $val ? 'active' : '' }}">
+            @foreach($payStatuses as $val => $info)
+                <a href="{{ route('manager.orders.index', array_merge(request()->except('pay_status', 'page'), $val ? ['pay_status' => $val] : [])) }}"
+                    class="tab-btn {{ $currentPayStatus === $val ? 'active' : '' }}">
                     {{ $info['label'] }}
                 </a>
             @endforeach
@@ -45,8 +38,8 @@
     {{-- Filter bar --}}
     <div class="filter-bar">
         <form method="GET" action="{{ route('manager.orders.index') }}" class="flex-gap-10">
-            @if(request('status'))
-                <input type="hidden" name="status" value="{{ request('status') }}">
+            @if(request('pay_status'))
+                <input type="hidden" name="pay_status" value="{{ request('pay_status') }}">
             @endif
             <input type="text" name="search" class="form-control filter-search" placeholder="Tìm mã đơn / tên khách..."
                 value="{{ request('search') }}">
@@ -77,18 +70,15 @@
 
                     <div class="grid" style="grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
                         <div class="form-group">
-                            <label class="form-label">Loại đơn <span>*</span></label>
+                            <label class="form-label">Loại đơn</label>
                             <select name="loai_don" id="create-order-type" class="form-control" required>
-                                <option value="mua tại quán" {{ old('loai_don') === 'mua tại quán' ? 'selected' : '' }}>Mua
-                                    tại quán</option>
-                                <option value="gọi tại bàn bằng qr" {{ old('loai_don') === 'gọi tại bàn bằng qr' ? 'selected' : '' }}>Gọi tại bàn bằng QR</option>
-                                <option value="đặt online" {{ old('loai_don') === 'đặt online' ? 'selected' : '' }}>Đặt online
-                                </option>
+                                <option value="sử dụng ngay" {{ old('loai_don') === 'sử dụng ngay' ? 'selected' : '' }}>Sử dụng ngay</option>
+                                <option value="đặt hàng trước" {{ old('loai_don') === 'đặt hàng trước' ? 'selected' : '' }}>Đặt hàng trước</option>
                             </select>
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">Khách hàng thành viên</label>
+                            <label class="form-label">Khách hàng</label>
                             <select name="nguoi_dung_id" class="form-control">
                                 <option value="">Khách vãng lai</option>
                                 @foreach($customers ?? [] as $customer)
@@ -100,13 +90,15 @@
                         </div>
 
                         <div class="form-group" id="create-order-table-group">
-                            <label class="form-label">Bàn ăn</label>
-                            <select name="ban_an_id" id="create-order-table" class="form-control">
+                            <label class="form-label">Bàn ăn <span>*</span></label>
+                            <select name="ban_an_id" id="create-order-table" class="form-control" required>
                                 <option value="">Chọn bàn</option>
                                 @foreach($banAns ?? [] as $table)
-                                    <option value="{{ $table->id }}" {{ (string) old('ban_an_id') === (string) $table->id ? 'selected' : '' }}>
-                                        Bàn {{ $table->so_ban }} ({{ $table->trang_thai }})
-                                    </option>
+                                    @if($table->trang_thai === 'trống')
+                                        <option value="{{ $table->id }}" {{ (string) old('ban_an_id') === (string) $table->id ? 'selected' : '' }}>
+                                            Bàn {{ $table->so_ban }}
+                                        </option>
+                                    @endif
                                 @endforeach
                             </select>
                         </div>
@@ -121,23 +113,12 @@
                             </select>
                         </div>
 
-                        <div class="form-group">
-                            <label class="form-label">Tên khách hàng</label>
-                            <input type="text" name="ten_khach_hang" class="form-control" maxlength="150"
-                                value="{{ old('ten_khach_hang') }}">
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">Số điện thoại khách</label>
-                            <input type="text" name="so_dien_thoai_khach" class="form-control" maxlength="20"
-                                value="{{ old('so_dien_thoai_khach') }}">
-                        </div>
                     </div>
 
                     <div class="form-group" id="create-order-address-group" style="display: none;">
                         <label class="form-label">Địa chỉ giao hàng (đơn online)</label>
-                        <textarea name="dia_chi_giao_hang" class="form-control"
-                            rows="2">{{ old('dia_chi_giao_hang') }}</textarea>
+                        <textarea name="ghi_chu_them" class="form-control"
+                            rows="2"></textarea>
                     </div>
 
                     <div class="form-group">
@@ -197,8 +178,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('create-order-modal')">Hủy</button>
-                <button class="btn btn-primary" onclick="document.getElementById('create-order-form').submit()">Lưu đơn
-                    hàng</button>
+                <button type="submit" form="create-order-form" class="btn btn-primary">Lưu đơn hàng</button>
             </div>
         </div>
     </div>
@@ -213,25 +193,12 @@
                         <th>Khách hàng</th>
                         <th>Mã đơn</th>
                         <th>Tổng tiền</th>
-                        <th>Trạng thái</th>
-                        <th>Thanh toán</th>
+                        <th class="text-center">Thanh toán</th>
                         <th>Thời gian</th>
                         <th class="col-action-xl">Thao tác</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @php
-                        $badgeMap = [
-                            'chờ xác nhận' => 'badge-pending',
-                            'đã xác nhận' => 'badge-done',
-                            'đã hủy' => 'badge-cancelled',
-                        ];
-                        $statusLabels = [
-                            'chờ xác nhận' => 'Chờ xác nhận',
-                            'đã xác nhận' => 'Đã xác nhận',
-                            'đã hủy' => 'Đã hủy',
-                        ];
-                    @endphp
                     @forelse($orders ?? [] as $order)
                         <tr>
                             <td>
@@ -242,8 +209,8 @@
                                 @endif
                             </td>
                             <td>
-                                <div class="font-600">{{ $order->nguoiDung->ho_ten ?? 'Khách vãng lai' }}</div>
-                                <div class="text-12 text-muted">{{ $order->nguoiDung->so_dien_thoai ?? '' }}</div>
+                                <div class="font-600">{{ $order->nguoiDung?->hoSoKhachHang?->ho_ten ?? $order->nguoiDung?->email ?? 'Khách vãng lai' }}</div>
+                                <div class="text-12 text-muted">{{ $order->nguoiDung?->hoSoKhachHang?->so_dien_thoai ?? '' }}</div>
                             </td>
                             <td>
                                 <span class="font-700">#{{ $order->id }}</span><br>
@@ -252,15 +219,10 @@
                             <td class="price-text">
                                 {{ number_format($order->tong_tien, 0, ',', '.') }}đ
                             </td>
-                            <td>
-                                <span class="badge {{ $badgeMap[$order->trang_thai_don] ?? 'badge-default' }}">
-                                    {{ $statusLabels[$order->trang_thai_don] ?? $order->trang_thai_don }}
-                                </span>
-                            </td>
-                            <td>
+                            <td class="text-center">
                                 <span
-                                    class="badge {{ $order->trang_thai_thanh_toan === 'đã thanh toán' ? 'badge-done' : 'badge-pending' }}">
-                                    {{ $order->trang_thai_thanh_toan === 'đã thanh toán' ? 'Đã TT' : 'Chưa TT' }}
+                                    class="badge {{ $order->trang_thai_thanh_toan === 'đã thanh toán' ? 'badge-done' : 'badge-pending' }}" style="min-width: 115px; justify-content: center;">
+                                    {{ $order->trang_thai_thanh_toan === 'đã thanh toán' ? 'Đã thanh toán' : 'Chưa thanh toán' }}
                                 </span>
                             </td>
                             <td class="text-12 text-muted">
@@ -268,38 +230,24 @@
                             </td>
                             <td>
                                 <div class="action-row">
-                                    <a href="{{ route('manager.orders.show', $order->id) }}" class="btn btn-primary btn-sm">Chi
-                                        tiết</a>
-                                    @php
-                                        $canEdit = $order->trang_thai_don === 'đã xác nhận'
-                                            && $order->trang_thai_thanh_toan === 'chưa thanh toán';
-                                    @endphp
-                                    @if($canEdit)
-                                        <a href="{{ route('manager.orders.edit', $order->id) }}"
-                                            class="btn btn-secondary btn-sm">Sửa</a>
+                                    @if($order->trang_thai_thanh_toan !== 'chưa thanh toán')
+                                        <a href="{{ route('manager.orders.show', $order->id) }}" class="btn btn-primary btn-sm">Chi tiết</a>
+                                    @else
+                                        <a href="{{ route('manager.orders.edit', $order->id) }}" class="btn btn-secondary btn-sm">Sửa</a>
                                     @endif
-                                    @if($order->trang_thai_don === 'chờ xác nhận')
-                                        <form method="POST" action="{{ route('manager.orders.status', $order->id) }}"
-                                            onsubmit="return confirm('Xác nhận đơn #{{ $order->id }}?')">
-                                            @csrf
-                                            @method('PATCH')
-                                            <input type="hidden" name="trang_thai" value="đã xác nhận">
-                                            <button type="submit" class="btn btn-secondary btn-sm">Xác nhận</button>
-                                        </form>
-                                        <form method="POST" action="{{ route('manager.orders.status', $order->id) }}"
-                                            onsubmit="return confirm('Hủy đơn #{{ $order->id }}?')">
-                                            @csrf
-                                            @method('PATCH')
-                                            <input type="hidden" name="trang_thai" value="đã hủy">
-                                            <button type="submit" class="btn btn-danger btn-sm">Hủy</button>
-                                        </form>
-                                    @endif
+                                    <form action="{{ route('manager.orders.destroy', $order->id) }}" method="POST"
+                                        onsubmit="return confirmDelete(this, 'Bạn có chắc chắn muốn xóa đơn hàng này? Việc này sẽ hoàn lại số lượng nguyên liệu trong kho và cập nhật bàn.');"
+                                        style="display:inline-block;">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-danger btn-sm">Xóa</button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="empty-state">
+                            <td colspan="7" class="empty-state">
                                 Không có đơn hàng nào phù hợp với bộ lọc.
                             </td>
                         </tr>
@@ -335,7 +283,7 @@
             const typeSelect = document.getElementById('create-order-type');
             const tableSelect = document.getElementById('create-order-table');
             const addressGroup = document.getElementById('create-order-address-group');
-            const isOnline = typeSelect && typeSelect.value === 'đặt online';
+            const isOnline = typeSelect && typeSelect.value === 'đặt hàng trước';
 
             if (!tableSelect || !addressGroup) return;
 

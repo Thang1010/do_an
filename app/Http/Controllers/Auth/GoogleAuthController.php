@@ -9,7 +9,6 @@ use App\Models\HoSoNhanVien;
 use App\Models\HoSoQuanLy;
 use App\Models\NguoiDung;
 use App\Notifications\PendingAccountApprovalNotification;
-use App\Services\VoucherAssignmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -19,9 +18,6 @@ use Laravel\Socialite\Facades\Socialite;
 
 class GoogleAuthController extends Controller
 {
-    public function __construct(private readonly VoucherAssignmentService $voucherAssignmentService)
-    {
-    }
 
     public function redirect(Request $request)
     {
@@ -39,13 +35,14 @@ class GoogleAuthController extends Controller
     public function callback(Request $request)
     {
         try {
-            $googleUser = Socialite::driver('google')->user();
+            $googleUser = Socialite::driver('google')
+                ->user();
         } catch (\Throwable $e) {
             Log::warning('Google auth failed.', ['error' => $e->getMessage()]);
 
             return redirect()
                 ->route('auth.login')
-                ->withErrors(['login' => 'Không thể đăng nhập bằng Google. Vui lòng thử lại.']);
+                ->withErrors(['login' => 'Không thể đăng nhập bằng Google. Vui lòng thử lại. Lỗi: ' . $e->getMessage()]);
         }
 
         $email = $googleUser->getEmail();
@@ -130,9 +127,10 @@ class GoogleAuthController extends Controller
         try {
             $store = CuaHang::query()->orderBy('id')->first();
 
+            $googleName = trim($googleUser->getName() ?: $googleUser->getNickname() ?: 'Google User');
+
             $nguoiDung = NguoiDung::create([
                 'cua_hang_id' => $store?->id,
-                'ho_ten' => trim($googleUser->getName() ?: $googleUser->getNickname() ?: 'Google User'),
                 'email' => strtolower($googleUser->getEmail()),
                 'mat_khau' => null,
                 'vai_tro' => $role,
@@ -142,18 +140,18 @@ class GoogleAuthController extends Controller
             ]);
 
             if ($role === 'khách hàng') {
-                HoSoKhachHang::firstOrCreate([
-                    'nguoi_dung_id' => $nguoiDung->id,
-                ]);
+                HoSoKhachHang::firstOrCreate(
+                    ['nguoi_dung_id' => $nguoiDung->id],
+                    ['ho_ten' => $googleName]
+                );
             }
 
             if ($role === 'nhân viên') {
                 HoSoNhanVien::firstOrCreate(
                     ['nguoi_dung_id' => $nguoiDung->id],
                     [
-                        'ma_nhan_vien' => 'NV' . str_pad((string) $nguoiDung->id, 5, '0', STR_PAD_LEFT),
+                        'ho_ten' => $googleName,
                         'chuc_vu_id' => null,
-                        'luong_co_ban' => 0,
                     ]
                 );
             }
@@ -178,7 +176,6 @@ class GoogleAuthController extends Controller
                     [
                         'cua_hang_id' => $store?->id,
                         'chuc_vu_id' => $managerPositionId,
-                        'ma_quan_ly' => 'QL' . str_pad((string) $nguoiDung->id, 5, '0', STR_PAD_LEFT),
                     ]
                 );
             }
@@ -198,10 +195,10 @@ class GoogleAuthController extends Controller
 
     private function loginIfActive(NguoiDung $nguoiDung, Request $request)
     {
-        if ($nguoiDung->trang_thai === 'bị khóa') {
+        if ($nguoiDung->trang_thai === 'ngưng hoạt động' && $nguoiDung->vai_tro !== 'khách hàng') {
             return redirect()
                 ->route('auth.login')
-                ->withErrors(['login' => 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản lý.']);
+                ->withErrors(['login' => 'Tài khoản chưa được kích hoạt. Vui lòng liên hệ quản lý.']);
         }
 
         if ($nguoiDung->trang_thai === 'ngưng hoạt động') {
@@ -217,16 +214,8 @@ class GoogleAuthController extends Controller
             $request->session()->put('force_password_setup', true);
         }
 
-        try {
-            $assignedVouchers = $this->voucherAssignmentService->assignLoginEligibleVouchers($nguoiDung);
-            if ($assignedVouchers->count() > 0) {
-                $request->session()->flash('success', 'Bạn vừa nhận được ' . $assignedVouchers->count() . ' voucher mới trong tài khoản.');
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Không thể cấp voucher tự động khi đăng nhập bằng Google.', [
-                'user_id' => $nguoiDung->id,
-                'error' => $e->getMessage(),
-            ]);
+        if ($nguoiDung->vai_tro === 'khách hàng') {
+            $request->session()->flash('show_voucher_popup', true);
         }
 
         return $this->redirectByRole($nguoiDung);
@@ -243,7 +232,7 @@ class GoogleAuthController extends Controller
 
     private function notifyApproversForApproval(NguoiDung $pendingUser, ?CuaHang $store): void
     {
-        if (! Schema::hasTable('notifications')) {
+        if (! Schema::hasTable('thong_bao')) {
             return;
         }
 
@@ -256,16 +245,8 @@ class GoogleAuthController extends Controller
             $approvers = NguoiDung::query()
                 ->whereIn('vai_tro', $approvalRoles)
                 ->where('trang_thai', 'hoạt động')
-                ->when($store?->id || $store?->chu_cua_hang_id, function ($q) use ($store) {
-                    $q->where(function ($scope) use ($store) {
-                        if ($store?->id) {
-                            $scope->where('cua_hang_id', $store->id);
-                        }
-
-                        if ($store?->chu_cua_hang_id) {
-                            $scope->orWhere('id', $store->chu_cua_hang_id);
-                        }
-                    });
+                ->when($store?->id, function ($q) use ($store) {
+                    $q->where('cua_hang_id', $store->id);
                 })
                 ->get();
 

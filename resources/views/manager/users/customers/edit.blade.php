@@ -101,11 +101,9 @@
                         <label class="form-label" for="luong_co_ban">Lương cơ bản</label>
                         <input
                             id="luong_co_ban"
-                            type="number"
-                            step="1000"
-                            min="0"
+                            type="text"
                             name="luong_co_ban"
-                            class="form-control"
+                            class="form-control format-money"
                             value="{{ old('luong_co_ban', $user->hoSoNhanVien?->luong_co_ban) }}"
                             placeholder="Nhập lương cơ bản"
                         >

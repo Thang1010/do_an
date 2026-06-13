@@ -11,6 +11,7 @@ use App\Models\CuaHang;
 use App\Models\DonHang;
 use App\Models\ThanhToan;
 use App\Services\PaymentService;
+use App\Services\OrderInventoryService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,13 +20,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Traits\NormalizesPayment;
 use App\Traits\ResolvesVietQrBank;
+use App\Traits\GeneratesOrderCode;
+use App\Models\ChiTietDonHang;
 
 class TableController extends Controller
 {
-    use NormalizesPayment, ResolvesVietQrBank;
+    use NormalizesPayment, ResolvesVietQrBank, GeneratesOrderCode;
 
     public function __construct(
         private readonly PaymentService $paymentService,
+        private readonly OrderInventoryService $inventoryService,
     ) {}
     // normalizePaymentStatus(), normalizePaymentMethod() => NormalizesPayment trait
     // resolveVietQrBankCode() => ResolvesVietQrBank trait
@@ -40,12 +44,10 @@ class TableController extends Controller
         $query = BanAn::query()
             ->withCount([
                 'donHang as so_don_chua_thanh_toan' => function ($q) {
-                    $q->where('trang_thai_thanh_toan', 'chưa thanh toán')
-                        ->where('trang_thai_don', '!=', 'đã hủy');
+                    $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'chưa thanh toán'));
                 },
                 'donHang as so_don_da_thanh_toan' => function ($q) {
-                    $q->where('trang_thai_thanh_toan', 'đã thanh toán')
-                        ->where('trang_thai_don', '!=', 'đã hủy');
+                    $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'đã thanh toán'));
                 },
             ]);
 
@@ -69,46 +71,75 @@ class TableController extends Controller
     {
         $table = BanAn::withCount([
             'donHang as so_don_chua_thanh_toan' => function ($q) {
-                $q->where('trang_thai_thanh_toan', 'chưa thanh toán')
-                    ->where('trang_thai_don', '!=', 'đã hủy');
+                $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'chưa thanh toán'));
             },
             'donHang as so_don_da_thanh_toan' => function ($q) {
-                $q->where('trang_thai_thanh_toan', 'đã thanh toán')
-                    ->where('trang_thai_don', '!=', 'đã hủy');
+                $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'đã thanh toán'));
             },
         ])->findOrFail($id);
 
-        $dishQuery = $table->chiTietDonHang()
-            ->with(['donHang', 'kichCo'])
-            ->latest('created_at');
-
-        $dishItems = $dishQuery->paginate(20)->withQueryString();
-
-        $summaryOrderQuery = $table->donHang()->where('trang_thai_don', '!=', 'đã hủy');
-
-        $totalDishQty = (clone $dishQuery)->sum('so_luong');
-        $totalDiscount = (clone $summaryOrderQuery)->sum('so_tien_giam');
-        $totalPayable = (clone $summaryOrderQuery)->sum('tong_tien');
-
-        $voucherSummary = $table->donHang()
-            ->where('trang_thai_don', '!=', 'đã hủy')
-            ->whereNotNull('voucher_nguoi_dung_id')
-            ->with('voucherNguoiDung.voucher')
-            ->get()
-            ->pluck('voucherNguoiDung.voucher.ma_voucher')
-            ->filter()
-            ->unique()
-            ->values()
-            ->implode(', ');
-
-        if ($voucherSummary === '') {
-            $voucherSummary = 'Không dùng voucher';
-        }
-
         $latestOrder = $table->donHang()
+            ->where(function ($query) use ($table) {
+                $query->where(function ($q) {
+                    $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'chưa thanh toán'));
+                })
+                ->orWhere(function ($q) use ($table) {
+                    if (in_array($table->trang_thai, ['đang phục vụ', 'đã đặt'])) {
+                        $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'đã thanh toán'));
+                    } else {
+                        $q->whereRaw('1 = 0');
+                    }
+                });
+            })
             ->with(['nguoiDung', 'nhanVien'])
             ->latest()
             ->first();
+
+        $dishItems = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+        $totalDishQty = 0;
+        $totalDiscount = 0;
+        $totalPayable = 0;
+        $voucherSummary = 'Không dùng voucher';
+        $tableHasUnpaid = false;
+
+        if ($latestOrder) {
+            $dishQuery = $latestOrder->chiTietDonHang()->with('kichCo')->latest('created_at');
+            $dishItems = $dishQuery->paginate(20)->withQueryString();
+            
+            $totalDishQty = (clone $dishQuery)->sum('so_luong');
+            $totalDiscount = $latestOrder->so_tien_giam;
+            $totalPayable = $latestOrder->tong_tien;
+
+            $tableHasUnpaid = $latestOrder->trang_thai_thanh_toan === 'chưa thanh toán';
+            
+            if ($latestOrder->voucher_nguoi_dung_id) {
+                $vu = \App\Models\VoucherNguoiDung::with('voucher')->find($latestOrder->voucher_nguoi_dung_id);
+                if ($vu && $vu->voucher) {
+                    $voucherSummary = $vu->voucher->ma_voucher;
+                }
+            }
+        }
+
+        $availableProducts = \App\Models\SanPham::query()
+            ->where('trang_thai_ban', 'đang bán')
+            ->orderBy('ten_san_pham')
+            ->get(['id', 'ten_san_pham', 'gia_goc', 'gia_khuyen_mai']);
+
+        $allSizes = \App\Models\KichCo::all();
+        $productSizeMap = [];
+        foreach ($availableProducts as $product) {
+            $sizes = [];
+            foreach ($allSizes as $sizeItem) {
+                $sizes[] = [
+                    'id' => $sizeItem->id,
+                    'name' => $sizeItem->ten_kich_co ?? ('Size #' . $sizeItem->id),
+                ];
+            }
+
+            $productSizeMap[$product->id] = [
+                'sizes' => $sizes,
+            ];
+        }
 
         return view('manager.tables.show', compact(
             'table',
@@ -118,44 +149,54 @@ class TableController extends Controller
             'totalPayable',
             'voucherSummary',
             'latestOrder',
+            'tableHasUnpaid',
+            'availableProducts',
+            'productSizeMap',
         ));
     }
 
-    public function generatePaymentQr(Request $request, int $id): JsonResponse
+    public function enterTable(int $id)
     {
         $table = BanAn::findOrFail($id);
 
-        $order = $table->donHang()
-            ->where('trang_thai_don', '!=', 'đã hủy')
-            ->where('trang_thai_thanh_toan', 'chưa thanh toán')
-            ->latest()
-            ->first();
-
-        if (! $order) {
-            return response()->json([
-                'message' => 'Bàn này chưa có đơn cần thanh toán.',
-            ], 422);
+        if ($table->trang_thai !== 'đã đặt') {
+            return back()->with('error', 'Bàn này không ở trạng thái đã đặt.');
         }
 
-        $storeId = $request->user()?->cua_hang_id;
-        $store = $this->paymentService->resolveStoreForPayment($storeId);
+        $table->update(['trang_thai' => 'đang phục vụ']);
 
-        if (! $store || ! $store->chu_cua_hang_id || ! $store->so_tai_khoan || ! $store->ngan_hang) {
-            return response()->json([
-                'message' => 'Chưa có thông tin tài khoản thanh toán của chủ cửa hàng để tạo QR.',
-            ], 422);
-        }
-
-        $qrData = $this->paymentService->generateQrDataWithCache($order, $store);
-
-        if (!$qrData) {
-            return response()->json([
-                'message' => 'Thông tin ngân hàng hoặc số tài khoản chưa hợp lệ hoặc đơn hàng chưa có tổng tiền.',
-            ], 422);
-        }
-
-        return response()->json($qrData);
+        return redirect()
+            ->route('manager.tables.show', $table->id)
+            ->with('success', "Đã chuyển bàn {$table->so_ban} sang trạng thái đang phục vụ.");
     }
+
+    public function releaseTable(int $id)
+    {
+        $table = BanAn::findOrFail($id);
+
+        DB::transaction(function () use ($table): void {
+            $unpaidOrders = DonHang::where('ban_an_id', $table->id)
+                ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
+                ->get();
+
+            foreach ($unpaidOrders as $order) {
+                $this->inventoryService->restoreIngredientsForOrder($order);
+                ThanhToan::where('don_hang_id', $order->id)->delete();
+                $order->chiTietDonHang()->delete();
+                $order->delete();
+            }
+
+            $table->update(['trang_thai' => 'trống']);
+        });
+
+        return redirect()
+            ->route('manager.tables.index')
+            ->with('success', "Đã trả bàn {$table->so_ban} về trạng thái trống.");
+    }
+
+
+
+
 
     public function updateOrderPayment(Request $request, int $id)
     {
@@ -168,6 +209,7 @@ class TableController extends Controller
             'order_id' => 'required|integer',
             'phuong_thuc_thanh_toan' => 'required|string|max:50',
             'trang_thai_thanh_toan' => 'required|string|max:50',
+            'email_khach_hang' => 'nullable|email|max:255',
         ]);
 
         $paymentMethod = $this->normalizePaymentMethod($request->input('phuong_thuc_thanh_toan'));
@@ -186,17 +228,24 @@ class TableController extends Controller
             ->where('ban_an_id', $table->id)
             ->firstOrFail();
 
-        DB::transaction(function () use ($order, $paymentMethod, $paymentStatus, $user, $table): void {
+        DB::transaction(function () use ($order, $paymentMethod, $paymentStatus, $user, $table, $request): void {
             $order->update([
-                'phuong_thuc_thanh_toan' => $paymentMethod,
-                'trang_thai_thanh_toan' => $paymentStatus,
                 'nhan_vien_id' => $user->id,
+                'email_khach_hang' => $request->input('email_khach_hang') ?? $order->email_khach_hang,
             ]);
+            $order->updatePaymentStatus($paymentStatus, $paymentMethod);
 
             $this->paymentService->syncThanhToanRecord($order->fresh(), $paymentMethod, $paymentStatus);
 
             if ($paymentStatus === 'đã thanh toán') {
-                $this->paymentService->freeTableIfAllPaid($table->id);
+                $order = $order->fresh();
+                $this->paymentService->applyTableStatusAfterPayment($order);
+                
+                if ($order->email_khach_hang) {
+                    \Illuminate\Support\Facades\Mail::to($order->email_khach_hang)->queue(new \App\Mail\CustomerOrderPaidMail($order));
+                } elseif ($order->nguoiDung && $order->nguoiDung->email) {
+                    \Illuminate\Support\Facades\Mail::to($order->nguoiDung->email)->queue(new \App\Mail\CustomerOrderPaidMail($order));
+                }
             }
         });
 
@@ -235,12 +284,144 @@ class TableController extends Controller
             'trang_thai.in' => 'Trạng thái bàn ăn không hợp lệ.',
         ]);
 
-        $table->update([
-            'so_ban' => trim($validated['so_ban']),
-            'trang_thai' => $this->toDbTrangThai($validated['trang_thai'] ?? null),
-        ]);
+        $newTrangThai = $this->toDbTrangThai($validated['trang_thai'] ?? null);
+
+        DB::transaction(function () use ($table, $validated, $newTrangThai) {
+            if ($newTrangThai === 'trống' && $table->trang_thai !== 'trống') {
+                $unpaidOrders = DonHang::where('ban_an_id', $table->id)
+                    ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
+                    ->get();
+
+                foreach ($unpaidOrders as $order) {
+                    $this->inventoryService->restoreIngredientsForOrder($order);
+                    ThanhToan::where('don_hang_id', $order->id)->delete();
+                    $order->chiTietDonHang()->delete();
+                    $order->delete();
+                }
+            }
+
+            $table->update([
+                'so_ban' => trim($validated['so_ban']),
+                'trang_thai' => $newTrangThai,
+            ]);
+        });
 
         return redirect()->route('manager.tables.index')->with('success', "Đã cập nhật bàn {$table->so_ban}.");
+    }
+
+    public function addItem(Request $request, int $id)
+    {
+        $table = BanAn::findOrFail($id);
+
+        $validated = $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.san_pham_id' => 'required|exists:san_pham,id',
+            'items.*.kich_co_id' => 'nullable|exists:kich_co,id',
+            'items.*.so_luong' => 'required|integer|min:1',
+            'items.*.ghi_chu_mon' => 'nullable|string|max:255',
+        ]);
+
+        $order = $table->donHang()
+            ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
+            ->latest()
+            ->first();
+
+        DB::transaction(function () use ($table, &$order, $validated, $request) {
+            $oldUsage = $order ? $this->inventoryService->ingredientUsageForOrder($order->id) : [];
+
+            if (!$order) {
+                $order = DonHang::create([
+                    'ma_don_hang' => $this->generateOrderCode(),
+                    'nhan_vien_id' => $request->user()->id,
+                    'ban_an_id' => $table->id,
+                ]);
+            }
+
+            foreach ($validated['items'] as $itemData) {
+                $product = \App\Models\SanPham::find($itemData['san_pham_id']);
+                $sizeId = $itemData['kich_co_id'] ?? null;
+                $sizeName = null;
+                $unitPrice = $product->gia_khuyen_mai ?? $product->gia_goc;
+
+                if ($sizeId) {
+                    $sizeItem = $product->kichCo()->find($sizeId);
+                    if ($sizeItem) {
+                        $basePrice = (float) ($product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc);
+                        $unitPrice = $basePrice * (float) ($sizeItem->he_so_gia ?? 1);
+                        $sizeName = $sizeItem->ten_kich_co;
+                    }
+                }
+
+                $existing = ChiTietDonHang::where('don_hang_id', $order->id)
+                    ->where('san_pham_id', $product->id)
+                    ->where('kich_co_id', $sizeId)
+                    ->where('ghi_chu_mon', $itemData['ghi_chu_mon'] ?? null)
+                    ->first();
+
+                if ($existing) {
+                    $existing->update([
+                        'so_luong' => $existing->so_luong + $itemData['so_luong'],
+                        'thanh_tien' => $existing->don_gia * ($existing->so_luong + $itemData['so_luong']),
+                    ]);
+                } else {
+                    ChiTietDonHang::create([
+                        'don_hang_id' => $order->id,
+                        'san_pham_id' => $product->id,
+                        'kich_co_id' => $sizeId,
+                        'ten_san_pham' => $product->ten_san_pham,
+                        'ten_kich_co' => $sizeName,
+                        'don_gia' => $unitPrice,
+                        'so_luong' => $itemData['so_luong'],
+                        'thanh_tien' => $unitPrice * $itemData['so_luong'],
+                        'ghi_chu_mon' => $itemData['ghi_chu_mon'] ?? null,
+                    ]);
+                }
+            }
+
+            $order->update([
+                'nhan_vien_id' => $request->user()->id,
+            ]);
+
+            $table->update(['trang_thai' => 'đang phục vụ']);
+
+            $newUsage = $this->inventoryService->ingredientUsageForOrder($order->id);
+            $this->inventoryService->applyIngredientDelta($oldUsage, $newUsage, $order->id);
+        });
+
+        return redirect()->route('manager.tables.show', $table->id)->with('success', 'Đã thêm món vào bàn thành công.');
+    }
+
+    public function clearTable(int $id)
+    {
+        $table = BanAn::findOrFail($id);
+
+        if ($table->trang_thai !== 'đang phục vụ') {
+            return back()->with('error', 'Chỉ có thể xóa thông tin bàn đang ở trạng thái đang phục vụ.');
+        }
+
+        DB::transaction(function () use ($table): void {
+            $unpaidOrders = DonHang::where('ban_an_id', $table->id)
+                ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
+                ->get();
+
+            foreach ($unpaidOrders as $order) {
+                $this->inventoryService->restoreIngredientsForOrder($order);
+                ThanhToan::where('don_hang_id', $order->id)->delete();
+                $order->chiTietDonHang()->delete();
+                $order->delete();
+            }
+
+            $hasRemaining = DonHang::where('ban_an_id', $table->id)
+                ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
+                ->exists();
+
+            if (! $hasRemaining) {
+                $table->update(['trang_thai' => 'trống']);
+            }
+        });
+
+        return redirect()->route('manager.tables.index')
+            ->with('success', "Đã xóa thông tin bàn {$table->so_ban}. Bàn đã trở về trạng thái trống.");
     }
 
     public function destroy(int $id)

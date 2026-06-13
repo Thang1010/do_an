@@ -1,13 +1,13 @@
 @extends('manager.layout.app')
 
-@section('title', 'Tạo voucher mới')
-@section('breadcrumb', 'Kinh doanh / Voucher & Khuyến mãi / <strong>Tạo mới</strong>')
+@section('title', 'Tạo mã giảm giá mới')
+@section('breadcrumb', 'Kinh doanh / Mã giảm giá & Khuyến mãi / <strong>Tạo mới</strong>')
 
 @section('content')
 
 <div class="page-header">
 	<div>
-		<h1 class="page-title">Tạo voucher mới</h1>
+		<h1 class="page-title">Tạo mã giảm giá mới</h1>
 		<p class="page-subtitle">Tạo mã giảm giá mới cho cửa hàng</p>
 	</div>
 	<div class="page-actions">
@@ -17,14 +17,14 @@
 
 <div class="card" style="max-width: 980px;">
 	<div class="card-header">
-		<span class="card-title">Thông tin voucher</span>
+		<span class="card-title">Thông tin mã giảm giá</span>
 	</div>
 	<div class="card-body">
 		<form id="create-voucher-form" method="POST" action="{{ route('manager.vouchers.store') }}">
 			@csrf
 			<div class="form-grid-2">
 				<div class="form-group">
-					<label class="form-label">Mã voucher <span>*</span></label>
+					<label class="form-label">Mã giảm giá <span>*</span></label>
 					<input type="text" name="ma_voucher" class="form-control text-uppercase"
 						   placeholder="VD: SUMMER20" value="{{ old('ma_voucher') }}" required>
 					<div class="form-hint">Chỉ dùng chữ hoa và số</div>
@@ -33,8 +33,8 @@
 					@enderror
 				</div>
 				<div class="form-group">
-					<label class="form-label">Tên voucher</label>
-					<input type="text" name="ten_voucher" class="form-control" placeholder="Tên hiển thị voucher" value="{{ old('ten_voucher') }}">
+					<label class="form-label">Tên chương trình</label>
+					<input type="text" name="ten_voucher" class="form-control" placeholder="Tên hiển thị mã giảm giá" value="{{ old('ten_voucher') }}">
 					@error('ten_voucher')
 						<div class="form-error">{{ $message }}</div>
 					@enderror
@@ -68,7 +68,7 @@
 				<div class="form-group">
 					<label class="form-label">Giá trị giảm <span>*</span></label>
 					<div class="flex-center-gap-6">
-						<input type="number" name="gia_tri_giam" class="form-control" placeholder="15" min="0" value="{{ old('gia_tri_giam') }}" required>
+						<input type="text" name="gia_tri_giam" class="form-control format-money" placeholder="15" value="{{ old('gia_tri_giam') }}" required>
 						<span id="create-discount-unit" class="discount-unit">%</span>
 					</div>
 					@error('gia_tri_giam')
@@ -76,8 +76,8 @@
 					@enderror
 				</div>
 				<div class="form-group">
-					<label class="form-label">Giá trị đơn tối thiểu (đ)</label>
-					<input type="number" name="don_toi_thieu" class="form-control" placeholder="100000" min="0" value="{{ old('don_toi_thieu') }}">
+					<label class="form-label">Giá trị đơn tối thiểu (đ) <span>*</span></label>
+					<input type="text" name="don_toi_thieu" class="form-control format-money" placeholder="100000" value="{{ old('don_toi_thieu') }}" required>
 					@error('don_toi_thieu')
 						<div class="form-error">{{ $message }}</div>
 					@enderror
@@ -103,15 +103,15 @@
 
 			<div class="form-grid-2">
 				<div class="form-group">
-					<label class="form-label">Giới hạn sử dụng</label>
-					<input type="number" name="so_luong" class="form-control" placeholder="Để trống = không giới hạn" min="1" value="{{ old('so_luong') }}">
+					<label class="form-label">Giới hạn sử dụng <span>*</span></label>
+					<input type="number" name="so_luong" class="form-control" placeholder="Nhập 0 = không giới hạn" min="0" value="{{ old('so_luong') }}" required>
 					@error('so_luong')
 						<div class="form-error">{{ $message }}</div>
 					@enderror
 				</div>
 				<div class="form-group">
-					<label class="form-label">Giảm tối đa (đ)</label>
-					<input type="number" name="giam_toi_da" class="form-control" placeholder="Ví dụ: 50000" min="0" value="{{ old('giam_toi_da') }}">
+					<label class="form-label">Giảm tối đa (đ) <span>*</span></label>
+					<input type="text" name="giam_toi_da" class="form-control format-money" placeholder="Ví dụ: 50000" value="{{ old('giam_toi_da') }}" required>
 					@error('giam_toi_da')
 						<div class="form-error">{{ $message }}</div>
 					@enderror
@@ -120,7 +120,7 @@
 
 			<div style="display:flex; justify-content:flex-end; gap:10px; margin-top: 10px;">
 				<a href="{{ route('manager.vouchers.index') }}" class="btn btn-secondary">Hủy</a>
-				<button type="submit" class="btn btn-primary">Tạo voucher</button>
+				<button type="submit" class="btn btn-primary">Tạo mã giảm giá</button>
 			</div>
 		</form>
 	</div>

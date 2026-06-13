@@ -184,4 +184,26 @@ class OrderInventoryService
             ]);
         }
     }
+
+    /**
+     * Hoàn lại nguyên liệu vào kho khi xóa/hủy đơn hàng.
+     */
+    public function restoreIngredientsForOrder(DonHang $order): void
+    {
+        $usage = $this->ingredientUsageForOrder($order->id);
+        foreach ($usage as $ingredientId => $data) {
+            if ($data['qty'] > 0) {
+                LichSuKho::create([
+                    'nguyen_lieu_id' => (int) $ingredientId,
+                    'loai_giao_dich' => 'điều chỉnh',
+                    'tham_chieu_loai' => 'don_hang',
+                    'tham_chieu_id' => $order->id,
+                    'so_luong' => $data['qty'],
+                    'nguoi_tao_id' => Auth::id(),
+                    'ghi_chu' => 'Hoàn kho do hủy/xóa đơn hàng #' . $order->id,
+                    'created_at' => now(),
+                ]);
+            }
+        }
+    }
 }

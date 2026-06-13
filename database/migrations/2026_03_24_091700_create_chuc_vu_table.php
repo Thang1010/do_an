@@ -13,9 +13,14 @@ return new class extends Migration
     {
         Schema::create('chuc_vu', function (Blueprint $table) {
             $table->id();
-            $table->string('ten_chuc_vu', 100)->unique();
-            $table->string('vai_tro_ap_dung', 20)->default('nhân viên')->index();
-            $table->text('mo_ta_chuc_vu')->nullable();
+            $table->string('ten_chuc_vu', 40);
+            $table->enum('vai_tro_ap_dung', ['nhân viên', 'quản lý'])->default('nhân viên')->index();
+            $table->string('mo_ta_chuc_vu', 50)->nullable();
+            $table->float('luong_co_ban')->default(0);
+            $table->enum('loai_hinh_lam_viec', ['toàn thời gian', 'bán thời gian'])->nullable();
+            $table->float('luong_theo_gio')->default(0);
+
+            $table->unique(['ten_chuc_vu', 'vai_tro_ap_dung', 'loai_hinh_lam_viec'], 'chuc_vu_unique_combo');
         });
     }
 

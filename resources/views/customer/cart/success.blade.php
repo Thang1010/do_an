@@ -47,7 +47,7 @@
                     Tiếp tục mua sắm
                 </a>
                 @auth
-                    <a href="{{ route('cart.index') }}"
+                    <a href="{{ route('customer.orders') }}"
                         style="background:#f5ede0;color:#30261C;padding:12px 28px;border-radius:50px;text-decoration:none;font-weight:600;font-size:15px;">
                         Xem đơn hàng
                     </a>

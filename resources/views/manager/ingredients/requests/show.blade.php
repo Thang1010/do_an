@@ -92,29 +92,65 @@
 </div>
 
 @if($isStoreOwner && $ingredientRequest->trang_thai === 'cho_xac_nhan')
-<div class="card">
-    <div class="card-header">
-        <span class="card-title">Thao tác xác nhận</span>
-    </div>
-    <div class="card-body">
-        <form method="POST" action="{{ route('manager.ingredients.requests.approve', ['id' => $ingredientRequest->id]) }}" class="mb-16" onsubmit="return confirm('Duyệt yêu cầu này và thêm nguyên liệu vào danh mục?')">
-            @csrf
-            <div class="form-group">
-                <label class="form-label">Ghi chú duyệt (tùy chọn)</label>
-                <textarea name="review_note" class="form-control" rows="3" maxlength="1000" placeholder="Ví dụ: Đã kiểm tra danh mục, đồng ý thêm toàn bộ."></textarea>
-            </div>
-            <button type="submit" class="btn btn-primary">Duyệt yêu cầu</button>
-        </form>
+<div style="display: flex; gap: 10px; margin-bottom: 20px;">
+    <button type="button" class="btn btn-primary" onclick="openApproveModal({{ $ingredientRequest->id }})">Xác nhận yêu cầu</button>
 
-        <form method="POST" action="{{ route('manager.ingredients.requests.reject', ['id' => $ingredientRequest->id]) }}" onsubmit="return confirm('Bạn chắc chắn muốn từ chối yêu cầu này?')">
-            @csrf
-            <div class="form-group">
-                <label class="form-label">Lý do từ chối (tùy chọn)</label>
-                <textarea name="review_note" class="form-control" rows="3" maxlength="1000" placeholder="Ví dụ: Trùng nguyên liệu đã có, cần chỉnh lại đơn vị tính."></textarea>
-            </div>
-            <button type="submit" class="btn btn-danger">Từ chối yêu cầu</button>
-        </form>
+    <button type="button" class="btn btn-danger" onclick="openRejectModal({{ $ingredientRequest->id }})">Từ chối yêu cầu</button>
+</div>
+
+<div class="modal-backdrop" id="reject-modal">
+    <div class="modal-box modal-md">
+        <div class="modal-header">
+            <span class="modal-title">Từ chối yêu cầu</span>
+            <button class="modal-close" onclick="closeModal('reject-modal')">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <form id="reject-form" method="POST" action="">
+                @csrf
+                <div class="form-group">
+                    <label class="form-label">Lý do từ chối <span>*</span></label>
+                    <textarea name="review_note" class="form-control" rows="3" required placeholder="Nhập lý do..."></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('reject-modal')">Hủy</button>
+            <button type="submit" form="reject-form" class="btn btn-danger">Xác nhận từ chối</button>
+        </div>
     </div>
 </div>
+
+<div class="modal-backdrop" id="approve-modal">
+    <div class="modal-box modal-md">
+        <div class="modal-header">
+            <span class="modal-title">Xác nhận yêu cầu</span>
+            <button class="modal-close" onclick="closeModal('approve-modal')">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <p>Bạn có chắc chắn muốn xác nhận yêu cầu thêm nguyên liệu này không?</p>
+            <form id="approve-form" method="POST" action="">
+                @csrf
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('approve-modal')">Hủy</button>
+            <button type="submit" form="approve-form" class="btn btn-primary">Xác nhận</button>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+    function openRejectModal(id) {
+        document.getElementById('reject-form').action = '/manager/ingredient-requests/' + id + '/reject';
+        openModal('reject-modal');
+    }
+    
+    function openApproveModal(id) {
+        document.getElementById('approve-form').action = '/manager/ingredient-requests/' + id + '/approve';
+        openModal('approve-modal');
+    }
+</script>
+@endpush
 @endif
 @endsection

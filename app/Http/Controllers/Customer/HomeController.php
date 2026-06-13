@@ -12,6 +12,26 @@ use Illuminate\Support\Str;
 
 class HomeController extends Controller
 {
+    public function about()
+    {
+        return view('customer.home.about');
+    }
+
+    public function contact()
+    {
+        return view('customer.home.contact');
+    }
+
+    public function newsletter()
+    {
+        return back()->with('success', 'Đăng ký thành công! Mã giảm giá 15% đã được gửi đến email của bạn.');
+    }
+
+    public function orderTable($table)
+    {
+        return view('customer.menu.index', ['tableNumber' => $table]);
+    }
+
     public function index()
     {
         $categories = DanhMuc::orderBy('ten_danh_muc')->get();
@@ -33,41 +53,33 @@ class HomeController extends Controller
 
         $from = Carbon::now()->subDays(6)->startOfDay();
 
-        $drinkSlugs = ['do-nong', 'do-lanh', 'do-uong', 'ca-phe', 'tra'];
-        $dessertSlugs = ['do-an-vat', 'an-vat', 'banh', 'trang-mieng', 'do-ngot'];
+        $bestSellers = $this->bestSellers([], $from, 10);
 
-        $drinkCategoryIds = $categorySlugs->filter(fn($slug) => in_array($slug, $drinkSlugs, true))
-            ->keys()
-            ->values()
-            ->all();
+        // Lấy đánh giá từ top 10 đồ uống bán chạy
+        $testimonialsProductIds = $bestSellers->take(10)->pluck('id')
+            ->unique()
+            ->values();
 
-        $dessertCategoryIds = $categorySlugs->filter(fn($slug) => in_array($slug, $dessertSlugs, true))
-            ->keys()
-            ->values()
-            ->all();
-
-        $bestDrinks = $this->bestSellers($drinkCategoryIds, $from, 8);
-        $bestDesserts = $this->bestSellers($dessertCategoryIds, $from, 8);
-
-        if ($bestDrinks->isEmpty()) {
-            $bestDrinks = $this->bestSellers([], $from, 8);
+        if ($testimonialsProductIds->isNotEmpty()) {
+            $testimonials = DanhGiaSanPham::with(['nguoiDung', 'sanPham'])
+                ->whereIn('san_pham_id', $testimonialsProductIds)
+                ->latest()
+                ->get()
+                ->groupBy('san_pham_id')
+                ->flatMap(fn($reviews) => $reviews->take(3))
+                ->values();
+        } else {
+            $testimonials = DanhGiaSanPham::with(['nguoiDung', 'sanPham'])
+                ->latest()
+                ->limit(9)
+                ->get();
         }
-
-        if ($bestDesserts->isEmpty()) {
-            $bestDesserts = $this->bestSellers([], $from, 8);
-        }
-
-        $testimonials = DanhGiaSanPham::with(['nguoiDung', 'sanPham'])
-            ->latest()
-            ->limit(3)
-            ->get();
 
         return view('customer.dashboard', compact(
             'categories',
             'categoryImages',
             'categorySlugs',
-            'bestDrinks',
-            'bestDesserts',
+            'bestSellers',
             'testimonials'
         ));
     }
@@ -77,7 +89,6 @@ class HomeController extends Controller
         $query = DB::table('chi_tiet_don_hang')
             ->join('don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')
             ->join('san_pham', 'san_pham.id', '=', 'chi_tiet_don_hang.san_pham_id')
-            ->whereNotIn('don_hang.trang_thai_don', ['huy', 'đã hủy'])
             ->where('don_hang.created_at', '>=', $from)
             ->whereIn('san_pham.trang_thai_ban', ['dang_ban', 'đang bán']);
 
@@ -93,13 +104,18 @@ class HomeController extends Controller
         if ($topIds->isEmpty()) {
             return SanPham::whereIn('trang_thai_ban', ['dang_ban', 'đang bán'])
                 ->when(!empty($categoryIds), fn($q) => $q->whereIn('danh_muc_id', $categoryIds))
+                ->withAvg('danhGiaSanPham as avg_rating', 'so_sao')
+                ->with('kichCo')
                 ->orderByDesc('noi_bat')
                 ->latest()
                 ->limit($limit)
                 ->get();
         }
 
-        $products = SanPham::whereIn('id', $topIds)->get()->keyBy('id');
+        $products = SanPham::whereIn('id', $topIds)
+            ->withAvg('danhGiaSanPham as avg_rating', 'so_sao')
+            ->with('kichCo')
+            ->get()->keyBy('id');
 
         return $topIds->map(fn($id) => $products->get($id))
             ->filter()

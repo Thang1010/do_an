@@ -11,20 +11,20 @@ class HoSoNhanVien extends Model
 
     protected $fillable = [
         'nguoi_dung_id',
-        'ma_nhan_vien',
         'chuc_vu_id',
-        'loai_hinh_lam_viec',
-        'luong_co_ban',
-        'luong_theo_gio',
+        'ho_ten',
+        'ngay_sinh',
+        'dia_chi_tam_chu',
+        'so_dien_thoai',
         'ngay_vao_lam',
+        'anh_dai_dien',
     ];
 
     protected function casts(): array
     {
         return [
-            'luong_co_ban' => 'decimal:2',
-            'luong_theo_gio' => 'decimal:2',
             'ngay_vao_lam' => 'date',
+            'ngay_sinh' => 'date',
         ];
     }
 

@@ -22,7 +22,7 @@ class IngredientApprovalRequestNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return [\App\Channels\CustomDatabaseChannel::class];
     }
 
     /**

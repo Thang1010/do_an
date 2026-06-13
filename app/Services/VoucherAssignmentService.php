@@ -24,7 +24,7 @@ class VoucherAssignmentService
         $now = Carbon::now();
 
         $activeVouchers = Voucher::query()
-            ->whereIn('trang_thai', ['đang hoạt động', 'hoat_dong'])
+            ->where('trang_thai', 'đang hoạt động')
             ->where(function ($q) use ($now) {
                 $q->whereNull('ngay_bat_dau')
                     ->orWhere('ngay_bat_dau', '<=', $now);

@@ -40,6 +40,7 @@
                 <tr>
                     <th class="col-stt">STT</th>
                     <th>Tên chức vụ</th>
+                    <th>Loại hình</th>
                     <th>Vai trò áp dụng</th>
                     <th>Mô tả</th>
                     <th>Số nhân sự</th>
@@ -55,6 +56,7 @@
                 <tr>
                     <td>{{ $positions->firstItem() + $index }}</td>
                     <td>{{ $position->ten_chuc_vu }}</td>
+                    <td>{{ ucfirst($position->loai_hinh_lam_viec ?? 'Toàn thời gian') }}</td>
                     <td>{{ $isManagerRole ? 'quản lý' : 'nhân viên' }}</td>
                     <td>{{ \Illuminate\Support\Str::limit($position->mo_ta_chuc_vu ?? '—', 60) }}</td>
                     <td>{{ number_format($assignedCount, 0, ',', '.') }}</td>

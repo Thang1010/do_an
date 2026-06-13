@@ -18,10 +18,6 @@ class ThanhToan extends Model
         'phuong_thuc',
         'so_tien',
         'trang_thai',
-        'ten_ngan_hang',
-        'ma_ngan_hang',
-        'so_tai_khoan',
-        'ten_chu_tai_khoan',
         'noi_dung_chuyen_khoan',
         'duong_dan_qr',
         'ma_giao_dich',
@@ -54,7 +50,7 @@ class ThanhToan extends Model
 
             $isQrPayment = $payment->phuong_thuc === 'chuyển khoản' || ! empty($payment->duong_dan_qr);
 
-            if (! $justPaid || ! $isQrPayment || ! Schema::hasTable('notifications')) {
+            if (! $justPaid || ! $isQrPayment || ! Schema::hasTable('thong_bao')) {
                 return;
             }
 

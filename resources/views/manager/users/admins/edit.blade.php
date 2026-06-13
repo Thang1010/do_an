@@ -98,37 +98,18 @@
                     @enderror
                 </div>
 
-                <div class="form-grid-2">
-                    <div class="form-group">
-                        <label class="form-label" for="luong_co_ban">Lương cơ bản</label>
-                        <input
-                            id="luong_co_ban"
-                            type="number"
-                            step="1000"
-                            min="0"
-                            name="luong_co_ban"
-                            class="form-control"
-                            value="{{ old('luong_co_ban', $user->hoSoNhanVien?->luong_co_ban) }}"
-                            placeholder="Nhập lương cơ bản"
-                        >
-                        @error('luong_co_ban')
-                            <div class="form-error">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label" for="ngay_vao_lam">Ngày vào làm</label>
-                        <input
-                            id="ngay_vao_lam"
-                            type="date"
-                            name="ngay_vao_lam"
-                            class="form-control"
-                            value="{{ old('ngay_vao_lam', optional($user->hoSoNhanVien?->ngay_vao_lam)->format('Y-m-d')) }}"
-                        >
-                        @error('ngay_vao_lam')
-                            <div class="form-error">{{ $message }}</div>
-                        @enderror
-                    </div>
+                <div class="form-group mt-3">
+                    <label class="form-label" for="ngay_vao_lam">Ngày vào làm</label>
+                    <input
+                        id="ngay_vao_lam"
+                        type="date"
+                        name="ngay_vao_lam"
+                        class="form-control"
+                        value="{{ old('ngay_vao_lam', optional($user->hoSoNhanVien?->ngay_vao_lam)->format('Y-m-d')) }}"
+                    >
+                    @error('ngay_vao_lam')
+                        <div class="form-error">{{ $message }}</div>
+                    @enderror
                 </div>
             </div>
 
@@ -150,13 +131,16 @@
                     @enderror
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label" for="admin_loai_hinh_lam_viec">Loại hình làm việc</label>
-                    <select id="admin_loai_hinh_lam_viec" name="loai_hinh_lam_viec" class="form-control">
-                        <option value="toàn thời gian" {{ old('loai_hinh_lam_viec', $user->hoSoQuanLy?->loai_hinh_lam_viec) === 'toàn thời gian' ? 'selected' : '' }}>Toàn thời gian</option>
-                        <option value="bán thời gian" {{ old('loai_hinh_lam_viec', $user->hoSoQuanLy?->loai_hinh_lam_viec) === 'bán thời gian' ? 'selected' : '' }}>Bán thời gian</option>
-                    </select>
-                    @error('loai_hinh_lam_viec')
+                <div class="form-group mt-3">
+                    <label class="form-label" for="admin_ngay_vao_lam">Ngày vào làm</label>
+                    <input
+                        id="admin_ngay_vao_lam"
+                        type="date"
+                        name="ngay_vao_lam"
+                        class="form-control"
+                        value="{{ old('ngay_vao_lam', optional($user->hoSoQuanLy?->ngay_vao_lam)->format('Y-m-d')) }}"
+                    >
+                    @error('ngay_vao_lam')
                         <div class="form-error">{{ $message }}</div>
                     @enderror
                 </div>

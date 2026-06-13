@@ -27,14 +27,11 @@
             </a>
         </div>
         <div class="w-full max-w-[380px]">
-            <div class="flex items-center justify-center gap-3 mb-8">
-                <div style="width:52px;height:52px;border-radius:50%;background:#2a1f14;border:2px solid #5a3e2b;display:flex;align-items:center;justify-content:center;overflow:hidden;">
-                    <img src="{{ asset('images/logo.png') }}" alt="Logo" style="width:40px;height:40px;object-fit:contain;" onerror="this.parentElement.innerHTML='☕'"/>
-                </div>
-                <span style="font-family:'Outfit',sans-serif;font-weight:700;font-size:20px;color:#F1F0EE;letter-spacing:0.08em;">XM COFFEE</span>
+            <div class="flex items-center justify-center gap-3 mb-6">
+                <img src="{{ asset('images/logo.png') }}" alt="XM Coffee Logo" style="width: 330px; height: 150px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<span style=\'font-family:\\\'Outfit\\\',sans-serif;font-weight:700;font-size:20px;color:#F1F0EE;letter-spacing:0.08em;\'>XM COFFEE</span>'">
             </div>
 
-            <h1 style="font-family:'Playfair Display',serif;font-weight:700;font-size:26px;color:#F1F0EE;text-align:center;font-style:italic;margin-bottom:12px;">Đặt lại mật khẩu</h1>
+            <h1 style="font-family:'Playfair Display',serif;font-weight:700;font-size:32px;color:#F1F0EE;text-align:center;font-style:italic;margin-bottom:20px;">Đặt lại mật khẩu</h1>
 
             @if(!$showPasswordForm)
                 <p style="color:#7a6555;font-size:14px;text-align:center;margin-bottom:24px;font-family:'Outfit',sans-serif;">Nhập mã xác thực đã gửi đến email {{ $email }}.</p>

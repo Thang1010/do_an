@@ -57,7 +57,7 @@ class IngredientController extends Controller
     {
         $request->validate([
             'ingredients' => 'required|array|min:1',
-            'ingredients.*.ten_nguyen_lieu' => 'nullable|string|max:150',
+            'ingredients.*.ten_nguyen_lieu' => 'required|string|max:150|distinct|unique:nguyen_lieu,ten_nguyen_lieu',
             'ingredients.*.don_vi_tinh' => ['nullable', Rule::in($this->unitOptions())],
             'ingredients.*.muc_dich_su_dung' => 'nullable|string|max:120',
             'ingredients.*.muc_dich_su_dung_khac' => 'nullable|string|max:120',
@@ -113,7 +113,7 @@ class IngredientController extends Controller
         $this->ensureStoreOwner();
 
         $request->validate([
-            'ten_nguyen_lieu' => 'required|string|max:150',
+            'ten_nguyen_lieu' => 'required|string|max:150|unique:nguyen_lieu,ten_nguyen_lieu,' . $id,
             'don_vi_tinh' => ['required', Rule::in($this->unitOptions())],
             'muc_dich_su_dung' => 'required|string|max:120',
             'muc_dich_su_dung_khac' => 'nullable|string|max:120',
@@ -165,7 +165,7 @@ class IngredientController extends Controller
             ->when($search !== '', function (Builder $builder) use ($search) {
                 $builder->where(function (Builder $subQuery) use ($search) {
                     $subQuery->whereHas('nguoiGui', function (Builder $userQuery) use ($search) {
-                        $userQuery->where('ho_ten', 'like', "%{$search}%")
+                        $userQuery->where('email', 'like', "%{$search}%")
                             ->orWhere('email', 'like', "%{$search}%");
                     })->orWhere('ghi_chu', 'like', "%{$search}%");
                 });

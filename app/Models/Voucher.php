@@ -17,7 +17,6 @@ class Voucher extends Model
         'don_toi_thieu',
         'giam_toi_da',
         'so_luong',
-        'da_su_dung',
         'ngay_bat_dau',
         'ngay_ket_thuc',
         'trang_thai',
@@ -26,9 +25,9 @@ class Voucher extends Model
     protected function casts(): array
     {
         return [
-            'gia_tri_giam' => 'decimal:2',
-            'don_toi_thieu' => 'decimal:2',
-            'giam_toi_da' => 'decimal:2',
+            'gia_tri_giam' => 'float',
+            'don_toi_thieu' => 'float',
+            'giam_toi_da' => 'float',
             'ngay_bat_dau' => 'datetime',
             'ngay_ket_thuc' => 'datetime',
         ];

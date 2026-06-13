@@ -15,9 +15,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('nguoi_dung_id')->constrained('nguoi_dung')->cascadeOnDelete();
             $table->foreignId('san_pham_id')->constrained('san_pham')->cascadeOnDelete();
-            $table->foreignId('don_hang_id')->constrained('don_hang')->cascadeOnDelete();
+            $table->foreignId('don_hang_id')->nullable()->constrained('don_hang')->nullOnDelete();
             $table->unsignedTinyInteger('so_sao');
-            $table->text('noi_dung')->nullable();
+            $table->string('noi_dung', 300)->nullable();
             $table->timestamps();
 
             $table->index('san_pham_id');

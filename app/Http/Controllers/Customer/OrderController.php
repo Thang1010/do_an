@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Customer;
 
-use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Models\ChiTietDonHang;
 use App\Models\DonHang;
@@ -18,14 +17,28 @@ class OrderController extends Controller
 {
     public function index(Request $request)
     {
-        $orders = DonHang::query()
+        $tuNgay    = $request->has('tu_ngay') ? $request->get('tu_ngay') : now()->startOfMonth()->format('Y-m-d');
+        $denNgay   = $request->has('den_ngay') ? $request->get('den_ngay') : now()->endOfMonth()->format('Y-m-d');
+        $trangThai = $request->get('trang_thai');
+
+        $query = DonHang::query()
             ->with(['banAn'])
             ->withCount('chiTietDonHang')
-            ->where('nguoi_dung_id', $request->user()->id)
-            ->latest()
-            ->paginate(20);
+            ->where('nguoi_dung_id', $request->user()->id);
 
-        return view('customer.orders.index', compact('orders'));
+        if ($tuNgay) {
+            $query->whereDate('created_at', '>=', $tuNgay);
+        }
+        if ($denNgay) {
+            $query->whereDate('created_at', '<=', $denNgay);
+        }
+        if ($trangThai) {
+            $query->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', $trangThai));
+        }
+
+        $orders = $query->latest()->paginate(20)->withQueryString();
+
+        return view('customer.orders.index', compact('orders', 'tuNgay', 'denNgay', 'trangThai'));
     }
 
     public function show(Request $request, int $id)
@@ -50,7 +63,7 @@ class OrderController extends Controller
             ->findOrFail($id);
 
         if (! $this->isPending($order)) {
-            return $this->reject($request, 'Chỉ có thể sửa đơn khi đang chờ xác nhận.');
+            return $this->reject($request, 'Chỉ có thể sửa đơn khi chưa thanh toán.');
         }
 
         $validated = $request->validate([
@@ -66,7 +79,7 @@ class OrderController extends Controller
 
         DB::transaction(function () use ($order, $validated): void {
             if (array_key_exists('ghi_chu', $validated)) {
-                $order->ghi_chu = trim((string) $validated['ghi_chu']);
+                // ghi_chu removed from don_hang; no-op
             }
 
             $order->chiTietDonHang()->delete();
@@ -91,7 +104,6 @@ class OrderController extends Controller
 
                 ChiTietDonHang::create([
                     'don_hang_id' => $order->id,
-                    'ban_an_id' => $order->ban_an_id,
                     'san_pham_id' => $product->id,
                     'kich_co_id' => $sizeId,
                     'ten_san_pham' => $product->ten_san_pham,
@@ -100,6 +112,9 @@ class OrderController extends Controller
                     'so_luong' => $qty,
                     'thanh_tien' => $subtotal,
                     'ghi_chu_mon' => $note,
+                    'loai_don' => $order->loai_don,
+                    'trang_thai_thanh_toan' => 'chưa thanh toán',
+                    'phuong_thuc_thanh_toan' => $order->phuong_thuc_thanh_toan,
                 ]);
             }
 
@@ -140,40 +155,25 @@ class OrderController extends Controller
                 $voucherNguoiDungId = null;
             }
 
-            if ($discount > $tamTinh) {
-                $discount = $tamTinh;
+            // Distribute discount proportionally across items
+            $items = $order->chiTietDonHang()->get();
+            $totalThanhtien = $items->sum('thanh_tien');
+            foreach ($items as $item) {
+                $itemDiscount = $totalThanhtien > 0 ? round($discount * $item->thanh_tien / $totalThanhtien, 2) : 0;
+                $item->update([
+                    'so_tien_giam' => $itemDiscount,
+                    'tong_tien' => max(0, $item->thanh_tien - $itemDiscount),
+                ]);
             }
 
-            $order->fill([
-                'tam_tinh' => $tamTinh,
-                'so_tien_giam' => $discount,
-                'tong_tien' => max($tamTinh - $discount, 0),
+            $order->update([
                 'voucher_nguoi_dung_id' => $voucherNguoiDungId,
-            ])->save();
+            ]);
         });
 
         OrderNotificationService::notifyCustomerUpdated($order->fresh());
 
         return $this->success($request, 'Đã cập nhật đơn hàng thành công.');
-    }
-
-    public function cancel(Request $request, int $id)
-    {
-        $order = DonHang::query()
-            ->where('nguoi_dung_id', $request->user()->id)
-            ->findOrFail($id);
-
-        if (! $this->isPending($order)) {
-            return $this->reject($request, 'Chỉ có thể hủy đơn khi đang chờ xác nhận.');
-        }
-
-        $order->update(['trang_thai_don' => OrderStatus::DA_HUY->value]);
-
-        if ($order->ban_an_id) {
-            TableStatusService::refreshForTable($order->ban_an_id);
-        }
-
-        return back()->with('success', 'Đã hủy đơn hàng.');
     }
 
     public function editInCart(Request $request, int $id)
@@ -183,14 +183,16 @@ class OrderController extends Controller
             ->where('nguoi_dung_id', $request->user()->id)
             ->findOrFail($id);
 
-        if (! in_array($order->trang_thai_don, ['chờ xác nhận', 'cho_xac_nhan'])) {
-            return back()->with('error', 'Chỉ có thể sửa đơn khi đang chờ xác nhận.');
+        if (! $this->isPending($order)) {
+            return back()->with('error', 'Chỉ có thể sửa đơn khi chưa thanh toán.');
         }
 
-        // Hủy đơn hàng hiện tại
-        $order->update(['trang_thai_don' => OrderStatus::DA_HUY->value]);
-        if ($order->ban_an_id) {
-            TableStatusService::refreshForTable($order->ban_an_id);
+        // Xóa đơn hàng hiện tại (trả lại giỏ hàng)
+        $tableId = $order->ban_an_id;
+        $order->chiTietDonHang()->delete();
+        $order->delete();
+        if ($tableId) {
+            TableStatusService::refreshForTable($tableId);
         }
 
         // Tạo giỏ hàng mới
@@ -219,7 +221,7 @@ class OrderController extends Controller
 
     private function isPending(DonHang $order): bool
     {
-        return OrderStatus::normalize($order->trang_thai_don) === OrderStatus::CHO_XAC_NHAN;
+        return $order->trang_thai_thanh_toan === 'chưa thanh toán';
     }
 
     private function reject(Request $request, string $message)

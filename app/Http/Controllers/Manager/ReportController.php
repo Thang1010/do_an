@@ -22,25 +22,7 @@ class ReportController extends Controller
         return $this->buildReport($request, 'revenue');
     }
 
-    public function orders(Request $request)
-    {
-        return $this->buildReport($request, 'orders');
-    }
 
-    public function products(Request $request)
-    {
-        return $this->buildReport($request, 'products');
-    }
-
-    public function staff(Request $request)
-    {
-        return $this->buildReport($request, 'staff');
-    }
-
-    public function inventory(Request $request)
-    {
-        return $this->buildReport($request, 'inventory');
-    }
 
     // =====================================================
     private function buildReport(Request $request, string $activeTab)
@@ -48,9 +30,9 @@ class ReportController extends Controller
         [$from, $to] = $this->resolveDateRange($request);
 
         // ===== STAT CARDS =====
-        $tongDoanhThu = DonHang::whereBetween('created_at', [$from, $to])
-            ->whereNotIn('trang_thai_don', ['huy', 'đã hủy'])
-            ->sum('tong_tien');
+        $tongDoanhThu = DonHang::join('chi_tiet_don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')
+            ->whereBetween('don_hang.created_at', [$from, $to])
+            ->sum('chi_tiet_don_hang.tong_tien');
 
         $tongDon = DonHang::whereBetween('created_at', [$from, $to])->count();
 
@@ -59,110 +41,91 @@ class ReportController extends Controller
             : 0;
 
         // ===== DOANH THU THEO NGÀY =====
-        $revenueByDay = DonHang::selectRaw('DATE(created_at) as ngay, SUM(tong_tien) as tong')
-            ->whereBetween('created_at', [$from, $to])
-            ->whereNotIn('trang_thai_don', ['huy', 'đã hủy'])
+        $revenueByDay = DonHang::join('chi_tiet_don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')
+            ->selectRaw('DATE(don_hang.created_at) as ngay, SUM(chi_tiet_don_hang.tong_tien) as tong, COUNT(DISTINCT don_hang.id) as so_don')
+            ->whereBetween('don_hang.created_at', [$from, $to])
             ->groupBy('ngay')
             ->orderBy('ngay')
             ->get();
         $maxRevenue = $revenueByDay->max('tong') ?: 1;
 
-        // ===== STATUS COUNTS =====
-        $statusCounts = DonHang::whereBetween('created_at', [$from, $to])
-            ->select('trang_thai_don', DB::raw('COUNT(*) as cnt'))
-            ->groupBy('trang_thai_don')
-            ->pluck('cnt', 'trang_thai_don');
-
-        // ===== TOP PRODUCTS =====
-        $topProducts = DB::table('chi_tiet_don_hang')
-            ->join('don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')
-            ->join('san_pham', 'san_pham.id', '=', 'chi_tiet_don_hang.san_pham_id')
-            ->join('danh_muc', 'danh_muc.id', '=', 'san_pham.danh_muc_id')
+        // ===== STATUS COUNTS (by payment status) =====
+        $statusCounts = DonHang::join('chi_tiet_don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')
             ->whereBetween('don_hang.created_at', [$from, $to])
-            ->whereNotIn('don_hang.trang_thai_don', ['huy', 'đã hủy'])
-            ->select(
-                'san_pham.id',
-                'san_pham.ten_san_pham',
-                'danh_muc.ten_danh_muc',
-                DB::raw('SUM(chi_tiet_don_hang.so_luong) as tong_so_luong'),
-                DB::raw('SUM(chi_tiet_don_hang.thanh_tien) as tong_doanh_thu')
-            )
-            ->groupBy('san_pham.id', 'san_pham.ten_san_pham', 'danh_muc.ten_danh_muc')
-            ->orderByDesc('tong_so_luong')
-            ->limit(10)
-            ->get();
-        $maxSold = $topProducts->max('tong_so_luong') ?: 1;
-
-        // ===== PEAK HOURS =====
-        $peakHours = DonHang::selectRaw('HOUR(created_at) as gio, COUNT(*) as cnt')
-            ->whereBetween('created_at', [$from, $to])
-            ->whereNotIn('trang_thai_don', ['huy', 'đã hủy'])
-            ->groupBy('gio')
-            ->orderBy('gio')
-            ->pluck('cnt', 'gio')
-            ->toArray();
-        $maxHour = max($peakHours ?: [1]);
-
-        // ===== STAFF PERFORMANCE =====
-        $staffPerformance = DonHang::whereBetween('created_at', [$from, $to])
-            ->whereNotIn('trang_thai_don', ['huy', 'đã hủy'])
-            ->whereNotNull('nhan_vien_id')
-            ->join('nguoi_dung', 'nguoi_dung.id', '=', 'don_hang.nhan_vien_id')
-            ->select(
-                'nguoi_dung.id',
-                'nguoi_dung.ho_ten',
-                DB::raw('COUNT(don_hang.id) as so_don'),
-                DB::raw('SUM(don_hang.tong_tien) as tong_doanh_thu')
-            )
-            ->groupBy('nguoi_dung.id', 'nguoi_dung.ho_ten')
-            ->orderByDesc('so_don')
-            ->get();
-
-        // ===== INVENTORY REPORT =====
-        $inventoryBalanceExpression = "SUM(CASE
-            WHEN lich_su_kho.loai_giao_dich IN ('nhap', 'nhập', 'nhap kho', 'nhập kho') THEN lich_su_kho.so_luong
-            WHEN lich_su_kho.loai_giao_dich IN ('xuat', 'xuất', 'xuat kho', 'xuất kho') THEN -lich_su_kho.so_luong
-            WHEN lich_su_kho.loai_giao_dich IN ('điều chỉnh', 'dieu chinh') THEN lich_su_kho.so_luong
-            ELSE 0
-        END)";
-
-        $inventoryReport = NguyenLieu::query()
-            ->leftJoin('lich_su_kho', 'lich_su_kho.nguyen_lieu_id', '=', 'nguyen_lieu.id')
-            ->select('nguyen_lieu.id', 'nguyen_lieu.ten_nguyen_lieu', 'nguyen_lieu.don_vi_tinh')
-            ->selectRaw("COALESCE({$inventoryBalanceExpression}, 0) as so_luong")
-            ->groupBy('nguyen_lieu.id', 'nguyen_lieu.ten_nguyen_lieu', 'nguyen_lieu.don_vi_tinh')
-            ->orderByRaw('COALESCE(' . $inventoryBalanceExpression . ', 0) <= 0 DESC')
-            ->orderBy('nguyen_lieu.ten_nguyen_lieu')
-            ->get();
+            ->select('chi_tiet_don_hang.trang_thai_thanh_toan', DB::raw('COUNT(DISTINCT don_hang.id) as cnt'))
+            ->groupBy('chi_tiet_don_hang.trang_thai_thanh_toan')
+            ->pluck('cnt', 'trang_thai_thanh_toan');
 
         return view('manager.reports.revenue', compact(
             'tongDoanhThu', 'tongDon', 'giaTriTrungBinh',
             'revenueByDay', 'maxRevenue',
             'statusCounts',
-            'topProducts', 'maxSold',
-            'peakHours', 'maxHour',
-            'staffPerformance',
-            'inventoryReport',
             'from', 'to', 'activeTab'
         ));
     }
 
     private function resolveDateRange(Request $request): array
     {
-        $period = $request->get('period', 'today');
-
-        if ($period === 'custom' && $request->filled('from') && $request->filled('to')) {
+        if ($request->filled('from') && $request->filled('to')) {
             return [
                 Carbon::parse($request->from)->startOfDay(),
                 Carbon::parse($request->to)->endOfDay(),
             ];
         }
 
-        return match($period) {
-            'today' => [Carbon::today()->startOfDay(), Carbon::today()->endOfDay()],
-            'month' => [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()],
-            'year'  => [Carbon::now()->startOfYear(), Carbon::now()->endOfYear()],
-            default => [Carbon::today()->startOfDay(), Carbon::today()->endOfDay()],
-        };
+        // Mặc định lọc 7 ngày gần nhất để biểu đồ có sức sống hơn
+        return [
+            Carbon::today()->subDays(6)->startOfDay(),
+            Carbon::today()->endOfDay(),
+        ];
+    }
+    public function exportRevenueExcel(Request $request)
+    {
+        [$from, $to] = $this->resolveDateRange($request);
+
+        $revenueByDay = DonHang::join('chi_tiet_don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')
+            ->selectRaw('DATE(don_hang.created_at) as ngay, SUM(chi_tiet_don_hang.tong_tien) as tong, COUNT(DISTINCT don_hang.id) as so_don')
+            ->whereBetween('don_hang.created_at', [$from, $to])
+            ->groupBy('ngay')
+            ->orderBy('ngay')
+            ->get();
+            
+        $tongDoanhThu = DonHang::join('chi_tiet_don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')
+            ->whereBetween('don_hang.created_at', [$from, $to])
+            ->sum('chi_tiet_don_hang.tong_tien');
+        $tongDon = DonHang::whereBetween('created_at', [$from, $to])->count();
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Doanh Thu');
+
+        $sheet->setCellValue('A1', 'BÁO CÁO DOANH THU');
+        $sheet->setCellValue('A2', 'Từ ngày: ' . $from->format('d/m/Y') . ' - Đến ngày: ' . $to->format('d/m/Y'));
+
+        $sheet->setCellValue('A4', 'Ngày');
+        $sheet->setCellValue('B4', 'Số lượng đơn');
+        $sheet->setCellValue('C4', 'Doanh thu (VNĐ)');
+
+        $sheet->getStyle('A4:C4')->getFont()->setBold(true);
+
+        $row = 5;
+        foreach ($revenueByDay as $item) {
+            $sheet->setCellValue('A' . $row, \Carbon\Carbon::parse($item->ngay)->format('d/m/Y'));
+            $sheet->setCellValue('B' . $row, $item->so_don);
+            $sheet->setCellValue('C' . $row, $item->tong);
+            $row++;
+        }
+
+        $sheet->setCellValue('A' . $row, 'Tổng cộng');
+        $sheet->setCellValue('B' . $row, $tongDon);
+        $sheet->setCellValue('C' . $row, $tongDoanhThu);
+        $sheet->getStyle('A' . $row . ':C' . $row)->getFont()->setBold(true);
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $fileName = 'Bao_Cao_Doanh_Thu_' . now()->format('Ymd_His') . '.xlsx';
+        $tempPath = tempnam(sys_get_temp_dir(), $fileName);
+        $writer->save($tempPath);
+
+        return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
     }
 }

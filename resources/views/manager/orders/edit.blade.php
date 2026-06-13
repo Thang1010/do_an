@@ -52,7 +52,15 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
     @method('PUT')
 
     <div class="card mb-20">
-        <div class="card-header"><span class="card-title">Thông tin đơn hàng</span></div>
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="card-title">Thông tin đơn hàng</span>
+                <span style="background-color: #ffc107; color: #212529; font-size: 14px; padding: 4px 12px; border-radius: 6px; font-weight: 600; text-transform: uppercase; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">{{ $paymentStatus }}</span>
+            </div>
+            @if(($order->trang_thai_thanh_toan ?? 'chưa thanh toán') !== 'đã thanh toán' && auth()->check() && in_array(auth()->user()->vai_tro ?? '', ['quản lý', 'nhân viên', 'chủ cửa hàng'], true))
+                <button type="button" class="btn btn-primary btn-sm" onclick="openPaymentModal()">Thanh toán</button>
+            @endif
+        </div>
         <div class="card-body">
             <div class="form-grid-2">
                 <div class="form-group">
@@ -133,105 +141,80 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
     </div>
 </form>
 
-@if(auth()->check() && in_array(auth()->user()->vai_tro ?? '', ['quản lý', 'nhân viên', 'chủ cửa hàng'], true))
-<div class="card mt-20">
-    <div class="card-header">
-        <span class="card-title">Thanh toán</span>
-    </div>
-    <div class="card-body">
-        <div class="form-grid-2">
-            <div>
-                <div class="text-12 text-muted">Phương thức thanh toán</div>
-                <div class="font-600">{{ $order->phuong_thuc_thanh_toan ?? '—' }}</div>
+@if(($order->trang_thai_thanh_toan ?? 'chưa thanh toán') !== 'đã thanh toán' && auth()->check() && in_array(auth()->user()->vai_tro ?? '', ['quản lý', 'nhân viên', 'chủ cửa hàng'], true))
+<div id="payment-modal" style="position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:10001;padding:20px;" role="dialog" aria-modal="true">
+    <div onclick="closePaymentModal()" style="position:absolute;inset:0;background:rgba(18,12,8,0.72);backdrop-filter:blur(2px);"></div>
+    <div style="position:relative;width:min(460px,92vw);background:rgba(30,17,6,0.92);border-radius:18px;border:1px solid rgba(240,221,184,0.16);backdrop-filter:blur(14px);padding:28px 26px 22px;box-shadow:0 24px 60px rgba(0,0,0,0.45);font-family:'Outfit',sans-serif;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+            <div style="width:44px;height:44px;border-radius:50%;background:rgba(40, 167, 69, 0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#28a745" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                    <line x1="2" y1="10" x2="22" y2="10"></line>
+                </svg>
             </div>
-            <div>
-                <div class="text-12 text-muted">Trạng thái thanh toán</div>
-                <div class="font-600"><span class="badge {{ $paymentStatusClass }}">{{ $paymentStatus }}</span></div>
-            </div>
+            <div style="font-size:18px;font-weight:700;color:#F0DDB8;">Thanh toán đơn #{{ $order->id }}</div>
+            <button type="button" onclick="closePaymentModal()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.5);font-size:20px;line-height:1;">&times;</button>
         </div>
 
-        <div style="margin-top: 18px; border-top: 1px dashed #e6ded2; padding-top: 14px;">
-            <div class="text-12 text-muted" style="margin-bottom: 10px;">Cập nhật thanh toán (bắt buộc chọn phương thức)</div>
-            <form method="POST" action="{{ route('manager.orders.payment', $order->id) }}" id="order-payment-method-form">
-                @csrf
-                @method('PATCH')
-                <input type="hidden" name="trang_thai_thanh_toan" value="{{ $order->trang_thai_thanh_toan ?? 'chưa thanh toán' }}">
-                <div class="form-grid-2">
-                    <div class="form-group">
-                        <label class="form-label">Phương thức thanh toán <span>*</span></label>
-                        <select name="phuong_thuc_thanh_toan" id="order-payment-method-select" class="form-control" required>
-                            <option value="" disabled {{ empty($order->phuong_thuc_thanh_toan) ? 'selected' : '' }}>Chọn phương thức</option>
-                            <option value="tiền mặt" {{ ($order->phuong_thuc_thanh_toan ?? '') === 'tiền mặt' ? 'selected' : '' }}>Tiền mặt</option>
-                            <option value="chuyển khoản" {{ ($order->phuong_thuc_thanh_toan ?? '') === 'chuyển khoản' ? 'selected' : '' }}>Chuyển khoản</option>
-                        </select>
+        <form method="POST" action="{{ route('manager.orders.payment', $order->id) }}" id="order-payment-method-form">
+            @csrf
+            @method('PATCH')
+            <input type="hidden" name="trang_thai_thanh_toan" value="{{ $order->trang_thai_thanh_toan ?? 'chưa thanh toán' }}">
+            <div style="margin-bottom: 16px;">
+                <label style="display:block;font-size:14px;color:rgba(255,255,255,0.78);margin-bottom:8px;">Email nhận hóa đơn (Tuỳ chọn)</label>
+                <input type="email" name="email_khach_hang" value="{{ $order->email_khach_hang ?? $order->nguoiDung?->email ?? '' }}" placeholder="email@example.com" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(240,221,184,0.3);color:#F0DDB8;border-radius:8px;padding:10px;font-family:'Outfit',sans-serif;outline:none;">
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display:block;font-size:14px;color:rgba(255,255,255,0.78);margin-bottom:8px;">Phương thức thanh toán <span style="color:#ff6b6b">*</span></label>
+                <select name="phuong_thuc_thanh_toan" id="order-payment-method-select" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(240,221,184,0.3);color:#F0DDB8;border-radius:8px;padding:10px;font-family:'Outfit',sans-serif;outline:none;" required>
+                    <option value="tiền mặt" style="background:#1e1106;color:#F0DDB8;" {{ empty($order->phuong_thuc_thanh_toan) || $order->phuong_thuc_thanh_toan === 'tiền mặt' ? 'selected' : '' }}>Tiền mặt</option>
+                    <option value="chuyển khoản" style="background:#1e1106;color:#F0DDB8;" {{ ($order->phuong_thuc_thanh_toan ?? '') === 'chuyển khoản' ? 'selected' : '' }}>Chuyển khoản</option>
+                </select>
+            </div>
+        </form>
+
+        <div id="order-payment-actions" data-paid="{{ ($order->trang_thai_thanh_toan ?? '') === 'đã thanh toán' ? '1' : '0' }}">
+            <div id="order-cash-action" style="display: none;">
+                <form method="POST" action="{{ route('manager.orders.payment', $order->id) }}" onsubmit="document.getElementById('cash-email-input').value = document.querySelector('input[name=\'email_khach_hang\']').value; return confirm('Xác nhận đã nhận tiền mặt cho đơn này?')">
+                    @csrf
+                    @method('PATCH')
+                    <input type="hidden" name="phuong_thuc_thanh_toan" value="tiền mặt">
+                    <input type="hidden" name="trang_thai_thanh_toan" value="đã thanh toán">
+                    <input type="hidden" name="email_khach_hang" id="cash-email-input" value="">
+                    <button type="submit" style="width:100%;padding:12px;border-radius:8px;border:none;background:#28a745;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;">Xác nhận đã thanh toán</button>
+                </form>
+            </div>
+            <div id="order-transfer-action" style="display: none; text-align: center;">
+                <div id="payos-qr-container-manager-order" style="width:100%; height:490px; display:none; position: relative; overflow: hidden; margin-bottom: 16px;">
+                    <div style="position: absolute; top: 0; left: 50%; margin-left: -200px; width: 400px; height: 650px; transform: scale(0.75); transform-origin: top center;">
+                        <iframe id="payos-qr-iframe-manager-order" src="" style="width:100%; height:100%; border:none; border-radius:12px; display:none;" allow="clipboard-write"></iframe>
                     </div>
-                    <div class="form-group" style="display: flex; align-items: flex-end;">
-                        <button type="submit" class="btn btn-secondary btn-sm">Lưu phương thức</button>
-                    </div>
+                    <p style="font-size:15px;color:#16a34a;font-weight:700;display:none;position:absolute;bottom:0;width:100%;text-align:center;background:#fff;padding:8px 0;" id="payos-success-text-manager-order">Đã thanh toán thành công!</p>
                 </div>
-            </form>
-
-            <div id="order-payment-actions" data-paid="{{ ($order->trang_thai_thanh_toan ?? '') === 'đã thanh toán' ? '1' : '0' }}">
-                <div id="order-payment-paid" class="text-12 text-muted" style="margin-top: 10px; display: none;">
-                    Đơn hàng đã thanh toán thành công.
-                </div>
-                <div id="order-payment-hint" class="text-12 text-muted" style="margin-top: 10px; display: none;">
-                    Vui lòng chọn phương thức thanh toán để tiếp tục.
-                </div>
-                <div id="order-cash-action" style="margin-top: 12px; display: none;">
-                    <form method="POST" action="{{ route('manager.orders.payment', $order->id) }}"
-                          onsubmit="return confirm('Xác nhận đã nhận tiền mặt cho đơn này?')">
-                        @csrf
-                        @method('PATCH')
-                        <input type="hidden" name="phuong_thuc_thanh_toan" value="tiền mặt">
-                        <input type="hidden" name="trang_thai_thanh_toan" value="đã thanh toán">
-                        <button type="submit" class="btn btn-primary btn-sm">Xác nhận đã thanh toán</button>
-                    </form>
-                </div>
-                <div id="order-transfer-action" style="margin-top: 12px; display: none;">
-                    <div class="text-12 text-muted" style="margin-bottom: 10px;">Tạo mã QR thanh toán nhanh (hiệu lực 60 giây)</div>
-                    <button type="button"
-                            class="btn btn-primary btn-sm"
-                            id="order-generate-payment-qr-btn"
-                            data-url="{{ route('manager.orders.payment-qr', $order->id) }}">
-                        Tạo mã QR thanh toán
-                    </button>
-
-                    <div id="order-payment-qr-message" class="text-12 text-muted" style="margin-top: 10px;">Nhấn nút để tạo mã QR thanh toán.</div>
-
-                    <div id="order-payment-qr-panel" style="display: none; margin-top: 12px;">
-                        <img id="order-payment-qr-image" src="" alt="QR thanh toán" style="width: 220px; height: 220px; border-radius: 10px; border: 1px solid #e6ded2; background: #fff;">
-                        <div class="text-12" style="margin-top: 10px;">
-                            <div><strong>Ngân hàng:</strong> <span id="order-payment-qr-bank">—</span></div>
-                            <div><strong>Số tài khoản:</strong> <span id="order-payment-qr-account">—</span></div>
-                            <div><strong>Số tiền:</strong> <span id="order-payment-qr-amount">0đ</span></div>
-                            <div><strong>Nội dung CK:</strong> <span id="order-payment-qr-content">—</span></div>
-                            <div style="margin-top: 6px;"><strong>Hết hiệu lực sau:</strong> <span id="order-payment-qr-countdown">60</span>s</div>
-                        </div>
-
-                        <form id="order-confirm-qr-paid-form"
-                              method="POST"
-                              action="{{ route('manager.orders.payment', $order->id) }}"
-                              style="margin-top: 10px;"
-                              onsubmit="return confirm('Xác nhận đã nhận tiền qua QR cho đơn này?')">
-                            @csrf
-                            @method('PATCH')
-                            <input type="hidden" name="phuong_thuc_thanh_toan" value="chuyển khoản">
-                            <input type="hidden" name="trang_thai_thanh_toan" value="đã thanh toán">
-                            <button type="submit" class="btn btn-secondary btn-sm">Xác nhận đã nhận tiền QR</button>
-                        </form>
-                    </div>
-                </div>
+                <button type="button" id="btn-generate-payos-manager-order" style="display: inline-flex; justify-content: center; width: 100%; padding: 12px; border-radius: 8px; border: none; background: #007bff; color: #fff; font-size: 14px; font-weight: 600; text-decoration: none; font-family:'Outfit',sans-serif; cursor: pointer;" onclick="generatePayOSQrManagerOrder('{{ $order->ma_don_hang ?? '' }}')">
+                    Tạo QR thanh toán PayOS
+                </button>
             </div>
         </div>
     </div>
 </div>
+<script>
+    function openPaymentModal() {
+        var m = document.getElementById('payment-modal');
+        if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+    }
+    function closePaymentModal() {
+        var m = document.getElementById('payment-modal');
+        if (m) { m.style.display = 'none'; document.body.style.overflow = ''; }
+    }
+</script>
 @endif
 @endsection
 
 <script id="order-product-map-data" type="application/json">@json($productSizeMap ?? [])</script>
 
 @push('scripts')
+@include('partials.payos-payment')
 <script>
     const orderProductMap = JSON.parse(
         document.getElementById('order-product-map-data')?.textContent || '{}'
@@ -241,7 +224,7 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
         const typeInput = document.getElementById('edit-order-type');
         const tableGroup = document.getElementById('edit-order-table-group');
         const tableSelect = document.getElementById('edit-order-table');
-        const isOnline = typeInput && typeInput.value === 'đặt online';
+        const isOnline = typeInput && typeInput.value === 'đặt hàng trước';
 
         if (!tableGroup || !tableSelect) return;
 
@@ -385,88 +368,20 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
     }
 })();
 
-(function () {
-    const btn = document.getElementById('order-generate-payment-qr-btn');
-    if (!btn) {
-        return;
-    }
-
-    const panel = document.getElementById('order-payment-qr-panel');
-    const message = document.getElementById('order-payment-qr-message');
-    const qrImage = document.getElementById('order-payment-qr-image');
-    const bankEl = document.getElementById('order-payment-qr-bank');
-    const accountEl = document.getElementById('order-payment-qr-account');
-    const amountEl = document.getElementById('order-payment-qr-amount');
-    const contentEl = document.getElementById('order-payment-qr-content');
-    const countdownEl = document.getElementById('order-payment-qr-countdown');
-    let countdownTimer = null;
-
-    function setMessage(text, isError) {
-        message.textContent = text;
-        message.style.color = isError ? '#b42318' : '#5f544a';
-    }
-
-    function stopCountdown() {
-        if (countdownTimer) {
-            clearInterval(countdownTimer);
-            countdownTimer = null;
-        }
-    }
-
-    function startCountdown(seconds) {
-        stopCountdown();
-        let remain = Number(seconds) || 60;
-        countdownEl.textContent = remain;
-
-        countdownTimer = setInterval(function () {
-            remain -= 1;
-            countdownEl.textContent = Math.max(remain, 0);
-            if (remain <= 0) {
-                stopCountdown();
-                panel.style.display = 'none';
-                qrImage.src = '';
-                setMessage('Mã QR đã hết hiệu lực. Vui lòng tạo mã mới.', true);
-            }
-        }, 1000);
-    }
-
-    btn.addEventListener('click', async function () {
-        btn.disabled = true;
-        setMessage('Đang tạo mã QR thanh toán...', false);
-
-        try {
-            const response = await fetch(btn.dataset.url, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
-
-            const payload = await response.json();
-
-            if (!response.ok) {
-                throw new Error(payload.message || 'Không thể tạo mã QR thanh toán.');
-            }
-
-            qrImage.src = payload.qr_url;
-            bankEl.textContent = payload.bank_name || payload.bank_code || '—';
-            accountEl.textContent = payload.account_no || '—';
-            amountEl.textContent = new Intl.NumberFormat('vi-VN').format(payload.amount || 0) + 'đ';
-            contentEl.textContent = payload.transfer_content || '—';
-            panel.style.display = 'block';
-            startCountdown(payload.expires_in || 60);
-            setMessage(payload.message || 'Đã tạo mã QR thanh toán.', false);
-        } catch (error) {
-            panel.style.display = 'none';
-            qrImage.src = '';
-            stopCountdown();
-            setMessage(error.message || 'Có lỗi khi tạo mã QR.', true);
-        } finally {
-            btn.disabled = false;
-        }
+// Đơn đã thanh toán sẽ bị khoá sửa → sau khi thanh toán chuyển sang trang chi tiết (tránh 403).
+function generatePayOSQrManagerOrder(orderCode) {
+    const emailInput = document.querySelector('input[name="email_khach_hang"]');
+    PayOSPayment.start({
+        orderCode: orderCode,
+        source: 'manager',
+        email: emailInput ? emailInput.value : '',
+        button: document.getElementById('btn-generate-payos-manager-order'),
+        iframe: document.getElementById('payos-qr-iframe-manager-order'),
+        container: document.getElementById('payos-qr-container-manager-order'),
+        successText: document.getElementById('payos-success-text-manager-order'),
+        onPaid: function () { window.location.href = '{{ route('manager.orders.show', $order->id) }}'; }
     });
-})();
+}
+
 </script>
 @endpush

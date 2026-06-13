@@ -25,12 +25,23 @@
                 <div class="cart-payment-grid">
                     <div class="cart-payment-card">
                         @if($qrData)
-                            <img src="{{ $qrData['qr_url'] }}" alt="QR thanh toán" class="cart-payment-qr">
+                            <img src="{{ $qrData['qr_url'] }}" alt="QR thanh toán" class="cart-payment-qr" id="qr-img">
+                            <div style="text-align: center; margin-top: 12px; margin-bottom: 20px;">
+                                <button type="button" onclick="downloadQR('{{ $qrData['qr_url'] }}')" class="cart-submit-btn" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: auto; padding: 8px 16px; font-size: 14px; background: rgba(255, 255, 255, 0.1); border: none; cursor: pointer; color: white;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                    Tải ảnh QR
+                                </button>
+                            </div>
                             <div class="cart-payment-meta">
                                 <div><strong>Số tiền:</strong> {{ number_format($order->tong_tien, 0, ',', '.') }}đ</div>
                                 <div><strong>Ngân hàng:</strong> {{ $qrData['bank_name'] }}</div>
-                                <div><strong>Số tài khoản:</strong> {{ $qrData['account_no'] }}</div>
-                                <div><strong>Chủ tài khoản:</strong> {{ $qrData['account_name'] }}</div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <strong>Số tài khoản:</strong> <span id="payment-account-no">{{ $qrData['account_no'] }}</span>
+                                    <button type="button" onclick="copyText('{{ $qrData['account_no'] }}', this)" style="background: none; border: none; cursor: pointer; color: #34d399; padding: 2px; display: inline-flex; align-items: center;" title="Sao chép">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                    </button>
+                                </div>
+
                                 <div><strong>Nội dung:</strong> {{ $qrData['transfer_content'] }}</div>
                             </div>
                         @else
@@ -59,7 +70,17 @@
                                 </div>
                             @endforeach
                         </div>
-                        <div class="cart-summary-total" style="margin-top: 16px;">
+                        @if($order->so_tien_giam > 0)
+                            <div style="display: flex; justify-content: space-between; margin-top: 16px; font-size: 14px; color: rgba(255,255,255,0.7);">
+                                <span>Tạm tính</span>
+                                <span>{{ number_format($order->tong_tien + $order->so_tien_giam, 0, ',', '.') }}đ</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 14px; color: #10b981;">
+                                <span>Giảm voucher</span>
+                                <span>-{{ number_format($order->so_tien_giam, 0, ',', '.') }}đ</span>
+                            </div>
+                        @endif
+                        <div class="cart-summary-total" style="margin-top: {{ $order->so_tien_giam > 0 ? '12px' : '16px' }};">
                             <span>Tổng cộng</span>
                             <span>{{ number_format($order->tong_tien, 0, ',', '.') }}đ</span>
                         </div>
@@ -82,4 +103,40 @@
             </div>
         </div>
     </main>
+
+    <script>
+        function copyText(text, btn) {
+            navigator.clipboard.writeText(text).then(function() {
+                var originalColor = btn.style.color;
+                var originalHtml = btn.innerHTML;
+                btn.style.color = '#10b981';
+                btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                setTimeout(function() {
+                    btn.style.color = originalColor;
+                    btn.innerHTML = originalHtml;
+                }, 2000);
+            }).catch(function(err) {
+                console.error('Không thể sao chép', err);
+            });
+        }
+        function downloadQR(url) {
+            fetch(url)
+                .then(response => response.blob())
+                .then(blob => {
+                    const blobUrl = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = blobUrl;
+                    a.download = 'qr_thanh_toan.png';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(blobUrl);
+                    document.body.removeChild(a);
+                })
+                .catch(err => {
+                    console.error('Lỗi khi tải ảnh:', err);
+                    window.open(url, '_blank');
+                });
+        }
+    </script>
 @endsection

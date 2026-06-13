@@ -41,8 +41,8 @@ class ShiftService
      */
     public function attendanceHours(ChamCong $attendance): float
     {
-        $checkIn = $attendance->check_in_luc ? Carbon::parse($attendance->check_in_luc) : null;
-        $checkOut = $attendance->check_out_luc ? Carbon::parse($attendance->check_out_luc) : null;
+        $checkIn = $attendance->cham_cong_vao ? Carbon::parse($attendance->cham_cong_vao) : null;
+        $checkOut = $attendance->cham_cong_ra ? Carbon::parse($attendance->cham_cong_ra) : null;
 
         if ($checkIn && $checkOut && $checkOut->greaterThan($checkIn)) {
             return round($checkIn->diffInMinutes($checkOut) / 60, 2);
@@ -81,23 +81,38 @@ class ShiftService
     /**
      * Xây dựng ghi chú thời gian sai lệch (sớm/muộn).
      */
+    public function formatMinutesToHours(int $minutes): string
+    {
+        $h = floor($minutes / 60);
+        $m = $minutes % 60;
+        if ($h > 0 && $m > 0) {
+            return "{$h} giờ {$m} phút";
+        }
+        if ($h > 0) {
+            return "{$h} giờ";
+        }
+        return "{$m} phút";
+    }
+
     public function buildTimeDeviationNote(?CarbonInterface $actualTime, CarbonInterface $plannedTime, string $label): string
     {
         if (!$actualTime) {
             return 'Chưa ' . $label;
         }
 
-        $minuteDifference = $actualTime->diffInMinutes($plannedTime, false);
+        $minuteDifference = (int) $actualTime->diffInMinutes($plannedTime, false);
 
         if ($minuteDifference === 0) {
             return ucfirst($label) . ' đúng giờ';
         }
 
+        $formatted = $this->formatMinutesToHours(abs($minuteDifference));
+
         if ($minuteDifference > 0) {
-            return ucfirst($label) . ' sớm ' . $minuteDifference . ' phút';
+            return ucfirst($label) . ' sớm ' . $formatted;
         }
 
-        return ucfirst($label) . ' muộn ' . abs($minuteDifference) . ' phút';
+        return ucfirst($label) . ' muộn ' . $formatted;
     }
 
     /**
@@ -168,7 +183,7 @@ class ShiftService
         [$newStart, $newEnd] = $this->buildShiftInterval($shiftDate, $startTime, $endTime);
 
         $query = CaLamViec::query()
-            ->with('nguoiDung:id,ho_ten')
+            ->with(['nguoiDung.hoSoNhanVien', 'nguoiDung.hoSoQuanLy'])
             ->whereDate('ngay_lam', $shiftDate)
             ->whereIn('nguoi_dung_id', $userIds)
             ->orderBy('gio_bat_dau');
@@ -353,10 +368,11 @@ class ShiftService
     public function buildShiftAssignmentData(): array
     {
         $workingUsers = NguoiDung::query()
-            ->with('hoSoNhanVien.chucVu')
+            ->with(['hoSoNhanVien.chucVu', 'hoSoQuanLy'])
             ->whereIn('vai_tro', ['nhân viên', 'quản lý'])
-            ->orderBy('ho_ten')
-            ->get(['id', 'ho_ten', 'vai_tro', 'trang_thai']);
+            ->get(['id', 'email', 'vai_tro', 'trang_thai'])
+            ->sortBy('ho_ten', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
 
         $managerUsers = $workingUsers
             ->where('vai_tro', 'quản lý')

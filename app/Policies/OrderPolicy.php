@@ -39,13 +39,10 @@ class OrderPolicy
     }
 
     /**
-     * Đơn hàng có thể chỉnh sửa:
-     * - Trạng thái đã xác nhận
-     * - Chưa thanh toán
+     * Đơn hàng có thể chỉnh sửa: chưa thanh toán.
      */
     public function isEditable(DonHang $order): bool
     {
-        return $order->trang_thai_don === 'đã xác nhận'
-            && $order->trang_thai_thanh_toan === 'chưa thanh toán';
+        return $order->trang_thai_thanh_toan === 'chưa thanh toán';
     }
 }

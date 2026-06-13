@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Staff;
 use App\Http\Controllers\Controller;
 use App\Models\CaLamViec;
 use App\Models\ChamCong;
+use App\Models\ChotCa;
 use App\Notifications\ShiftCheckoutNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,10 +19,13 @@ class ShiftController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $date = $request->input('date', now()->toDateString());
+        $fromDate = $request->input('from_date', now()->startOfMonth()->toDateString());
+        $toDate = $request->input('to_date', now()->endOfMonth()->toDateString());
 
         $shifts = CaLamViec::where('nguoi_dung_id', $user->id)
-            ->whereDate('ngay_lam', $date)
+            ->whereDate('ngay_lam', '>=', $fromDate)
+            ->whereDate('ngay_lam', '<=', $toDate)
+            ->orderBy('ngay_lam')
             ->orderBy('gio_bat_dau')
             ->get();
 
@@ -29,13 +33,13 @@ class ShiftController extends Controller
         if ($shifts->isNotEmpty()) {
             $attendanceMap = ChamCong::where('nguoi_dung_id', $user->id)
                 ->whereIn('ca_lam_viec_id', $shifts->pluck('id'))
-                ->latest('check_in_luc')
+                ->latest('cham_cong_vao')
                 ->get()
                 ->groupBy('ca_lam_viec_id')
                 ->map(fn($rows) => $rows->first());
         }
 
-        return view('staff.shifts.index', compact('shifts', 'attendanceMap', 'date'));
+        return view('staff.shifts.index', compact('shifts', 'attendanceMap', 'fromDate', 'toDate'));
     }
 
     public function show(int $id)
@@ -44,19 +48,31 @@ class ShiftController extends Controller
         $shift = CaLamViec::where('nguoi_dung_id', $user->id)->findOrFail($id);
         $attendance = ChamCong::where('nguoi_dung_id', $user->id)
             ->where('ca_lam_viec_id', $shift->id)
-            ->latest('check_in_luc')
+            ->latest('cham_cong_vao')
             ->first();
 
         $shiftDate = $shift->ngay_lam?->format('Y-m-d') ?? now()->toDateString();
         $start = Carbon::parse($shiftDate . ' ' . $shift->gio_bat_dau);
         $end = Carbon::parse($shiftDate . ' ' . $shift->gio_ket_thuc);
+        if ($end->lessThanOrEqualTo($start)) {
+            $end->addDay();
+        }
         $now = now();
 
         $isInShiftTime = $now->between($start, $end);
         $canCheckin = $isInShiftTime && !$attendance;
-        $canCheckout = $attendance && !$attendance->check_out_luc && $now->greaterThanOrEqualTo($start);
+        $canCheckout = $attendance && !$attendance->cham_cong_ra && $now->greaterThanOrEqualTo($start);
 
-        return view('staff.shifts.show', compact('shift', 'attendance', 'canCheckin', 'canCheckout', 'isInShiftTime'));
+        $coworkers = CaLamViec::with('nguoiDung')
+            ->whereDate('ngay_lam', $shift->ngay_lam)
+            ->where('gio_bat_dau', $shift->gio_bat_dau)
+            ->where('gio_ket_thuc', $shift->gio_ket_thuc)
+            ->where('nguoi_dung_id', '!=', $user->id)
+            ->get()
+            ->map(fn($c) => $c->nguoiDung)
+            ->filter();
+
+        return view('staff.shifts.show', compact('shift', 'attendance', 'canCheckin', 'canCheckout', 'isInShiftTime', 'start', 'end', 'coworkers'));
     }
 
     public function checkin(Request $request)
@@ -71,7 +87,7 @@ class ShiftController extends Controller
         // Check if already checked in
         $existing = ChamCong::where('nguoi_dung_id', $user->id)
             ->where('ca_lam_viec_id', $shiftId)
-            ->whereNull('check_out_luc')
+            ->whereNull('cham_cong_ra')
             ->first();
 
         if ($existing) {
@@ -81,7 +97,7 @@ class ShiftController extends Controller
         ChamCong::create([
             'nguoi_dung_id' => $user->id,
             'ca_lam_viec_id' => $shiftId,
-            'check_in_luc' => now(),
+            'cham_cong_vao' => now(),
         ]);
 
         return back()->with('success', 'Check-in thành công!');
@@ -95,11 +111,11 @@ class ShiftController extends Controller
 
         $attendance = ChamCong::where('id', $request->attendance_id)
             ->where('nguoi_dung_id', Auth::id())
-            ->whereNull('check_out_luc')
+            ->whereNull('cham_cong_ra')
             ->firstOrFail();
 
         $attendance->update([
-            'check_out_luc' => now(),
+            'cham_cong_ra' => now(),
         ]);
 
         $shift = CaLamViec::find($attendance->ca_lam_viec_id);
@@ -111,12 +127,39 @@ class ShiftController extends Controller
         return back()->with('success', 'Check-out thành công!');
     }
 
+    public function startCash(Request $request)
+    {
+        $request->merge([
+            'so_tien_dau_ca' => str_replace(',', '', $request->input('so_tien_dau_ca', ''))
+        ]);
+
+        $request->validate([
+            'ca_lam_viec_id' => 'required|exists:ca_lam_viec,id',
+            'so_tien_dau_ca' => 'required|numeric|min:0',
+        ]);
+
+        $selectedShiftId = (int) $request->input('ca_lam_viec_id');
+
+        $existing = ChotCa::where('ca_lam_viec_id', $selectedShiftId)->first();
+        if ($existing) {
+            return back()->with('error', 'Ca này đã được khai báo tiền đầu ca.');
+        }
+
+        ChotCa::create([
+            'ca_lam_viec_id' => $selectedShiftId,
+            'nguoi_chot_id' => Auth::id(),
+            'so_tien_dau_ca' => (float) $request->input('so_tien_dau_ca'),
+        ]);
+
+        return back()->with('success', 'Đã khai báo tiền đầu ca thành công.');
+    }
+
     public function exportSchedule(Request $request)
     {
         $user = Auth::user();
         $referenceDate = Carbon::parse((string) $request->input('date', now()->toDateString()));
-        $startDate = $referenceDate->copy()->day(15)->startOfDay();
-        $endDate = $startDate->copy()->addMonth()->day(15)->endOfDay();
+        $startDate = $referenceDate->copy()->startOfMonth()->startOfDay();
+        $endDate = $referenceDate->copy()->endOfMonth()->endOfDay();
 
         $shifts = CaLamViec::query()
             ->where('nguoi_dung_id', $user->id)
@@ -131,7 +174,7 @@ class ShiftController extends Controller
             $attendanceMap = ChamCong::query()
                 ->where('nguoi_dung_id', $user->id)
                 ->whereIn('ca_lam_viec_id', $shifts->pluck('id'))
-                ->latest('check_in_luc')
+                ->latest('cham_cong_vao')
                 ->get()
                 ->groupBy('ca_lam_viec_id')
                 ->map(fn ($rows) => $rows->first());
@@ -151,8 +194,8 @@ class ShiftController extends Controller
         $rows = [];
         foreach ($shifts as $index => $shift) {
             $attendance = $attendanceMap->get($shift->id);
-            $checkIn = $attendance?->check_in_luc ? Carbon::parse($attendance->check_in_luc) : null;
-            $checkOut = $attendance?->check_out_luc ? Carbon::parse($attendance->check_out_luc) : null;
+            $checkIn = $attendance?->cham_cong_vao ? Carbon::parse($attendance->cham_cong_vao) : null;
+            $checkOut = $attendance?->cham_cong_ra ? Carbon::parse($attendance->cham_cong_ra) : null;
 
             [$plannedStart, $plannedEnd] = $this->buildPlannedShiftWindow($shift);
 
@@ -197,20 +240,48 @@ class ShiftController extends Controller
         return [$plannedStart, $plannedEnd];
     }
 
+            private function formatMinutesToHours(int $minutes): string
+    {
+        $h = (int) floor($minutes / 60);
+        $m = $minutes % 60;
+        if ($h > 0 && $m > 0) {
+            return "{$h} giờ {$m} phút";
+        }
+        if ($h > 0) {
+            return "{$h} giờ";
+        }
+        if ($m > 0) {
+            return "{$m} phút";
+        }
+        return "0 phút";
+    }
+
     private function buildShiftDeviationNote(CaLamViec $shift, ?ChamCong $attendance): string
     {
         [$plannedStart, $plannedEnd] = $this->buildPlannedShiftWindow($shift);
 
         $notes = [];
-        $checkIn = $attendance?->check_in_luc ? Carbon::parse($attendance->check_in_luc) : null;
-        $checkOut = $attendance?->check_out_luc ? Carbon::parse($attendance->check_out_luc) : null;
+        $checkIn = $attendance?->cham_cong_vao ? Carbon::parse($attendance->cham_cong_vao) : null;
+        $checkOut = $attendance?->cham_cong_ra ? Carbon::parse($attendance->cham_cong_ra) : null;
 
-        if ($checkIn && $checkIn->greaterThan($plannedStart)) {
-            $notes[] = 'Check in muộn';
+        if ($checkIn) {
+            $diffMinCi = (int) round($checkIn->diffInSeconds($plannedStart, false) / 60);
+            if ($diffMinCi > 0) {
+                $notes[] = 'Chấm công vào sớm ' . $this->formatMinutesToHours($diffMinCi);
+            } elseif ($diffMinCi < 0) {
+                $notes[] = 'Chấm công vào muộn ' . $this->formatMinutesToHours(abs($diffMinCi));
+            }
+        } else {
+            $notes[] = 'Chưa chấm công vào';
         }
 
-        if ($checkOut && $checkOut->lessThan($plannedEnd)) {
-            $notes[] = 'Check out sớm';
+        if ($checkOut) {
+            $diffMinCo = (int) round($checkOut->diffInSeconds($plannedEnd, false) / 60);
+            if ($diffMinCo > 0) {
+                $notes[] = 'Chấm công ra sớm ' . $this->formatMinutesToHours($diffMinCo);
+            } elseif ($diffMinCo < 0) {
+                $notes[] = 'Chấm công ra muộn ' . $this->formatMinutesToHours(abs($diffMinCo));
+            }
         }
 
         return implode(' | ', $notes);

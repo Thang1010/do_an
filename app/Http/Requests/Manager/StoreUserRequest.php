@@ -14,30 +14,28 @@ class StoreUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'ho_ten'              => 'required|string|max:150',
-            'email'               => 'nullable|email|max:150|unique:nguoi_dung,email',
-            'so_dien_thoai'       => 'nullable|digits_between:9,11|unique:nguoi_dung,so_dien_thoai',
-            'password'            => 'required|string|min:8|confirmed',
+            'email'               => 'required|email|max:60|unique:nguoi_dung,email',
+            'password'            => 'required|string|min:8|max:20|confirmed',
             'vai_tro'             => 'required|string|max:50',
             'from'                => 'nullable|string|in:customers,staff,staffs,admins',
             'chuc_vu_id'          => 'nullable|integer|exists:chuc_vu,id',
-            'loai_hinh_lam_viec'  => 'nullable|string|in:toàn thời gian,bán thời gian',
-            'luong_co_ban'        => 'nullable|numeric|min:0',
+            'ho_ten'              => 'nullable|string|max:70',
+            'ngay_sinh'           => 'nullable|date',
+            'dia_chi_tam_chu'     => 'nullable|string|max:150',
+            'so_dien_thoai'       => 'nullable|string|max:20',
             'ngay_vao_lam'        => 'nullable|date',
-            'so_tai_khoan'        => 'nullable|string|max:50',
-            'ngan_hang'           => 'nullable|string|max:150',
         ];
     }
 
     public function messages(): array
     {
         return [
-            'ho_ten.required'              => 'Vui lòng nhập họ tên.',
+            'email.required'               => 'Vui lòng nhập email.',
             'email.email'                  => 'Email không đúng định dạng.',
             'email.unique'                 => 'Email này đã được sử dụng.',
-            'so_dien_thoai.digits_between' => 'Số điện thoại phải từ 9 đến 11 chữ số.',
-            'so_dien_thoai.unique'         => 'Số điện thoại này đã được sử dụng.',
+            'email.max'                    => 'Email tối đa 60 ký tự.',
             'password.min'                 => 'Mật khẩu phải có ít nhất 8 ký tự.',
+            'password.max'                 => 'Mật khẩu tối đa 20 ký tự.',
             'password.confirmed'           => 'Xác nhận mật khẩu không khớp.',
         ];
     }

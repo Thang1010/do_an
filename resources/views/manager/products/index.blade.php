@@ -11,7 +11,10 @@
         <p class="page-subtitle">Danh sách tất cả sản phẩm trong menu</p>
     </div>
     <div class="page-actions">
-        <a href="{{ route('manager.products.recipes.excel') }}" class="btn btn-secondary">Xuất công thức (Excel)</a>
+        <a href="{{ route('manager.products.recipes.excel') }}" class="btn btn-success" style="background-color: #27AE60; border-color: #27AE60; color: white; display: flex; align-items: center; gap: 4px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            Xuất công thức (Excel)
+        </a>
         <a href="{{ route('manager.products.create') }}" class="btn btn-primary">Thêm sản phẩm</a>
     </div>
 </div>
@@ -130,6 +133,14 @@ function toggleStatus(productId, checkbox) {
                             || '{{ csrf_token() }}'
         },
         body: JSON.stringify({ trang_thai: status })
+    }).then(async response => {
+        if (!response.ok) {
+            checkbox.checked = !checkbox.checked;
+            const data = await response.json();
+            if (data.message) {
+                alert(data.message);
+            }
+        }
     }).catch(() => {
         checkbox.checked = !checkbox.checked; // revert on error
     });

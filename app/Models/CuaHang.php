@@ -10,13 +10,10 @@ class CuaHang extends Model
     protected $table = 'cua_hang';
 
     protected $fillable = [
-        'chu_cua_hang_id',
         'ten_cua_hang',
-        'email',
         'so_dien_thoai',
         'dia_chi',
-        'so_tai_khoan',
-        'ngan_hang',
+        'lien_ket_trang',
         'gio_mo_cua',
         'gio_dong_cua',
         'mo_ta',
@@ -32,7 +29,7 @@ class CuaHang extends Model
 
     public function chuCuaHang()
     {
-        return $this->belongsTo(NguoiDung::class, 'chu_cua_hang_id');
+        return $this->hasOne(NguoiDung::class, 'cua_hang_id')->where('vai_tro', 'chủ cửa hàng');
     }
 
     public function hoSoQuanLy()

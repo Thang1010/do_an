@@ -4,17 +4,12 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\NguoiDung;
-use App\Services\VoucherAssignmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 
 class LoginController extends Controller
 {
-    public function __construct(private readonly VoucherAssignmentService $voucherAssignmentService)
-    {
-    }
 
     /**
      * Hiển thị form đăng nhập.
@@ -46,7 +41,6 @@ class LoginController extends Controller
 
         // Tìm người dùng theo email hoặc số điện thoại
         $nguoiDung = NguoiDung::where('email', $loginValue)
-                               ->orWhere('so_dien_thoai', $loginValue)
                                ->first();
 
         if (! $nguoiDung) {
@@ -56,12 +50,6 @@ class LoginController extends Controller
         }
 
         // Kiểm tra trạng thái tài khoản
-        if ($nguoiDung->trang_thai === 'bị khóa') {
-            return back()
-                ->withInput($request->only('login', 'remember'))
-                ->withErrors(['login' => 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản lý.']);
-        }
-
         if ($nguoiDung->trang_thai === 'ngưng hoạt động') {
             if ($nguoiDung->vai_tro === 'khách hàng') {
                 $request->session()->put('pending_verification_email', $nguoiDung->email);
@@ -94,16 +82,8 @@ class LoginController extends Controller
 
         $request->session()->regenerate();
 
-        try {
-            $assignedVouchers = $this->voucherAssignmentService->assignLoginEligibleVouchers($nguoiDung);
-            if ($assignedVouchers->count() > 0) {
-                $request->session()->flash('success', 'Bạn vừa nhận được ' . $assignedVouchers->count() . ' voucher mới trong tài khoản.');
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Không thể cấp voucher tự động khi đăng nhập.', [
-                'user_id' => $nguoiDung->id,
-                'error' => $e->getMessage(),
-            ]);
+        if ($nguoiDung->vai_tro === 'khách hàng') {
+            $request->session()->flash('show_voucher_popup', true);
         }
 
         return $this->redirectByRole($nguoiDung);

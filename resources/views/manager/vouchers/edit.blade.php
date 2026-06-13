@@ -1,14 +1,14 @@
 @extends('manager.layout.app')
 
-@section('title', 'Sửa voucher')
-@section('breadcrumb', 'Kinh doanh / Voucher & Khuyến mãi / <strong>Sửa</strong>')
+@section('title', 'Sửa mã giảm giá')
+@section('breadcrumb', 'Kinh doanh / Mã giảm giá & Khuyến mãi / <strong>Sửa</strong>')
 
 @section('content')
 
 <div class="page-header">
 	<div>
-		<h1 class="page-title">Sửa voucher {{ $voucher->ma_voucher }}</h1>
-		<p class="page-subtitle">Cập nhật thông tin voucher</p>
+		<h1 class="page-title">Sửa mã giảm giá {{ $voucher->ma_voucher }}</h1>
+		<p class="page-subtitle">Cập nhật thông tin mã giảm giá</p>
 	</div>
 	<div class="page-actions">
 		<a href="{{ route('manager.vouchers.index') }}" class="btn btn-secondary">Quay lại danh sách</a>
@@ -17,7 +17,7 @@
 
 <div class="card" style="max-width: 980px;">
 	<div class="card-header">
-		<span class="card-title">Thông tin voucher</span>
+		<span class="card-title">Thông tin mã giảm giá</span>
 	</div>
 	<div class="card-body">
 		<form method="POST" action="{{ route('manager.vouchers.update', $voucher->id) }}">
@@ -26,14 +26,14 @@
 
 			<div class="form-grid-2">
 				<div class="form-group">
-					<label class="form-label">Mã voucher <span>*</span></label>
+					<label class="form-label">Mã giảm giá <span>*</span></label>
 					<input type="text" name="ma_voucher" class="form-control text-uppercase" value="{{ old('ma_voucher', $voucher->ma_voucher) }}" required>
 					@error('ma_voucher')
 						<div class="form-error">{{ $message }}</div>
 					@enderror
 				</div>
 				<div class="form-group">
-					<label class="form-label">Tên voucher</label>
+					<label class="form-label">Tên chương trình</label>
 					<input type="text" name="ten_voucher" class="form-control" value="{{ old('ten_voucher', $voucher->ten_voucher) }}">
 					@error('ten_voucher')
 						<div class="form-error">{{ $message }}</div>
@@ -68,7 +68,7 @@
 				<div class="form-group">
 					<label class="form-label">Giá trị giảm <span>*</span></label>
 					<div class="flex-center-gap-6">
-						<input type="number" name="gia_tri_giam" class="form-control" value="{{ old('gia_tri_giam', $voucher->gia_tri_giam) }}" min="0" required>
+						<input type="text" name="gia_tri_giam" class="form-control format-money" value="{{ old('gia_tri_giam', $voucher->gia_tri_giam) }}" required>
 						<span id="edit-discount-unit" class="discount-unit">{{ old('loai_giam', $voucher->loai_giam) === 'phần trăm' ? '%' : 'đ' }}</span>
 					</div>
 					@error('gia_tri_giam')
@@ -76,8 +76,8 @@
 					@enderror
 				</div>
 				<div class="form-group">
-					<label class="form-label">Giá trị đơn tối thiểu (đ)</label>
-					<input type="number" name="don_toi_thieu" class="form-control" value="{{ old('don_toi_thieu', $voucher->don_toi_thieu) }}" min="0">
+					<label class="form-label">Giá trị đơn tối thiểu (đ) <span>*</span></label>
+					<input type="text" name="don_toi_thieu" class="form-control format-money" value="{{ old('don_toi_thieu', $voucher->don_toi_thieu) }}" required>
 					@error('don_toi_thieu')
 						<div class="form-error">{{ $message }}</div>
 					@enderror
@@ -103,15 +103,15 @@
 
 			<div class="form-grid-2">
 				<div class="form-group">
-					<label class="form-label">Giới hạn sử dụng</label>
-					<input type="number" name="so_luong" class="form-control" value="{{ old('so_luong', $voucher->so_luong) }}" min="1">
+					<label class="form-label">Giới hạn sử dụng <span>*</span></label>
+					<input type="number" name="so_luong" class="form-control" placeholder="Nhập 0 = không giới hạn" value="{{ old('so_luong', $voucher->so_luong) }}" min="0" required>
 					@error('so_luong')
 						<div class="form-error">{{ $message }}</div>
 					@enderror
 				</div>
 				<div class="form-group">
-					<label class="form-label">Giảm tối đa (đ)</label>
-					<input type="number" name="giam_toi_da" class="form-control" value="{{ old('giam_toi_da', $voucher->giam_toi_da) }}" min="0">
+					<label class="form-label">Giảm tối đa (đ) <span>*</span></label>
+					<input type="text" name="giam_toi_da" class="form-control format-money" value="{{ old('giam_toi_da', $voucher->giam_toi_da) }}" required>
 					@error('giam_toi_da')
 						<div class="form-error">{{ $message }}</div>
 					@enderror

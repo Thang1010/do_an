@@ -16,8 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureUserRole::class,
         ]);
-        $middleware->preventRequestForgery(except: [
-            'webhooks/sepay',
+        $middleware->web(append: [
+            \App\Http\Middleware\CheckStartingCash::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

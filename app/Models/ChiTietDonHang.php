@@ -13,7 +13,6 @@ class ChiTietDonHang extends Model
 
     protected $fillable = [
         'don_hang_id',
-        'ban_an_id',
         'san_pham_id',
         'kich_co_id',
         'ten_san_pham',
@@ -22,28 +21,27 @@ class ChiTietDonHang extends Model
         'so_luong',
         'ghi_chu_mon',
         'thanh_tien',
+        'loai_don',
+        'trang_thai_thanh_toan',
+        'phuong_thuc_thanh_toan',
+        'thoi_gian_den',
+        'so_tien_giam',
+        'tong_tien',
         'created_at',
     ];
 
-    protected static function booted(): void
+    protected function casts(): array
     {
-        static::creating(function (ChiTietDonHang $detail): void {
-            if (! $detail->ban_an_id && $detail->don_hang_id) {
-                $detail->ban_an_id = DonHang::query()
-                    ->whereKey($detail->don_hang_id)
-                    ->value('ban_an_id');
-            }
-        });
+        return [
+            'so_tien_giam' => 'float',
+            'tong_tien' => 'float',
+            'thoi_gian_den' => 'datetime',
+        ];
     }
 
     public function donHang()
     {
         return $this->belongsTo(DonHang::class, 'don_hang_id');
-    }
-
-    public function banAn()
-    {
-        return $this->belongsTo(BanAn::class, 'ban_an_id');
     }
 
     public function sanPham()

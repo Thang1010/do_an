@@ -67,10 +67,17 @@
                     </td>
                     <td>{{ number_format(count((array) ($requestItem->du_lieu ?? [])), 0, ',', '.') }}</td>
                     <td><span class="badge {{ $statusClass }}">{{ $statusLabel }}</span></td>
+
                     <td class="text-12 text-muted">{{ optional($requestItem->created_at)->format('d/m/Y H:i') }}</td>
                     <td>{{ $requestItem->nguoiDuyet->ho_ten ?? '—' }}</td>
                     <td>
-                        <a href="{{ route('manager.ingredients.requests.show', ['id' => $requestItem->id]) }}" class="btn btn-primary btn-sm">Chi tiết</a>
+                        <div class="action-row">
+                            <a href="{{ route('manager.ingredients.requests.show', ['id' => $requestItem->id]) }}" class="btn btn-secondary btn-sm">Chi tiết</a>
+                            @if($isStoreOwner && $requestItem->trang_thai === 'cho_xac_nhan')
+                                <button type="button" class="btn btn-primary btn-sm" onclick="openApproveModal({{ $requestItem->id }})">Xác nhận</button>
+                                <button type="button" class="btn btn-danger btn-sm" onclick="openRejectModal({{ $requestItem->id }})">Từ chối</button>
+                            @endif
+                        </div>
                     </td>
                 </tr>
                 @empty
@@ -92,3 +99,60 @@
     @endif
 </div>
 @endsection
+
+@if($isStoreOwner)
+<div class="modal-backdrop" id="reject-modal">
+    <div class="modal-box modal-md">
+        <div class="modal-header">
+            <span class="modal-title">Từ chối yêu cầu</span>
+            <button class="modal-close" onclick="closeModal('reject-modal')">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <form id="reject-form" method="POST" action="">
+                @csrf
+                <div class="form-group">
+                    <label class="form-label">Lý do từ chối <span>*</span></label>
+                    <textarea name="review_note" class="form-control" rows="3" required placeholder="Nhập lý do..."></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('reject-modal')">Hủy</button>
+            <button type="submit" form="reject-form" class="btn btn-danger">Từ chối yêu cầu</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-backdrop" id="approve-modal">
+    <div class="modal-box modal-md">
+        <div class="modal-header">
+            <span class="modal-title">Xác nhận yêu cầu</span>
+            <button class="modal-close" onclick="closeModal('approve-modal')">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <p>Bạn có chắc chắn muốn xác nhận yêu cầu thêm nguyên liệu này không?</p>
+            <form id="approve-form" method="POST" action="">
+                @csrf
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('approve-modal')">Hủy</button>
+            <button type="submit" form="approve-form" class="btn btn-primary">Xác nhận</button>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+    function openRejectModal(id) {
+        document.getElementById('reject-form').action = '/manager/ingredient-requests/' + id + '/reject';
+        openModal('reject-modal');
+    }
+
+    function openApproveModal(id) {
+        document.getElementById('approve-form').action = '/manager/ingredient-requests/' + id + '/approve';
+        openModal('approve-modal');
+    }
+</script>
+@endpush
+@endif

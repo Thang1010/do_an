@@ -17,10 +17,11 @@ return new class extends Migration
                 ->unique()
                 ->constrained('nguoi_dung')
                 ->cascadeOnDelete();
-            $table->enum('gioi_tinh', ['nam', 'nữ', 'khác'])->nullable();
+            $table->string('ho_ten', 70)->nullable();
+            $table->enum('gioi_tinh', ['nam', 'nữ'])->nullable();
             $table->date('ngay_sinh')->nullable();
             $table->text('dia_chi')->nullable();
-            $table->decimal('tong_chi_tieu', 12, 2)->default(0);
+            $table->string('anh_dai_dien')->nullable();
             $table->timestamps();
         });
     }

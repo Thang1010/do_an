@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('ban_an', function (Blueprint $table) {
             $table->id();
             $table->string('so_ban', 20)->unique();
-            $table->enum('trang_thai', ['trống', 'đang phục vụ', 'đang chờ duyệt', 'đã đặt', 'ngưng sử dụng'])->default('trống');
+            $table->enum('trang_thai', ['trống', 'đang phục vụ', 'đặt hàng', 'ngưng sử dụng'])->default('trống');
             $table->timestamps();
         });
     }

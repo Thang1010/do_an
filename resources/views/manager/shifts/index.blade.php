@@ -10,7 +10,11 @@
 		<h1 class="page-title">Quản lý ca làm việc</h1>
 		<p class="page-subtitle">Danh sách ca làm theo khoảng ngày, có thể thêm, sửa, xóa và xem chi tiết</p>
 	</div>
-	<div class="page-actions">
+	<div class="page-actions" style="display: flex; gap: 8px;">
+		<form method="POST" action="{{ route('manager.shifts.send-next-week') }}" style="display:inline;" onsubmit="return confirm('Bạn có chắc chắn muốn gửi lịch làm việc tuần tới cho tất cả nhân viên?')">
+			@csrf
+			<button type="submit" class="btn btn-secondary">Gửi lịch tuần tới</button>
+		</form>
 		<a class="btn btn-primary" href="{{ route('manager.shifts.create') }}">Thêm ca làm việc</a>
 	</div>
 </div>

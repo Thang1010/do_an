@@ -75,7 +75,6 @@ class OrderNotificationService
             $data = (array) ($notification->data ?? []);
             $data['title'] = $title;
             $data['message'] = $message;
-            $data['status'] = $order->trang_thai_don;
             $data['customer_name'] = self::resolveCustomerName($order);
 
             $notification->forceFill([
@@ -121,7 +120,7 @@ class OrderNotificationService
     private static function resolveCustomerName(DonHang $order): string
     {
         return $order->nguoiDung?->ho_ten
-            ?? $order->ten_khach_hang
+            ?? $order->email_khach_hang
             ?? 'Khách hàng';
     }
 }

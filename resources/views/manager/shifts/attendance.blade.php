@@ -27,7 +27,7 @@
 			<option value="">Tất cả ca làm việc</option>
 			@foreach($shifts ?? [] as $shift)
 				<option value="{{ $shift->id }}" {{ (string) $selectedShiftId === (string) $shift->id ? 'selected' : '' }}>
-					{{ $shift->ten_ca }} - {{ $shift->nguoiDung?->ho_ten ?? 'Không rõ' }} - {{ $shift->ngay_lam ? \Carbon\Carbon::parse($shift->ngay_lam)->format('d/m/Y') : '—' }} ({{ \Carbon\Carbon::parse($shift->gio_bat_dau)->format('H:i') }}-{{ \Carbon\Carbon::parse($shift->gio_ket_thuc)->format('H:i') }})
+					{{ $shift->ten_ca }} - {{ $shift->nguoiDung?->hoSoNhanVien?->ho_ten ?? $shift->nguoiDung?->email ?? 'Không rõ' }} - {{ $shift->ngay_lam ? \Carbon\Carbon::parse($shift->ngay_lam)->format('d/m/Y') : '—' }} ({{ \Carbon\Carbon::parse($shift->gio_bat_dau)->format('H:i') }}-{{ \Carbon\Carbon::parse($shift->gio_ket_thuc)->format('H:i') }})
 				</option>
 			@endforeach
 		</select>
@@ -45,7 +45,7 @@
 					<th>Ngày làm</th>
 					<th>Nhân viên</th>
 					<th>Ca làm việc</th>
-					<th>Check-in / Check-out</th>
+					<th>Chấm công vào / Chấm công ra</th>
 					<th>Số giờ</th>
 					<th>Ghi chú</th>
 					<th class="col-action-xl">Thao tác</th>
@@ -160,20 +160,20 @@
 						<option value="">-- Chọn ca --</option>
 						@foreach($shiftsForAttendance ?? [] as $shift)
 							<option value="{{ $shift->id }}" {{ (string) old('ca_lam_viec_id') === (string) $shift->id ? 'selected' : '' }}>
-								{{ $shift->ngay_lam ? \Carbon\Carbon::parse($shift->ngay_lam)->format('d/m/Y') : 'Không rõ ngày' }} - {{ $shift->nguoiDung?->ho_ten ?? 'Không rõ' }} - {{ $shift->ten_ca }} ({{ \Carbon\Carbon::parse($shift->gio_bat_dau)->format('H:i') }}-{{ \Carbon\Carbon::parse($shift->gio_ket_thuc)->format('H:i') }})
+								{{ $shift->ngay_lam ? \Carbon\Carbon::parse($shift->ngay_lam)->format('d/m/Y') : 'Không rõ ngày' }} - {{ $shift->nguoiDung?->hoSoNhanVien?->ho_ten ?? $shift->nguoiDung?->email ?? 'Không rõ' }} - {{ $shift->ten_ca }} ({{ \Carbon\Carbon::parse($shift->gio_bat_dau)->format('H:i') }}-{{ \Carbon\Carbon::parse($shift->gio_ket_thuc)->format('H:i') }})
 							</option>
 						@endforeach
 					</select>
 				</div>
 
 				<div class="form-group">
-					<label class="form-label">Check-in</label>
+					<label class="form-label">Chấm công vào</label>
 					<input type="datetime-local" name="check_in_luc" class="form-control"
 						   value="{{ old('check_in_luc') ? \Carbon\Carbon::parse(old('check_in_luc'))->format('Y-m-d\TH:i') : '' }}">
 				</div>
 
 				<div class="form-group">
-					<label class="form-label">Check-out</label>
+					<label class="form-label">Chấm công ra</label>
 					<input type="datetime-local" name="check_out_luc" class="form-control"
 						   value="{{ old('check_out_luc') ? \Carbon\Carbon::parse(old('check_out_luc'))->format('Y-m-d\TH:i') : '' }}">
 				</div>
@@ -189,7 +189,7 @@
 		</div>
 		<div class="modal-footer">
 			<button class="btn btn-secondary" onclick="closeModal('create-attendance-modal')">Hủy</button>
-			<button class="btn btn-primary" onclick="document.getElementById('create-attendance-form').submit()">Lưu</button>
+			<button type="submit" form="create-attendance-form" class="btn btn-primary">Lưu</button>
 		</div>
 	</div>
 </div>
@@ -213,17 +213,17 @@
 
 				<div class="form-group">
 					<label class="form-label">Nhân sự</label>
-					<input type="text" class="form-control" value="{{ $record->nguoiDung?->ho_ten ?? ($record->caLamViec?->nguoiDung?->ho_ten ?? '—') }}" disabled>
+							<input type="text" class="form-control" value="{{ $record->nguoiDung?->hoSoNhanVien?->ho_ten ?? ($record->caLamViec?->nguoiDung?->hoSoNhanVien?->ho_ten ?? '—') }}" disabled>
 				</div>
 
 				<div class="form-group">
-					<label class="form-label">Check-in</label>
+					<label class="form-label">Chấm công vào</label>
 					<input type="datetime-local" name="check_in_luc" class="form-control"
 						   value="{{ old('attendance_id') == $record->id ? (old('check_in_luc') ? \Carbon\Carbon::parse(old('check_in_luc'))->format('Y-m-d\TH:i') : '') : (optional($record->check_in_luc) ? \Carbon\Carbon::parse($record->check_in_luc)->format('Y-m-d\TH:i') : '') }}">
 				</div>
 
 				<div class="form-group">
-					<label class="form-label">Check-out</label>
+					<label class="form-label">Chấm công ra</label>
 					<input type="datetime-local" name="check_out_luc" class="form-control"
 						   value="{{ old('attendance_id') == $record->id ? (old('check_out_luc') ? \Carbon\Carbon::parse(old('check_out_luc'))->format('Y-m-d\TH:i') : '') : (optional($record->check_out_luc) ? \Carbon\Carbon::parse($record->check_out_luc)->format('Y-m-d\TH:i') : '') }}">
 				</div>
@@ -236,7 +236,7 @@
 		</div>
 		<div class="modal-footer">
 			<button class="btn btn-secondary" onclick="closeModal('edit-attendance-modal-{{ $record->id }}')">Hủy</button>
-			<button class="btn btn-primary" onclick="document.getElementById('edit-attendance-form-{{ $record->id }}').submit()">Cập nhật</button>
+			<button type="submit" form="edit-attendance-form-{{ $record->id }}" class="btn btn-primary">Cập nhật</button>
 		</div>
 	</div>
 </div>

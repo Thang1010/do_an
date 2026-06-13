@@ -12,9 +12,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('ca_lam_viec_id')->constrained('ca_lam_viec')->cascadeOnDelete();
             $table->foreignId('nguoi_chot_id')->nullable()->constrained('nguoi_dung')->nullOnDelete();
-            $table->decimal('so_tien_dau_ca', 12, 2)->default(0);
+            $table->float('so_tien_dau_ca')->default(0);
             $table->timestamp('chot_luc')->nullable();
-            $table->text('ghi_chu')->nullable();
+            $table->string('ghi_chu', 150)->nullable();
             $table->timestamps();
 
             $table->unique('ca_lam_viec_id');

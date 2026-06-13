@@ -17,12 +17,13 @@ return new class extends Migration
                 ->unique()
                 ->constrained('nguoi_dung')
                 ->cascadeOnDelete();
-            $table->string('ma_nhan_vien', 50)->unique();
             $table->foreignId('chuc_vu_id')->nullable()->constrained('chuc_vu')->nullOnDelete();
-            $table->string('loai_hinh_lam_viec', 30)->default('toàn thời gian');
-            $table->decimal('luong_co_ban', 12, 2)->nullable();
-            $table->decimal('luong_theo_gio', 12, 2)->nullable();
+            $table->string('ho_ten', 70)->nullable();
+            $table->date('ngay_sinh')->nullable();
+            $table->string('dia_chi_tam_chu', 150)->nullable();
+            $table->string('so_dien_thoai', 10)->nullable();
             $table->date('ngay_vao_lam')->nullable();
+            $table->string('anh_dai_dien')->nullable();
             $table->timestamps();
         });
     }

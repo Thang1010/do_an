@@ -1,7 +1,9 @@
 @extends('staff.layout.app')
 
 @section('title', 'Quản lý bàn')
-@section('breadcrumb', 'Quản lý / <strong>Bàn</strong>')
+@section('breadcrumb')
+Nhân viên / <strong>Bàn</strong>
+@endsection
 
 @section('content')
 
@@ -21,18 +23,20 @@
                 @csrf
                 <input type="hidden" name="attendance_id" value="{{ $currentAttendance->id }}">
                 <button type="submit" class="shift-badge shift-badge--checkout"
-                        onclick="return confirm('Xác nhận check-out ca làm việc?')">
-                    Check-out Ca làm việc
+                        onclick="return confirm('Xác nhận chấm công ra?')">
+                    Chấm công ra
                 </button>
             </form>
-        @elseif($currentShift)
+        @elseif($currentShift && !$currentAttendance)
             <form method="POST" action="{{ route('staff.shifts.checkin') }}" style="display:inline;">
                 @csrf
                 <input type="hidden" name="ca_lam_viec_id" value="{{ $currentShift->id }}">
                 <button type="submit" class="shift-badge shift-badge--checkin">
-                    Check-in Ca làm việc
+                    Chấm công vào
                 </button>
             </form>
+        @elseif($currentAttendance && $currentAttendance->check_out_luc)
+            <span class="shift-badge shift-badge--none">Đã hoàn thành ca</span>
         @else
             <span class="shift-badge shift-badge--none">Không có ca</span>
         @endif
@@ -54,59 +58,6 @@
 
 @push('scripts')
 <script>
-function initQrPayment() {
-    var btn = document.getElementById('generate-qr-btn');
-    if (!btn || btn.dataset.bound === '1') return;
-    btn.dataset.bound = '1';
-    var panel = document.getElementById('qr-panel');
-    var image = document.getElementById('qr-image');
-    var hint = document.getElementById('qr-hint');
-    var countdown = document.getElementById('qr-countdown');
-    var timer = document.getElementById('qr-timer');
-    var message = document.getElementById('qr-message');
-    var interval = null;
-
-    btn.addEventListener('click', async function() {
-        btn.disabled = true;
-        message.textContent = 'Đang tạo mã QR...';
-        message.style.color = '';
-        try {
-            var res = await fetch(btn.dataset.url, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
-            var data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Lỗi tạo QR');
-            image.src = data.qr_url;
-            panel.style.display = '';
-            countdown.style.display = '';
-            message.textContent = data.message || '';
-            var remain = data.expires_in || 60;
-            timer.textContent = remain;
-            if (interval) clearInterval(interval);
-            interval = setInterval(function() {
-                remain--;
-                timer.textContent = Math.max(remain, 0);
-                if (remain <= 0) {
-                    clearInterval(interval);
-                    panel.style.display = 'none';
-                    message.textContent = 'QR đã hết hạn. Vui lòng tạo lại.';
-                    message.style.color = '#b42318';
-                }
-            }, 1000);
-        } catch(e) {
-            panel.style.display = 'none';
-            message.textContent = e.message;
-            message.style.color = '#b42318';
-        }
-        btn.disabled = false;
-    });
-}
-
 
 function bindModalClose(modal) {
     var closes = modal.querySelectorAll('[data-modal-close]');
@@ -164,7 +115,14 @@ function initPaymentModal() {
     if (!modal || modal.dataset.bound === '1') return;
     modal.dataset.bound = '1';
 
-    bindModalClose(modal);
+    // Bind close handlers; also clear countdown when modal is closed
+    var closes = modal.querySelectorAll('[data-modal-close]');
+    closes.forEach(function(el) {
+        el.addEventListener('click', function() {
+            modal.classList.remove('modal--open');
+            if (typeof clearQrCountdown === 'function') clearQrCountdown();
+        });
+    });
 
     var methodButtons = modal.querySelectorAll('[data-payment-method]');
     var methodInput = document.getElementById('payment-method-input');
@@ -174,47 +132,19 @@ function initPaymentModal() {
     var bankName = document.getElementById('payment-bank-name');
     var bankAccount = document.getElementById('payment-bank-account');
     var bankOwner = document.getElementById('payment-bank-owner');
-
     function setMethod(method) {
         if (!method) return;
         if (methodInput) methodInput.value = method;
         methodButtons.forEach(function(btn) {
             btn.classList.toggle('is-active', btn.dataset.paymentMethod === method);
         });
+        var submitBtn = document.getElementById('payment-modal-submit');
         if (method === 'chuyển khoản') {
-            qrBox.style.display = '';
-            loadQr();
+            if (qrBox) qrBox.style.display = 'block';
+            if (submitBtn) submitBtn.style.display = 'none';
         } else {
-            qrBox.style.display = 'none';
-        }
-    }
-
-    async function loadQr() {
-        if (!modal.dataset.qrUrl || modal.dataset.qrLoading === '1') return;
-        modal.dataset.qrLoading = '1';
-        if (qrNote) qrNote.textContent = 'Đang tạo mã QR...';
-        try {
-            var res = await fetch(modal.dataset.qrUrl, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
-            var data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Không thể tạo mã QR.');
-            if (qrImage) qrImage.src = data.qr_url;
-            if (qrNote) qrNote.textContent = data.message || '';
-            if (bankName) bankName.textContent = data.bank_name || '—';
-            if (bankAccount) bankAccount.textContent = data.account_no || '—';
-            if (bankOwner) bankOwner.textContent = data.account_name || '—';
-        } catch (e) {
-            if (qrNote) {
-                qrNote.textContent = e.message;
-            }
-        } finally {
-            modal.dataset.qrLoading = '0';
+            if (qrBox) qrBox.style.display = 'none';
+            if (submitBtn) submitBtn.style.display = 'inline-flex';
         }
     }
 
@@ -265,7 +195,7 @@ function startPosAutoRefresh() {
             var data = await res.json();
             if (data.left) leftPanel.innerHTML = data.left;
             if (data.detail) detailPanel.innerHTML = data.detail;
-            initQrPayment();
+    
             initVoucherDetails();
             initPaymentModal();
         } catch (e) {
@@ -279,7 +209,6 @@ function startPosAutoRefresh() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    initQrPayment();
     initVoucherDetails();
     initPaymentModal();
     startPosAutoRefresh();

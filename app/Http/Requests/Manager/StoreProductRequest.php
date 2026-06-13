@@ -22,10 +22,12 @@ class StoreProductRequest extends FormRequest
             'gia_goc'                   => 'required|numeric|min:0',
             'gia_khuyen_mai'            => 'nullable|numeric|min:0',
             'trang_thai_ban'            => 'required|in:dang_ban,ngung_ban',
+            'nhiet_do'                  => 'nullable|array',
+            'nhiet_do.*'                => 'in:nóng,lạnh',
             'anh_chinh'                 => 'nullable|mimes:jpg,jpeg,png,gif,webp,avif,bmp,tiff,svg|max:5120',
             'sizes'                     => 'nullable|array',
             'sizes.*.kich_co_id'        => 'required',
-            'sizes.*.he_so_gia'         => 'required|numeric|min:1',
+
             'sizes.*.ma_kich_co_moi'    => 'nullable|string|max:20',
             'sizes.*.ten_kich_co_moi'   => 'nullable|string|max:50',
             'sizes.*.mo_ta_kich_co_moi' => 'nullable|string|max:500',
@@ -42,7 +44,7 @@ class StoreProductRequest extends FormRequest
             'danh_muc_id.required'        => 'Vui lòng chọn danh mục.',
             'gia_goc.required'            => 'Vui lòng nhập giá sản phẩm.',
             'sizes.*.kich_co_id.required' => 'Vui lòng chọn kích cỡ.',
-            'sizes.*.he_so_gia.required'  => 'Vui lòng nhập hệ số giá.',
+
         ];
     }
 
@@ -97,7 +99,7 @@ class StoreProductRequest extends FormRequest
                     if ($maMoi === '') {
                         $validator->errors()->add("sizes.$index.ma_kich_co_moi", 'Vui lòng nhập mã kích cỡ mới.');
                     } elseif (KichCo::where('ma_kich_co', $maMoi)->exists()) {
-                        $validator->errors()->add("sizes.$index.ma_kich_co_moi", 'Mã kích cỡ này đã tồn tại.');
+                        $validator->errors()->add("sizes.$index.ma_kich_co_moi", 'Mã kích cỡ này đã tồn tại trong danh sách chọn.');
                     }
                 } else {
                     $selectedId = (int) $kichCoId;

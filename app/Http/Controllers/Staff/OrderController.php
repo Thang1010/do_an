@@ -29,10 +29,13 @@ class OrderController extends Controller
         $user = Auth::user();
 
         $query = DonHang::query()
-            ->with(['banAn', 'nguoiDung', 'nhanVien'])
+            ->with(['banAn', 'nguoiDung', 'nhanVien', 'chiTietDonHang'])
             ->where(function ($q) use ($user) {
                 $q->where('nhan_vien_id', $user->id)
                   ->orWhereHas('banAn'); // show all table orders for staff
+            })
+            ->where(function ($q) {
+                // Show all orders, whether staff-assigned or customer-placed
             })
             ->latest();
 
@@ -44,22 +47,35 @@ class OrderController extends Controller
         if ($request->filled('customer_name')) {
             $name = trim((string) $request->customer_name);
             $query->where(function ($q) use ($name) {
-                $q->whereHas('nguoiDung', fn($q2) => $q2->where('ho_ten', 'like', "%{$name}%"))
-                  ->orWhere('ten_khach_hang', 'like', "%{$name}%");
+                $q->whereHas('nguoiDung', fn($q2) => $q2->where('email', 'like', "%{$name}%"))
+                  ->orWhere('email_khach_hang', 'like', "%{$name}%");
             });
         }
 
-        if ($request->filled('date_start')) {
-            $query->whereDate('created_at', '>=', $request->date_start);
+        if (!$request->has('date_start') && !$request->has('date_end')) {
+            $now = now();
+            $defaultStart = $now->copy()->startOfMonth()->toDateString();
+            $defaultEnd = $now->copy()->endOfMonth()->toDateString();
+            $request->merge([
+                'date_start' => $defaultStart,
+                'date_end' => $defaultEnd,
+            ]);
         }
 
-        if ($request->filled('date_end')) {
-            $query->whereDate('created_at', '<=', $request->date_end);
+        $dateStart = $request->input('date_start');
+        $dateEnd = $request->input('date_end');
+
+        if ($dateStart) {
+            $query->whereDate('created_at', '>=', $dateStart);
+        }
+
+        if ($dateEnd) {
+            $query->whereDate('created_at', '<=', $dateEnd);
         }
 
         $orders = $query->paginate(20)->withQueryString();
 
-        return view('staff.orders.index', compact('orders'));
+        return view('staff.orders.index', compact('orders', 'dateStart', 'dateEnd'));
     }
 
     public function show(int $id)
@@ -73,63 +89,13 @@ class OrderController extends Controller
         return view('staff.orders.show', compact('order', 'store'));
     }
 
-    public function generatePaymentQr(Request $request, int $id): JsonResponse
-    {
-        $order = DonHang::with('banAn')->findOrFail($id);
-
-        if ($order->trang_thai_don === 'đã hủy') {
-            return response()->json(['message' => 'Đơn hàng đã hủy.'], 422);
-        }
-
-        if ($order->trang_thai_thanh_toan === 'đã thanh toán') {
-            return response()->json(['message' => 'Đơn hàng đã được thanh toán.'], 422);
-        }
-
-        $storeId = $request->user()?->cua_hang_id;
-        $store = $this->paymentService->resolveStoreForPayment($storeId);
-
-        if (!$store || !$store->so_tai_khoan || !$store->ngan_hang) {
-            return response()->json(['message' => 'Chưa có thông tin tài khoản thanh toán.'], 422);
-        }
-
-        $bankCode = $this->resolveVietQrBankCode($store->ngan_hang);
-        $accountNo = preg_replace('/\s+/', '', (string) $store->so_tai_khoan);
-        $amount = (int) round((float) ($order->tong_tien ?? 0));
-
-        if ($bankCode === '' || $accountNo === '' || $amount <= 0) {
-            return response()->json(['message' => 'Thông tin thanh toán không hợp lệ.'], 422);
-        }
-
-        $transferContent = 'TT ' . ($order->ma_don_hang ?? ('DON' . $order->id));
-        $accountName = $store->chuCuaHang?->ho_ten ?? $store->ten_cua_hang;
-
-        $params = http_build_query([
-            'amount' => $amount,
-            'addInfo' => $transferContent,
-            'accountName' => $accountName,
-        ], '', '&', PHP_QUERY_RFC3986);
-
-        $qrUrl = "https://img.vietqr.io/image/{$bankCode}-{$accountNo}-compact2.png?{$params}";
-
-        return response()->json([
-            'message' => 'Đã tạo QR thanh toán. Mã sẽ hết hiệu lực sau 60 giây.',
-            'qr_url' => $qrUrl,
-            'order_id' => $order->id,
-            'order_code' => $order->ma_don_hang,
-            'amount' => $amount,
-            'bank_name' => $store->ngan_hang,
-            'account_no' => $accountNo,
-            'account_name' => $accountName,
-            'transfer_content' => $transferContent,
-            'expires_in' => 60,
-        ]);
-    }
 
     public function updatePayment(Request $request, int $id)
     {
         $request->validate([
             'phuong_thuc_thanh_toan' => 'required|string',
             'trang_thai_thanh_toan' => 'required|string',
+            'email_khach_hang' => 'nullable|email|max:255',
         ]);
 
         $order = DonHang::with('banAn')->findOrFail($id);
@@ -141,17 +107,25 @@ class OrderController extends Controller
             return back()->with('error', 'Thông tin thanh toán không hợp lệ.');
         }
 
-        DB::transaction(function () use ($order, $paymentMethod, $paymentStatus) {
+        DB::transaction(function () use ($order, $paymentMethod, $paymentStatus, $request) {
             $order->update([
-                'phuong_thuc_thanh_toan' => $paymentMethod,
-                'trang_thai_thanh_toan' => $paymentStatus,
                 'nhan_vien_id' => Auth::id(),
+                'email_khach_hang' => $request->email_khach_hang ?? $order->email_khach_hang,
             ]);
+            
+            $order->updatePaymentStatus($paymentStatus, $paymentMethod);
 
             $this->paymentService->syncThanhToanSimple($order, $paymentMethod, $paymentStatus);
 
             if ($paymentStatus === 'đã thanh toán') {
-                $this->paymentService->freeTableIfAllPaid($order->ban_an_id);
+                $order = $order->fresh();
+                $this->paymentService->applyTableStatusAfterPayment($order);
+                
+                if ($order->email_khach_hang) {
+                    \Illuminate\Support\Facades\Mail::to($order->email_khach_hang)->queue(new \App\Mail\CustomerOrderPaidMail($order));
+                } elseif ($order->nguoiDung && $order->nguoiDung->email) {
+                    \Illuminate\Support\Facades\Mail::to($order->nguoiDung->email)->queue(new \App\Mail\CustomerOrderPaidMail($order));
+                }
             }
         });
 

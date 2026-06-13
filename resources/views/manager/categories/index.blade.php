@@ -44,7 +44,7 @@
 					<th>Mô tả</th>
 					<th>Trạng thái</th>
 					<th>Sản phẩm</th>
-					<th class="col-action-xl">Tùy chọn</th>
+					<th class="col-action-xl">Thao tác</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -72,6 +72,7 @@
 					<td>{{ number_format($category->san_pham_count ?? 0, 0, ',', '.') }}</td>
 					<td>
 						<div class="action-row">
+							<a href="{{ route('manager.categories.show', $category->id) }}" class="btn btn-primary btn-sm">Chi tiết</a>
 							<button
 								type="button"
 								class="btn btn-secondary btn-sm"
@@ -140,7 +141,7 @@
 		</div>
 		<div class="modal-footer">
 			<button class="btn btn-secondary" onclick="closeModal('create-category-modal')">Hủy</button>
-			<button class="btn btn-primary" onclick="document.getElementById('create-category-form').submit()">Lưu danh mục</button>
+			<button type="submit" form="create-category-form" class="btn btn-primary">Lưu danh mục</button>
 		</div>
 	</div>
 </div>
@@ -183,7 +184,7 @@
 		</div>
 		<div class="modal-footer">
 			<button class="btn btn-secondary" onclick="closeModal('edit-category-modal-{{ $category->id }}')">Hủy</button>
-			<button class="btn btn-primary" onclick="document.getElementById('edit-category-form-{{ $category->id }}').submit()">Cập nhật</button>
+			<button type="submit" form="edit-category-form-{{ $category->id }}" class="btn btn-primary">Cập nhật</button>
 		</div>
 	</div>
 </div>

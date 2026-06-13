@@ -4,8 +4,8 @@ namespace App\Enums;
 
 enum OrderType: string
 {
-    case DAT_ONLINE = 'đặt online';
-    case MUA_TAI_QUAN = 'mua tại quán';
+    case DAT_HANG_TRUOC = 'đặt hàng trước';
+    case SU_DUNG_NGAY = 'sử dụng ngay';
     case GOI_TAI_BAN_QR = 'gọi tại bàn bằng qr';
 
     /**
@@ -14,8 +14,8 @@ enum OrderType: string
     public function requiresTable(): bool
     {
         return match ($this) {
-            self::MUA_TAI_QUAN, self::GOI_TAI_BAN_QR => true,
-            self::DAT_ONLINE => false,
+            self::SU_DUNG_NGAY, self::GOI_TAI_BAN_QR => true,
+            self::DAT_HANG_TRUOC => false,
         };
     }
 

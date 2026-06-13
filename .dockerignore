@@ -4,6 +4,17 @@
 .env.*
 node_modules
 vendor
+
+# Cache build sẵn ở máy dev — KHÔNG copy vào image (gây lỗi "PailServiceProvider not found"
+# vì image build --no-dev không có package dev). Để Laravel tự sinh lại lúc runtime.
+bootstrap/cache/*.php
+bootstrap/cache/*.tmp
+
+# File IDE helper sinh tự động (dev only)
+_ide_helper.php
+_ide_helper_models.php
+.phpstorm.meta.php
+
 storage/logs
 storage/framework/cache
 storage/framework/sessions

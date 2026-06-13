@@ -51,11 +51,13 @@ return new class extends Migration
         }
 
         // Xóa các dòng kich_co không phải master
+        // Dùng delete() thay cho truncate(): MySQL không cho truncate bảng đang bị
+        // khóa ngoại tham chiếu (chi_tiet_don_hang.kich_co_id), kể cả khi bảng rỗng.
         $masterIds = array_values($masters);
         if (!empty($masterIds)) {
             DB::table('kich_co')->whereNotIn('id', $masterIds)->delete();
         } else {
-            DB::table('kich_co')->truncate();
+            DB::table('kich_co')->delete();
         }
 
         // 3. Drop khóa ngoại và cột ở bảng kich_co

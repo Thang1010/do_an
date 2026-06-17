@@ -37,18 +37,26 @@ class SalaryController extends Controller
 
         $totalRevenue = $this->totalRevenue($periodStart, $periodEnd);
 
-        $salaryData = $users->through(function (NguoiDung $user) use ($periodStart, $periodEnd, $totalRevenue) {
-            return $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $totalRevenue);
-        });
+        try {
+            $salaryData = $users->through(function (NguoiDung $user) use ($periodStart, $periodEnd, $totalRevenue) {
+                return $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $totalRevenue);
+            });
+        } catch (\Throwable $e) {
+            dd('Error in logic: ' . $e->getMessage(), $e->getFile(), $e->getLine());
+        }
 
-        return view('manager.salary.index', [
-            'users' => $salaryData,
-            'filterRole' => $filterRole,
-            'thang' => $thang,
-            'nam' => $nam,
-            'periodStart' => $periodStart,
-            'periodEnd' => $periodEnd,
-        ]);
+        try {
+            return view('manager.salary.index', [
+                'users' => $salaryData,
+                'filterRole' => $filterRole,
+                'thang' => $thang,
+                'nam' => $nam,
+                'periodStart' => $periodStart,
+                'periodEnd' => $periodEnd,
+            ])->render();
+        } catch (\Throwable $e) {
+            dd('View Error: ' . $e->getMessage(), $e->getFile(), $e->getLine());
+        }
     }
 
     /**

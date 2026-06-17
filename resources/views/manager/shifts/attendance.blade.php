@@ -60,8 +60,8 @@
 
 					$shift = $record->caLamViec;
 					$user = $record->nguoiDung ?? $shift?->nguoiDung;
-					$checkIn = $record->check_in_luc ? \Carbon\Carbon::parse($record->check_in_luc) : null;
-					$checkOut = $record->check_out_luc ? \Carbon\Carbon::parse($record->check_out_luc) : null;
+					$checkIn = $record->cham_cong_vao ? \Carbon\Carbon::parse($record->cham_cong_vao) : null;
+					$checkOut = $record->cham_cong_ra ? \Carbon\Carbon::parse($record->cham_cong_ra) : null;
 
 					if ($checkIn && $checkOut && $checkOut->greaterThan($checkIn)) {
 						$hours = $checkIn->diffInMinutes($checkOut) / 60;
@@ -168,14 +168,14 @@
 
 				<div class="form-group">
 					<label class="form-label">Chấm công vào</label>
-					<input type="datetime-local" name="check_in_luc" class="form-control"
-						   value="{{ old('check_in_luc') ? \Carbon\Carbon::parse(old('check_in_luc'))->format('Y-m-d\TH:i') : '' }}">
+					<input type="datetime-local" name="cham_cong_vao" class="form-control"
+						   value="{{ old('cham_cong_vao') ? \Carbon\Carbon::parse(old('cham_cong_vao'))->format('Y-m-d\TH:i') : '' }}">
 				</div>
 
 				<div class="form-group">
 					<label class="form-label">Chấm công ra</label>
-					<input type="datetime-local" name="check_out_luc" class="form-control"
-						   value="{{ old('check_out_luc') ? \Carbon\Carbon::parse(old('check_out_luc'))->format('Y-m-d\TH:i') : '' }}">
+					<input type="datetime-local" name="cham_cong_ra" class="form-control"
+						   value="{{ old('cham_cong_ra') ? \Carbon\Carbon::parse(old('cham_cong_ra'))->format('Y-m-d\TH:i') : '' }}">
 				</div>
 
 				<div class="form-group">
@@ -218,14 +218,14 @@
 
 				<div class="form-group">
 					<label class="form-label">Chấm công vào</label>
-					<input type="datetime-local" name="check_in_luc" class="form-control"
-						   value="{{ old('attendance_id') == $record->id ? (old('check_in_luc') ? \Carbon\Carbon::parse(old('check_in_luc'))->format('Y-m-d\TH:i') : '') : (optional($record->check_in_luc) ? \Carbon\Carbon::parse($record->check_in_luc)->format('Y-m-d\TH:i') : '') }}">
+					<input type="datetime-local" name="cham_cong_vao" class="form-control"
+						   value="{{ old('attendance_id') == $record->id ? (old('cham_cong_vao') ? \Carbon\Carbon::parse(old('cham_cong_vao'))->format('Y-m-d\TH:i') : '') : (optional($record->cham_cong_vao) ? \Carbon\Carbon::parse($record->cham_cong_vao)->format('Y-m-d\TH:i') : '') }}">
 				</div>
 
 				<div class="form-group">
 					<label class="form-label">Chấm công ra</label>
-					<input type="datetime-local" name="check_out_luc" class="form-control"
-						   value="{{ old('attendance_id') == $record->id ? (old('check_out_luc') ? \Carbon\Carbon::parse(old('check_out_luc'))->format('Y-m-d\TH:i') : '') : (optional($record->check_out_luc) ? \Carbon\Carbon::parse($record->check_out_luc)->format('Y-m-d\TH:i') : '') }}">
+					<input type="datetime-local" name="cham_cong_ra" class="form-control"
+						   value="{{ old('attendance_id') == $record->id ? (old('cham_cong_ra') ? \Carbon\Carbon::parse(old('cham_cong_ra'))->format('Y-m-d\TH:i') : '') : (optional($record->cham_cong_ra) ? \Carbon\Carbon::parse($record->cham_cong_ra)->format('Y-m-d\TH:i') : '') }}">
 				</div>
 
 				<div class="form-group">

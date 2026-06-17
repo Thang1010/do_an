@@ -145,6 +145,12 @@
             </div>
         @endif
 
+        @if(session('error'))
+            <div style="background:rgba(248,113,113,0.18);border:1px solid rgba(248,113,113,0.4);border-radius:10px;padding:.75rem 1rem;margin-bottom:1rem;font-family:'Outfit',sans-serif;font-size:.9rem;color:#fecaca;">
+                {{ session('error') }}
+            </div>
+        @endif
+
         {{-- Review list --}}
         @if($product->danhGiaSanPham->count() > 0)
             <div class="review-list">
@@ -181,31 +187,37 @@
                 Viết đánh giá của bạn
             </h3>
             @auth
-                <form method="POST" action="{{ route('menu.review.store', $product->id) }}" class="review-form">
-                    @csrf
-                    <div>
-                        <p style="font-family:'Outfit',sans-serif;font-size:.82rem;color:rgba(255,255,255,.7);margin-bottom:.4rem;">Số sao</p>
-                        <div class="star-picker">
-                            @for($s = 5; $s >= 1; $s--)
-                                <input type="radio" name="so_sao" id="star{{ $s }}" value="{{ $s }}"
-                                       {{ old('so_sao') == $s ? 'checked' : '' }} required>
-                                <label for="star{{ $s }}" title="{{ $s }} sao">★</label>
-                            @endfor
+                @if($hasBought)
+                    <form method="POST" action="{{ route('menu.review.store', $product->id) }}" class="review-form">
+                        @csrf
+                        <div>
+                            <p style="font-family:'Outfit',sans-serif;font-size:.82rem;color:rgba(255,255,255,.7);margin-bottom:.4rem;">Số sao</p>
+                            <div class="star-picker">
+                                @for($s = 5; $s >= 1; $s--)
+                                    <input type="radio" name="so_sao" id="star{{ $s }}" value="{{ $s }}"
+                                           {{ old('so_sao') == $s ? 'checked' : '' }} required>
+                                    <label for="star{{ $s }}" title="{{ $s }} sao">★</label>
+                                @endfor
+                            </div>
+                            @error('so_sao')
+                                <p style="color:#fca5a5;font-size:.8rem;margin-top:.3rem;">{{ $message }}</p>
+                            @enderror
                         </div>
-                        @error('so_sao')
-                            <p style="color:#fca5a5;font-size:.8rem;margin-top:.3rem;">{{ $message }}</p>
-                        @enderror
-                    </div>
-                    <div>
-                        <textarea name="noi_dung" class="review-textarea"
-                                  placeholder="Chia sẻ trải nghiệm của bạn về sản phẩm này..."
-                                  maxlength="1000">{{ old('noi_dung') }}</textarea>
-                        @error('noi_dung')
-                            <p style="color:#fca5a5;font-size:.8rem;margin-top:.3rem;">{{ $message }}</p>
-                        @enderror
-                    </div>
-                    <button type="submit" class="review-submit-btn">Gửi đánh giá</button>
-                </form>
+                        <div>
+                            <textarea name="noi_dung" class="review-textarea"
+                                      placeholder="Chia sẻ trải nghiệm của bạn về sản phẩm này..."
+                                      maxlength="1000">{{ old('noi_dung') }}</textarea>
+                            @error('noi_dung')
+                                <p style="color:#fca5a5;font-size:.8rem;margin-top:.3rem;">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <button type="submit" class="review-submit-btn">Gửi đánh giá</button>
+                    </form>
+                @else
+                    <p style="font-family:'Outfit',sans-serif;font-size:.9rem;color:rgba(255,255,255,.65);">
+                        Bạn cần mua sản phẩm này thì mới có thể viết đánh giá.
+                    </p>
+                @endif
             @else
                 <p style="font-family:'Outfit',sans-serif;font-size:.9rem;color:rgba(255,255,255,.65);">
                     <a href="{{ route('auth.login') }}" style="color:#f5e6c8;text-decoration:underline;">Đăng nhập</a>

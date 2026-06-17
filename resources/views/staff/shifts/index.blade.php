@@ -69,7 +69,7 @@ Nhân viên / <strong>Ca làm việc</strong>
                     $canCheckin = !$attendance && $now->greaterThanOrEqualTo($start->copy()->subMinutes(15)) && $now->lessThanOrEqualTo($end);
                     
                     // Có thể check-out miễn là đã check-in và chưa quá 15 phút sau giờ kết thúc
-                    $canCheckout = $attendance && !$attendance->check_out_luc && $now->lessThanOrEqualTo($end->copy()->addMinutes(15));
+                    $canCheckout = $attendance && !$attendance->cham_cong_ra && $now->lessThanOrEqualTo($end->copy()->addMinutes(15));
                 @endphp
                 <tr>
                     <td>{{ $i + 1 }}</td>

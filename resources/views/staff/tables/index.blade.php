@@ -18,7 +18,7 @@ Nhân viên / <strong>Bàn</strong>
     </div>
     <div class="staff-info-right">
         <div class="staff-datetime" id="staff-live-clock">Đang tải...</div>
-        @if($currentAttendance && !$currentAttendance->check_out_luc)
+        @if($currentAttendance && !$currentAttendance->cham_cong_ra)
             <form method="POST" action="{{ route('staff.shifts.checkout') }}" style="display:inline;">
                 @csrf
                 <input type="hidden" name="attendance_id" value="{{ $currentAttendance->id }}">
@@ -35,7 +35,7 @@ Nhân viên / <strong>Bàn</strong>
                     Chấm công vào
                 </button>
             </form>
-        @elseif($currentAttendance && $currentAttendance->check_out_luc)
+        @elseif($currentAttendance && $currentAttendance->cham_cong_ra)
             <span class="shift-badge shift-badge--none">Đã hoàn thành ca</span>
         @else
             <span class="shift-badge shift-badge--none">Không có ca</span>

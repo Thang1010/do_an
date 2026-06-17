@@ -47,4 +47,9 @@ return [
         'checksum_key' => env('PAYOS_CHECKSUM_KEY'),
     ],
 
+    'openweathermap' => [
+        'key' => env('OPENWEATHERMAP_API_KEY'),
+        'city' => env('CAFE_CITY', 'Hanoi,vn'),
+    ],
+
 ];

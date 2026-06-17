@@ -160,7 +160,6 @@ Route::prefix('manager')->name('manager.')->middleware(['auth', 'role:quản lý
     Route::post('/inventory/import', [InventoryController::class, 'storeImport'])->name('inventory.import.store');
     Route::get('/inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
     Route::post('/inventory/export', [InventoryController::class, 'storeExport'])->name('inventory.export.store');
-    Route::post('/inventory/export-excel', [InventoryController::class, 'storeExportExcel'])->name('inventory.export.excel');
     Route::post('/inventory/adjustment', [InventoryController::class, 'storeAdjustment'])->name('inventory.adjustment.store');
     Route::patch('/inventory/stock', [InventoryController::class, 'updateStock'])->name('inventory.stock.update');
     Route::get('/inventory/stock/excel', [InventoryController::class, 'exportStockExcel'])->name('inventory.stock.excel');
@@ -199,4 +198,4 @@ Route::post('/account-approvals/{id}/confirm', [UserController::class, 'confirmA
 
 Route::get('/shift-checkin/{id}', [ShiftController::class, 'scanCheckIn'])
     ->name('shifts.checkin.scan')
-    ->middleware(['auth', 'signed', 'role:nhân viên,quản lý,chủ cửa hàng']);
+    ->middleware(['auth', 'role:nhân viên,quản lý,chủ cửa hàng']);

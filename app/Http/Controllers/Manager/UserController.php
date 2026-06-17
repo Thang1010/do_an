@@ -153,7 +153,7 @@ class UserController extends Controller
     }
 
     /** Khóa / Mở khóa tài khoản */
-    public function toggleLock(int $id)
+    public function toggleLock(Request $request, int $id)
     {
         $user = NguoiDung::findOrFail($id);
 
@@ -171,7 +171,8 @@ class UserController extends Controller
         $user->update(['trang_thai' => $newStatus]);
 
         $action = $newStatus === 'ngưng hoạt động' ? 'khóa' : 'mở khóa';
-        $redirectRoute = $this->resolveListRouteByOrigin($request->input('from'), $user->vai_tro);
+        $from = $this->normalizeListOrigin($request->input('from'));
+        $redirectRoute = $this->resolveListRouteByOrigin($from, $user->vai_tro);
         return redirect()->route($redirectRoute)->with('success', "Đã {$action} tài khoản {$user->email}.");
     }
 

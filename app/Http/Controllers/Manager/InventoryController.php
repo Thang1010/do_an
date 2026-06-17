@@ -15,7 +15,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
-use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
@@ -249,103 +248,6 @@ class InventoryController extends Controller
             ->with('success', "Đã xuất {$totalItems} loại nguyên liệu thành công.");
     }
 
-    public function storeExportExcel(Request $request)
-    {
-        $request->validate([
-            'excel_file' => 'required|file|mimes:xlsx,xls,csv,txt|max:5120',
-            'return_muc_dich_su_dung' => 'nullable|string|max:120',
-        ], [
-            'excel_file.required' => 'Vui lòng chọn file Excel để xuất kho.',
-            'excel_file.mimes' => 'File không hợp lệ. Chỉ chấp nhận xlsx, xls hoặc csv.',
-            'excel_file.max' => 'Kích thước file tối đa là 5MB.',
-        ]);
-
-        $file = $request->file('excel_file');
-
-        try {
-            $spreadsheet = IOFactory::load($file->getRealPath());
-        } catch (\Throwable $exception) {
-            return back()->with('error', 'Không thể đọc file Excel. Vui lòng kiểm tra lại định dạng dữ liệu.');
-        }
-
-        $rows = $spreadsheet->getActiveSheet()->toArray(null, true, true, false);
-
-        $successCount = 0;
-        $failedCount = 0;
-        $errors = [];
-
-        foreach ($rows as $index => $row) {
-            $line = $index + 1;
-            $ingredientCell = trim((string) ($row[0] ?? ''));
-            $quantityCell = trim((string) ($row[1] ?? ''));
-            $note = trim((string) ($row[2] ?? ''));
-
-            if ($line === 1 && $this->isHeaderRow([$ingredientCell, $quantityCell, ''])) {
-                continue;
-            }
-
-            if ($ingredientCell === '' && $quantityCell === '' && $note === '') {
-                continue;
-            }
-
-            $quantity = $this->parseDecimalValue($quantityCell);
-            if ($quantity === null || $quantity <= 0) {
-                $failedCount++;
-                $errors[] = "Dòng {$line}: Số lượng không hợp lệ.";
-                continue;
-            }
-
-            $nguyenLieu = $this->resolveNguyenLieu($ingredientCell);
-            if (!$nguyenLieu) {
-                $failedCount++;
-                $errors[] = "Dòng {$line}: Không tìm thấy nguyên liệu '{$ingredientCell}'.";
-                continue;
-            }
-
-            $currentStock = $this->currentStock((int) $nguyenLieu->id);
-            if ($quantity > $currentStock) {
-                $failedCount++;
-                $errors[] = "Dòng {$line}: Số lượng xuất vượt tồn kho hiện tại ({$currentStock}).";
-                continue;
-            }
-
-            DB::transaction(function () use ($nguyenLieu, $quantity, $note) {
-                LichSuKho::create([
-                    'nguyen_lieu_id' => $nguyenLieu->id,
-                    'loai_giao_dich' => 'xuất kho',
-                    'so_luong' => $quantity,
-                    'nguoi_tao_id' => Auth::id(),
-                    'ghi_chu' => $note !== '' ? $note : 'Xuất kho bằng file Excel',
-                    'created_at' => now(),
-                ]);
-            });
-
-            $successCount++;
-        }
-
-        $returnPurpose = $this->normalizePurposeFilter($request->input('return_muc_dich_su_dung'));
-        $redirectParams = ['tab' => 'stock'];
-        if ($returnPurpose !== null) {
-            $redirectParams['muc_dich_su_dung'] = $returnPurpose;
-        }
-        $redirect = redirect()->route('manager.inventory.index', $redirectParams);
-
-        if ($successCount === 0) {
-            $sampleErrors = implode(' ', array_slice($errors, 0, 3));
-            return $redirect->with('error', 'Không có dòng nào hợp lệ để xuất kho. ' . $sampleErrors);
-        }
-
-        $successMessage = "Đã xuất kho thành công {$successCount} dòng từ file.";
-        if ($failedCount > 0) {
-            $sampleErrors = implode(' ', array_slice($errors, 0, 3));
-            return $redirect
-                ->with('success', $successMessage)
-                ->with('warning', "Có {$failedCount} dòng bị bỏ qua. {$sampleErrors}");
-        }
-
-        return $redirect->with('success', $successMessage);
-    }
-
     public function storeAdjustment(Request $request)
     {
         $request->validate([
@@ -570,21 +472,6 @@ class InventoryController extends Controller
         }
     }
 
-    private function resolveNguyenLieu(string $identifier): ?NguyenLieu
-    {
-        if ($identifier === '') {
-            return null;
-        }
-
-        if (is_numeric($identifier)) {
-            return NguyenLieu::find((int) $identifier);
-        }
-
-        $normalized = mb_strtolower(trim($identifier));
-        return NguyenLieu::whereRaw('LOWER(ten_nguyen_lieu) = ?', [$normalized])->first()
-            ?? NguyenLieu::where('ten_nguyen_lieu', 'like', trim($identifier))->first();
-    }
-
     private function resolveExpenseShiftId(): ?int
     {
         $now = now();
@@ -694,53 +581,6 @@ class InventoryController extends Controller
 
             $builder->where($column, $purpose);
         });
-    }
-
-    private function parseDecimalValue(mixed $value): ?float
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        if (is_int($value) || is_float($value)) {
-            return (float) $value;
-        }
-
-        $text = trim((string) $value);
-        if ($text === '') {
-            return null;
-        }
-
-        $text = str_replace(["\xc2\xa0", ' '], '', $text);
-
-        if (str_contains($text, ',') && str_contains($text, '.')) {
-            if (strrpos($text, ',') > strrpos($text, '.')) {
-                $text = str_replace('.', '', $text);
-                $text = str_replace(',', '.', $text);
-            } else {
-                $text = str_replace(',', '', $text);
-            }
-        } elseif (str_contains($text, ',')) {
-            $text = str_replace(',', '.', $text);
-        }
-
-        if (!is_numeric($text)) {
-            return null;
-        }
-
-        return (float) $text;
-    }
-
-    private function isHeaderRow(array $columns): bool
-    {
-        $ingredient = mb_strtolower(trim((string) ($columns[0] ?? '')));
-        $quantity = mb_strtolower(trim((string) ($columns[1] ?? '')));
-
-        return str_contains($ingredient, 'nguyên')
-            || str_contains($ingredient, 'nguyen')
-            || str_contains($ingredient, 'tên')
-            || str_contains($quantity, 'số lượng')
-            || str_contains($quantity, 'so luong');
     }
 
     private function exportHistoryExcel(Request $request, string $type)

@@ -22,7 +22,7 @@
         <select name="trang_thai" class="form-control">
             <option value="">Tất cả trạng thái</option>
             <option value="hoat_dong" {{ request('trang_thai') === 'hoat_dong' ? 'selected' : '' }}>Hoạt động</option>
-            <option value="bi_khoa" {{ request('trang_thai') === 'bi_khoa' ? 'selected' : '' }}>Bị khóa</option>
+            <option value="ngung_hoat_dong" {{ request('trang_thai') === 'ngung_hoat_dong' ? 'selected' : '' }}>Chờ xác nhận / Ngưng hoạt động</option>
         </select>
         <button type="submit" class="btn btn-primary">Lọc</button>
         <a href="{{ route('manager.users.admins') }}" class="btn btn-secondary">Xóa lọc</a>

@@ -791,8 +791,8 @@ class ChatbotController extends Controller
 
     private function getWeatherContext(): string
     {
-        $apiKey = env('OPENWEATHERMAP_API_KEY');
-        $city = env('CAFE_CITY', 'Hanoi,vn');
+        $apiKey = config('services.openweathermap.key');
+        $city = config('services.openweathermap.city', 'Hanoi,vn');
 
         if (! $apiKey) {
             return '';

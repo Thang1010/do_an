@@ -23,7 +23,7 @@
         <select name="trang_thai" class="form-control">
             <option value="">Tất cả trạng thái</option>
             <option value="hoat_dong" {{ request('trang_thai')==='hoat_dong' ? 'selected' : '' }}>Hoạt động</option>
-            <option value="bi_khoa" {{ request('trang_thai')==='bi_khoa' ? 'selected' : '' }}>Bị khóa</option>
+            <option value="ngung_hoat_dong" {{ request('trang_thai')==='ngung_hoat_dong' ? 'selected' : '' }}>Ngưng hoạt động</option>
         </select>
         <button type="submit" class="btn btn-primary">Lọc</button>
         <a href="{{ route('manager.users.customers') }}" class="btn btn-secondary">Xóa lọc</a>
@@ -38,7 +38,6 @@
                     <th>STT</th>
                     <th>Họ tên</th>
                     <th>Email / SĐT</th>
-                    <th>Tổng chi tiêu</th>
                     <th>Trạng thái</th>
                     <th class="col-action-lg">Thao tác</th>
                 </tr>
@@ -48,8 +47,8 @@
                 @php
                     $statusLabel = match ($user->trang_thai) {
                         'hoạt động' => 'Hoạt động',
-                        'ngưng hoạt động' => 'Chua xac minh email',
-                        default => 'Bị khóa',
+                        'ngưng hoạt động' => 'Ngưng hoạt động',
+                        default => 'Ngưng hoạt động',
                     };
                 @endphp
                 <tr>
@@ -61,7 +60,6 @@
                         <div class="text-13">{{ $user->email ?? '—' }}</div>
                         <div class="text-12 text-muted">{{ $user->so_dien_thoai ?? '—' }}</div>
                     </td>
-                    <td class="font-600">{{ number_format($user->tong_chi_tieu_tai_khoan ?? 0, 0, ',', '.') }}đ</td>
                     <td>
                         <span class="badge {{ $user->trang_thai === 'hoạt động' ? 'badge-active' : 'badge-inactive' }}">
                             {{ $statusLabel }}
@@ -81,7 +79,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="6" class="empty-state">
+                    <td colspan="5" class="empty-state">
                         Không tìm thấy khách hàng nào.
                     </td>
                 </tr>

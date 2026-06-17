@@ -97,7 +97,7 @@
             </div>
             <div>
                 <div class="text-12 text-muted">Chấm công vào lúc</div>
-                <div class="font-600">{{ optional($attendance?->check_in_luc)->format('H:i d/m/Y') ?? '—' }}</div>
+                <div class="font-600">{{ optional($attendance?->cham_cong_vao)->format('H:i d/m/Y') ?? '—' }}</div>
             </div>
             <div>
                 <div class="text-12 text-muted">Đánh giá chấm công vào</div>
@@ -105,7 +105,7 @@
             </div>
             <div>
                 <div class="text-12 text-muted">Chấm công ra lúc</div>
-                <div class="font-600">{{ optional($attendance?->check_out_luc)->format('H:i d/m/Y') ?? '—' }}</div>
+                <div class="font-600">{{ optional($attendance?->cham_cong_ra)->format('H:i d/m/Y') ?? '—' }}</div>
             </div>
             <div>
                 <div class="text-12 text-muted">Đánh giá chấm công ra</div>

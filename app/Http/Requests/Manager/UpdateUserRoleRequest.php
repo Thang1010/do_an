@@ -15,7 +15,7 @@ class UpdateUserRoleRequest extends FormRequest
     {
         return [
             'vai_tro'             => 'required|string|max:50',
-            'trang_thai'          => 'required|string|in:hoạt động,bị khóa,ngưng hoạt động',
+            'trang_thai'          => 'required|string|in:hoạt động,ngưng hoạt động',
             'from'                => 'nullable|string|in:customers,staff,staffs,admins',
             'chuc_vu_id'          => 'nullable|integer|exists:chuc_vu,id',
             'ho_ten'              => 'nullable|string|max:70',

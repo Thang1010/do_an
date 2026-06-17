@@ -35,7 +35,7 @@
                             <div class="order-detail-item__size">{{ $sizeLabel }}</div>
                             @if(isset($selectedTable))
                                 <div id="note-display-{{ $item->id }}" style="display:flex; align-items:center; gap:6px; margin-top:4px;">
-                                    <span style="font-size:12px; color:{{ $item->ghi_chu_mon ? '#b8860b' : '#9b8e77' }};">
+                                    <span class="note-snippet {{ $item->ghi_chu_mon ? 'note-snippet--filled' : 'note-snippet--empty' }}">
                                         {{ $item->ghi_chu_mon ?: 'Chưa có ghi chú' }}
                                     </span>
                                     <button type="button" onclick="toggleNoteEdit('{{ $item->id }}')" title="Sửa ghi chú"
@@ -222,7 +222,7 @@
                     </div>
                     <div class="payment-modal__method">
                         <div class="payment-modal__subtitle" style="margin-bottom:8px;">Email nhận hóa đơn (Tuỳ chọn)</div>
-                        <input form="payment-modal-form" type="email" name="email_khach_hang" value="{{ $latestOrder->email_khach_hang ?? $latestOrder->nguoiDung?->email ?? '' }}" id="payment-modal-email" placeholder="email@example.com" class="form-control" style="margin-bottom:20px;">
+                        <input form="payment-modal-form" type="email" name="email_khach_hang" value="{{ $selectedOrder->email_khach_hang ?? $selectedOrder->nguoiDung?->email ?? '' }}" id="payment-modal-email" placeholder="email@example.com" class="form-control" style="margin-bottom:20px;">
                         
                         <div class="payment-modal__subtitle">Phương thức thanh toán</div>
                         <div class="payment-modal__methods">
@@ -236,7 +236,7 @@
                                 </div>
                                 <p style="font-size:15px;color:#16a34a;font-weight:700;display:none;position:absolute;bottom:0;width:100%;text-align:center;background:#fff;padding:8px 0;" id="payos-success-text-staff">Đã thanh toán thành công!</p>
                             </div>
-                            <button type="button" class="btn btn-primary" id="btn-generate-payos-staff" style="display: inline-flex; justify-content: center; width: 100%;" onclick="generatePayOSQrStaff('{{ $selectedOrder->ma_don_hang ?? '' }}')">
+                            <button type="button" class="btn btn-primary" id="btn-generate-payos-staff" style="display: inline-flex; justify-content: center; width: 100%;" data-order-code="{{ $selectedOrder->ma_don_hang }}" onclick="generatePayOSQrStaff(this.dataset.orderCode)">
                                 Tạo QR thanh toán PayOS
                             </button>
                         </div>

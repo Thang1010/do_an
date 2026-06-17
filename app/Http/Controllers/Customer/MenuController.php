@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
+use App\Models\ChiTietDonHang;
 use App\Models\DanhGiaSanPham;
 use App\Models\DanhMuc;
 use App\Models\SanPham;
@@ -94,6 +95,10 @@ class MenuController extends Controller
 
         $avgRating = $product->danhGiaSanPham->avg('so_sao') ?? 0;
 
+        // Khách chỉ được đánh giá nếu đã mua (đã thanh toán) sản phẩm này
+        $hasBought = auth()->check()
+            && $this->latestPaidOrderDetail(auth()->id(), $product->id) !== null;
+
         $related = SanPham::where('danh_muc_id', $product->danh_muc_id)
             ->where('id', '!=', $product->id)
             ->whereIn('trang_thai_ban', ['dang_ban', 'đang bán'])
@@ -101,7 +106,7 @@ class MenuController extends Controller
             ->limit(4)
             ->get();
 
-        return view('customer.menu.show', compact('product', 'related', 'avgRating'));
+        return view('customer.menu.show', compact('product', 'related', 'avgRating', 'hasBought'));
     }
 
     public function storeReview(Request $request, int $id)
@@ -117,12 +122,38 @@ class MenuController extends Controller
 
         $product = SanPham::findOrFail($id);
 
+        // Chỉ cho phép đánh giá khi khách đã mua (đã thanh toán) sản phẩm này
+        $chiTiet = $this->latestPaidOrderDetail(auth()->id(), $product->id);
+
+        if (!$chiTiet) {
+            return back()->with('error', 'Bạn cần mua sản phẩm này trước khi đánh giá.');
+        }
+
+        // 1 đánh giá / khách / sản phẩm — mua lại & đánh giá tiếp sẽ ghi đè cái cũ,
+        // đồng thời cập nhật đơn hàng gần nhất mà khách đã mua món này.
         DanhGiaSanPham::updateOrCreate(
             ['nguoi_dung_id' => auth()->id(), 'san_pham_id' => $product->id],
-            ['so_sao' => $request->so_sao, 'noi_dung' => $request->noi_dung, 'don_hang_id' => null]
+            [
+                'so_sao' => $request->so_sao,
+                'noi_dung' => $request->noi_dung,
+                'don_hang_id' => $chiTiet->don_hang_id,
+            ]
         );
 
         return back()->with('success', 'Đánh giá của bạn đã được ghi nhận!');
+    }
+
+    /**
+     * Lấy dòng chi tiết đơn hàng (đã thanh toán) gần nhất mà khách hàng đã mua sản phẩm này.
+     * Trả về null nếu khách chưa từng mua/thanh toán sản phẩm.
+     */
+    private function latestPaidOrderDetail(int $userId, int $productId): ?ChiTietDonHang
+    {
+        return ChiTietDonHang::where('san_pham_id', $productId)
+            ->where('trang_thai_thanh_toan', 'đã thanh toán')
+            ->whereHas('donHang', fn($q) => $q->where('nguoi_dung_id', $userId))
+            ->orderByDesc('id')
+            ->first();
     }
 
     public function toggleFavorite(Request $request, $id)

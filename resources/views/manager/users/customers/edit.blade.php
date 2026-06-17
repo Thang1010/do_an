@@ -70,7 +70,6 @@
                 <label class="form-label" for="trang_thai">Trạng thái tài khoản <span>*</span></label>
                 <select id="trang_thai" name="trang_thai" class="form-control" required>
                     <option value="hoạt động" {{ old('trang_thai', $user->trang_thai) === 'hoạt động' ? 'selected' : '' }}>Hoạt động</option>
-                    <option value="bị khóa" {{ old('trang_thai', $user->trang_thai) === 'bị khóa' ? 'selected' : '' }}>Bị khóa</option>
                     <option value="ngưng hoạt động" {{ old('trang_thai', $user->trang_thai) === 'ngưng hoạt động' ? 'selected' : '' }}>Ngưng hoạt động</option>
                 </select>
                 @error('trang_thai')

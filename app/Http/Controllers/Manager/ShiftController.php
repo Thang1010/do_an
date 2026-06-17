@@ -473,11 +473,14 @@ class ShiftController extends Controller
     public function show(int $id)
     {
         $shift = CaLamViec::with(['nguoiDung.hoSoNhanVien'])->findOrFail($id);
-        $checkinQrUrl = URL::temporarySignedRoute(
+        // Ký tương đối (không gồm host) rồi bọc thành URL tuyệt đối cho QR.
+        // Nhờ vậy chữ ký vẫn hợp lệ dù quét/đăng nhập qua host khác (LAN IP, 127.0.0.1, domain...).
+        $checkinQrUrl = url(URL::temporarySignedRoute(
             'shifts.checkin.scan',
             now()->addHours(12),
-            ['id' => $shift->id]
-        );
+            ['id' => $shift->id],
+            false
+        ));
         $checkinQrImageUrl = 'data:image/svg+xml;base64,' . base64_encode(
             QrCode::format('svg')->size(300)->generate($checkinQrUrl)
         );
@@ -569,6 +572,14 @@ class ShiftController extends Controller
         $actor = Auth::guard('nguoi_dung')->user() ?? $request->user();
         if (! $actor) {
             abort(403, 'Bạn cần đăng nhập để chấm công bằng QR.');
+        }
+
+        // Kiểm tra chữ ký kiểu relative (bỏ qua host) để QR dùng được dù quét/đăng nhập
+        // qua host khác (LAN IP, 127.0.0.1, domain...). Hết hạn/không hợp lệ → báo rõ thay vì 403.
+        if (! $request->hasValidRelativeSignature()) {
+            return redirect()
+                ->route($this->resolveCheckinRedirectRoute($actor))
+                ->with('error', 'Mã QR chấm công đã hết hạn hoặc không hợp lệ. Vui lòng yêu cầu quản lý tạo lại QR.');
         }
 
         $shift = CaLamViec::findOrFail($id);
@@ -830,5 +841,197 @@ class ShiftController extends Controller
         return redirect()
             ->route('manager.shifts.index')
             ->with('success', 'Đã xóa ca làm việc thành công.');
+    }
+
+    // ── Attendance (Chấm công) ────────────────────────────────────────
+
+    public function attendance(Request $request)
+    {
+        $today = now()->toDateString();
+        $request->validate([
+            'ngay' => ['nullable', 'date'],
+            'nhan_vien' => ['nullable', 'string', 'max:150'],
+            'ca_lam_viec_id' => ['nullable', 'integer'],
+        ]);
+
+        $selectedDate = (string) ($request->input('ngay') ?: $today);
+        $employeeKeyword = trim((string) $request->input('nhan_vien', ''));
+        $selectedShiftId = $request->input('ca_lam_viec_id');
+
+        $shiftsForFilter = CaLamViec::with('nguoiDung.hoSoNhanVien')
+            ->whereDate('ngay_lam', $selectedDate)
+            ->orderBy('gio_bat_dau')
+            ->get();
+
+        $attendanceRecords = $this->buildAttendanceQuery($selectedDate, $employeeKeyword, $selectedShiftId)
+            ->latest('id')
+            ->paginate(15)
+            ->withQueryString();
+
+        return view('manager.shifts.attendance', [
+            'attendanceRecords' => $attendanceRecords,
+            'shifts' => $shiftsForFilter,
+            'shiftsForAttendance' => $shiftsForFilter,
+            'selectedDate' => $selectedDate,
+            'employeeKeyword' => $employeeKeyword,
+            'selectedShiftId' => $selectedShiftId,
+        ]);
+    }
+
+    public function storeAttendance(Request $request)
+    {
+        $validated = $request->validate([
+            'ca_lam_viec_id' => ['required', 'integer', 'exists:ca_lam_viec,id'],
+            'cham_cong_vao' => ['nullable', 'date'],
+            'cham_cong_ra' => ['nullable', 'date', 'after:cham_cong_vao'],
+            'ghi_chu' => ['nullable', 'string', 'max:500'],
+        ], [
+            'ca_lam_viec_id.required' => 'Vui lòng chọn ca làm việc.',
+            'cham_cong_ra.after' => 'Chấm công ra phải sau chấm công vào.',
+        ]);
+
+        $shift = CaLamViec::findOrFail($validated['ca_lam_viec_id']);
+
+        ChamCong::updateOrCreate(
+            [
+                'ca_lam_viec_id' => $shift->id,
+                'nguoi_dung_id' => $shift->nguoi_dung_id,
+            ],
+            [
+                'cham_cong_vao' => $validated['cham_cong_vao'] ?? null,
+                'cham_cong_ra' => $validated['cham_cong_ra'] ?? null,
+                'ghi_chu' => $validated['ghi_chu'] ?? null,
+            ]
+        );
+
+        return redirect()
+            ->route('manager.shifts.attendance', $this->attendanceFilterParams($request))
+            ->with('success', 'Đã lưu chấm công.');
+    }
+
+    public function updateAttendance(Request $request, int $id)
+    {
+        $attendance = ChamCong::findOrFail($id);
+
+        $validated = $request->validate([
+            'cham_cong_vao' => ['nullable', 'date'],
+            'cham_cong_ra' => ['nullable', 'date', 'after:cham_cong_vao'],
+            'ghi_chu' => ['nullable', 'string', 'max:500'],
+        ], [
+            'cham_cong_ra.after' => 'Chấm công ra phải sau chấm công vào.',
+        ]);
+
+        $attendance->update([
+            'cham_cong_vao' => $validated['cham_cong_vao'] ?? null,
+            'cham_cong_ra' => $validated['cham_cong_ra'] ?? null,
+            'ghi_chu' => $validated['ghi_chu'] ?? null,
+        ]);
+
+        return redirect()
+            ->route('manager.shifts.attendance', $this->attendanceFilterParams($request))
+            ->with('success', 'Đã cập nhật chấm công.');
+    }
+
+    public function destroyAttendance(Request $request, int $id)
+    {
+        ChamCong::findOrFail($id)->delete();
+
+        return redirect()
+            ->route('manager.shifts.attendance', $this->attendanceFilterParams($request))
+            ->with('success', 'Đã xóa bản ghi chấm công.');
+    }
+
+    public function exportPayroll(Request $request)
+    {
+        $today = now()->toDateString();
+        $selectedDate = (string) ($request->input('ngay') ?: $today);
+        $employeeKeyword = trim((string) $request->input('nhan_vien', ''));
+        $selectedShiftId = $request->input('ca_lam_viec_id');
+
+        $records = $this->buildAttendanceQuery($selectedDate, $employeeKeyword, $selectedShiftId)
+            ->orderBy('ca_lam_viec_id')
+            ->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Bang cham cong');
+
+        $headers = ['STT', 'Ngày làm', 'Nhân viên', 'Mã NV', 'Ca làm việc', 'Chấm công vào', 'Chấm công ra', 'Số giờ', 'Ghi chú'];
+        $sheet->fromArray($headers, null, 'A1');
+
+        $rowIndex = 2;
+        foreach ($records as $i => $record) {
+            $shift = $record->caLamViec;
+            $user = $record->nguoiDung ?? $shift?->nguoiDung;
+            $checkIn = $record->cham_cong_vao ? Carbon::parse($record->cham_cong_vao) : null;
+            $checkOut = $record->cham_cong_ra ? Carbon::parse($record->cham_cong_ra) : null;
+
+            if ($checkIn && $checkOut && $checkOut->greaterThan($checkIn)) {
+                $hours = round($checkIn->diffInMinutes($checkOut) / 60, 2);
+            } elseif ($shift) {
+                $hours = $this->shiftService->shiftDurationHours($shift);
+            } else {
+                $hours = 0;
+            }
+
+            $sheet->fromArray([
+                $i + 1,
+                $shift?->ngay_lam ? Carbon::parse($shift->ngay_lam)->format('d/m/Y') : '—',
+                $user?->ho_ten ?? $user?->hoSoNhanVien?->ho_ten ?? '—',
+                $user?->hoSoNhanVien?->ma_nhan_vien ?? '—',
+                $shift
+                    ? $shift->ten_ca . ' (' . Carbon::parse($shift->gio_bat_dau)->format('H:i') . '-' . Carbon::parse($shift->gio_ket_thuc)->format('H:i') . ')'
+                    : '—',
+                $checkIn ? $checkIn->format('d/m/Y H:i') : '—',
+                $checkOut ? $checkOut->format('d/m/Y H:i') : '—',
+                $hours,
+                (string) ($record->ghi_chu ?? ''),
+            ], null, 'A' . $rowIndex);
+            $rowIndex++;
+        }
+
+        foreach (range('A', 'I') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $filename = 'bang-cham-cong-' . $selectedDate . '-' . now()->format('His') . '.xlsx';
+        $tempFile = tempnam(sys_get_temp_dir(), 'payroll_excel_');
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($tempFile);
+        $spreadsheet->disconnectWorksheets();
+        unset($spreadsheet);
+
+        return response()->download($tempFile, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    private function buildAttendanceQuery(string $selectedDate, string $employeeKeyword, $selectedShiftId): Builder
+    {
+        return ChamCong::query()
+            ->with(['caLamViec.nguoiDung.hoSoNhanVien', 'nguoiDung.hoSoNhanVien'])
+            ->whereHas('caLamViec', function (Builder $query) use ($selectedDate) {
+                $query->whereDate('ngay_lam', $selectedDate);
+            })
+            ->when($employeeKeyword !== '', function (Builder $query) use ($employeeKeyword) {
+                $query->whereHas('nguoiDung', function (Builder $userQuery) use ($employeeKeyword) {
+                    $userQuery->where('ho_ten', 'like', "%{$employeeKeyword}%")
+                        ->orWhereHas('hoSoNhanVien', function (Builder $profileQuery) use ($employeeKeyword) {
+                            $profileQuery->where('ho_ten', 'like', "%{$employeeKeyword}%");
+                        });
+                });
+            })
+            ->when(!empty($selectedShiftId), function (Builder $query) use ($selectedShiftId) {
+                $query->where('ca_lam_viec_id', $selectedShiftId);
+            });
+    }
+
+    private function attendanceFilterParams(Request $request): array
+    {
+        return array_filter([
+            'ngay' => $request->input('ngay'),
+            'nhan_vien' => $request->input('nhan_vien'),
+            'ca_lam_viec_id' => $request->input('ca_lam_viec_id'),
+        ], static fn ($value) => $value !== null && $value !== '');
     }
 }

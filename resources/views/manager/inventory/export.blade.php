@@ -18,7 +18,6 @@
 	<div class="tab-list tab-list-inner">
 		<button class="tab-btn active" data-tab-key="manual" onclick="activateExportTab('manual', this)">Xuất kho</button>
 		@if(empty($selectedNguyenLieuId))
-			<button class="tab-btn" data-tab-key="excel" onclick="activateExportTab('excel', this)">Xuất kho bằng Excel</button>
 			<button class="tab-btn" data-tab-key="adjust" onclick="activateExportTab('adjust', this)">Kiểm kê / Điều chỉnh</button>
 		@endif
 	</div>
@@ -78,19 +77,6 @@
 	</div>
 
 	@if(empty($selectedNguyenLieuId))
-	<div class="tab-panel p-24" id="tab-excel">
-		<form method="POST" action="{{ route('manager.inventory.export.excel') }}" enctype="multipart/form-data">
-			@csrf
-			<input type="hidden" name="return_muc_dich_su_dung" value="{{ $currentPurpose ?? '' }}">
-			<div class="form-group mb-12">
-				<label class="form-label">Chọn file Excel/CSV <span>*</span></label>
-				<input type="file" name="excel_file" class="form-control" accept=".xlsx,.xls,.csv" required>
-				<p class="form-hint">Cột A: Tên hoặc ID nguyên liệu, cột B: Số lượng xuất, cột C: Lý do/Ghi chú (tùy chọn).</p>
-			</div>
-			<button type="submit" class="btn btn-danger">Tải file và xuất kho</button>
-		</form>
-	</div>
-
 	<div class="tab-panel p-24" id="tab-adjust">
 		<form method="POST" action="{{ route('manager.inventory.adjustment.store') }}">
 			@csrf

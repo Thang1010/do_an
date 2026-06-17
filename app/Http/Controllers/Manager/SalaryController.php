@@ -93,55 +93,6 @@ class SalaryController extends Controller
     }
 
     /**
-     * Form sửa lương.
-     */
-    public function edit(Request $request, int $id)
-    {
-        $user = NguoiDung::with(['hoSoNhanVien.chucVu', 'hoSoQuanLy.chucVu'])->findOrFail($id);
-
-        $thang = (int) ($request->input('thang') ?: now()->month);
-        $nam = (int) ($request->input('nam') ?: now()->year);
-
-        [$periodStart, $periodEnd] = $this->salaryPeriod($thang, $nam);
-        $totalRevenue = $this->totalRevenue($periodStart, $periodEnd);
-        $salaryRow = $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $totalRevenue);
-
-        return view('manager.salary.edit', [
-            'user' => $user,
-            'salaryRow' => $salaryRow,
-            'thang' => $thang,
-            'nam' => $nam,
-        ]);
-    }
-
-    /**
-     * Lưu thay đổi lương.
-     */
-    public function update(Request $request, int $id)
-    {
-        $user = NguoiDung::with(['hoSoNhanVien', 'hoSoQuanLy'])->findOrFail($id);
-        $profile = $user->isNhanVien() ? $user->hoSoNhanVien : $user->hoSoQuanLy;
-
-        if (!$profile) {
-            return back()->with('error', 'Không tìm thấy hồ sơ nhân sự.');
-        }
-
-        $loaiHinh = $profile->loai_hinh_lam_viec ?? 'toàn thời gian';
-
-        if ($loaiHinh === 'bán thời gian') {
-            $request->validate(['luong_theo_gio' => 'required|numeric|min:0']);
-            $profile->update(['luong_theo_gio' => $request->input('luong_theo_gio')]);
-        } else {
-            $request->validate(['luong_co_ban' => 'required|numeric|min:0']);
-            $profile->update(['luong_co_ban' => $request->input('luong_co_ban')]);
-        }
-
-        return redirect()
-            ->route('manager.salary.index')
-            ->with('success', 'Đã cập nhật lương cho ' . $user->ho_ten . '.');
-    }
-
-    /**
      * Xuất bảng lương ra Excel.
      */
     public function export(Request $request): StreamedResponse

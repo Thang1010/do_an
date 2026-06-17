@@ -82,7 +82,6 @@
                             <td>
                                 <a href="{{ route('manager.salary.show', ['id' => $row['id'], 'thang' => $thang, 'nam' => $nam]) }}"
                                     class="btn btn-sm btn-secondary">Chi tiết</a>
-                                <a href="{{ route('manager.salary.edit', $row['id']) }}" class="btn btn-sm btn-primary">Sửa</a>
                             </td>
                         </tr>
                     @empty

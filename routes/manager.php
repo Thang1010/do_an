@@ -150,10 +150,8 @@ Route::prefix('manager')->name('manager.')->middleware(['auth', 'role:quản lý
     // ── Salary ────────────────────────────────────────────────────────
     // Quản lý: chỉ xem bảng lương
     Route::get('/salary', [\App\Http\Controllers\Manager\SalaryController::class, 'index'])->name('salary.index');
-    // Chủ cửa hàng: xuất file và chỉnh sửa mức lương (static routes trước wildcard {id})
+    // Chủ cửa hàng: xuất file (static routes trước wildcard {id})
     Route::get('/salary/export', [\App\Http\Controllers\Manager\SalaryController::class, 'export'])->middleware('role:chủ cửa hàng')->name('salary.export');
-    Route::get('/salary/{id}/edit', [\App\Http\Controllers\Manager\SalaryController::class, 'edit'])->middleware('role:chủ cửa hàng')->name('salary.edit');
-    Route::put('/salary/{id}', [\App\Http\Controllers\Manager\SalaryController::class, 'update'])->middleware('role:chủ cửa hàng')->name('salary.update');
     Route::get('/salary/{id}', [\App\Http\Controllers\Manager\SalaryController::class, 'show'])->name('salary.show');
 
     // ── Inventory ─────────────────────────────────────────────────────

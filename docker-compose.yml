@@ -28,6 +28,9 @@ services:
       - redis
     volumes:
       - app_storage:/var/www/html/storage
+      - .:/var/www/html
+      - /var/www/html/vendor
+      - /var/www/html/public/build
     command: >
       sh -c "rm -f bootstrap/cache/*.php
       && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs storage/app/public bootstrap/cache
@@ -35,9 +38,7 @@ services:
       && chmod -R 775 storage bootstrap/cache
       && (for i in 1 2 3 4 5 6 7 8 9 10; do php artisan migrate --force && break; echo 'Cho DB san sang...'; sleep 5; done)
       && php artisan storage:link --force
-      && php artisan config:cache
-      && php artisan route:cache
-      && php artisan view:cache
+      && php artisan optimize:clear
       && apache2-foreground"
     restart: always
 

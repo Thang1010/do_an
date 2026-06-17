@@ -44,87 +44,76 @@ class ExpenseController extends Controller
             ->orderBy('gio_bat_dau')
             ->get();
 
+        // Mặc định lọc theo tuần hiện tại (thứ Hai → Chủ nhật). Bỏ lọc ngày bằng ?clear=1.
+        $skipDefaultDate = $request->boolean('clear');
+        $defaultFrom = $now->copy()->startOfWeek()->toDateString();
+        $defaultTo = $now->copy()->endOfWeek()->toDateString();
+
         $filters = [
             'ca_lam_viec_id' => $request->query('ca_lam_viec_id'),
-            'ngay_lam' => $request->query('ngay_lam'),
+            'from_date' => $request->query('from_date', $skipDefaultDate ? null : $defaultFrom),
+            'to_date' => $request->query('to_date', $skipDefaultDate ? null : $defaultTo),
         ];
 
-        $hasQueryFilter = $request->hasAny(['ca_lam_viec_id', 'ngay_lam']);
-        $skipDefaultDate = $request->boolean('clear');
-        if (!$hasQueryFilter && !$skipDefaultDate) {
-            $filters['ngay_lam'] = $today;
-        }
-
-        // Expenses
+        // Expenses (chỉ của tài khoản này)
         $expensesQuery = ChiTieu::query()
             ->with(['nguoiTao', 'nguyenLieu', 'lichSuKho'])
             ->where('chi_tieu.nguoi_tao_id', $user->id);
 
-        if (!empty($filters['ca_lam_viec_id'])) {
-            $expensesQuery->where('chi_tieu.ca_lam_viec_id', $filters['ca_lam_viec_id']);
-        }
-
-        if (!empty($filters['ngay_lam'])) {
-            $expensesQuery->whereHas('caLamViec', function (Builder $query) use ($filters) {
-                $query->whereDate('ngay_lam', $filters['ngay_lam']);
-            });
-        }
+        $this->applyExpenseFilters($expensesQuery, $filters);
 
         $expenses = $expensesQuery
             ->latest('created_at')
             ->paginate(20)
             ->withQueryString();
 
-        // Summary for current shift
-        $summary = ['tong_tien_mat' => 0, 'tong_tien_chuyen_khoan' => 0, 'tong_chi' => 0];
-
+        // Summary bám đúng bộ lọc đang áp dụng
         $totalExpression = 'COALESCE(lich_su_kho.so_luong, 0) * COALESCE(lich_su_kho.gia_nhap, 0)';
-        $hasFilter = !empty($filters['ca_lam_viec_id']) || !empty($filters['ngay_lam']);
 
-        if ($hasFilter || $skipDefaultDate) {
-            $summaryQuery = ChiTieu::query()->where('chi_tieu.nguoi_tao_id', $user->id);
+        $summaryQuery = ChiTieu::query()->where('chi_tieu.nguoi_tao_id', $user->id);
+        $this->applyExpenseFilters($summaryQuery, $filters);
 
-            if (!empty($filters['ca_lam_viec_id'])) {
-                $summaryQuery->where('chi_tieu.ca_lam_viec_id', $filters['ca_lam_viec_id']);
-            }
+        $summaryRow = $summaryQuery
+            ->leftJoin('lich_su_kho', 'lich_su_kho.id', '=', 'chi_tieu.lich_su_kho_id')
+            ->leftJoin('nguyen_lieu', 'nguyen_lieu.id', '=', 'chi_tieu.nguyen_lieu_id')
+            ->selectRaw("SUM(CASE WHEN chi_tieu.phuong_thuc_thanh_toan = 'tiền mặt' THEN {$totalExpression} ELSE 0 END) as tong_tien_mat")
+            ->selectRaw("SUM(CASE WHEN chi_tieu.phuong_thuc_thanh_toan = 'chuyển khoản' THEN {$totalExpression} ELSE 0 END) as tong_tien_chuyen_khoan")
+            ->selectRaw("SUM({$totalExpression}) as tong_chi")
+            ->first();
 
-            if (!empty($filters['ngay_lam'])) {
-                $summaryQuery->whereHas('caLamViec', function (Builder $query) use ($filters) {
-                    $query->whereDate('ngay_lam', $filters['ngay_lam']);
-                });
-            }
-
-            $summaryRow = $summaryQuery
-                ->leftJoin('lich_su_kho', 'lich_su_kho.id', '=', 'chi_tieu.lich_su_kho_id')
-                ->leftJoin('nguyen_lieu', 'nguyen_lieu.id', '=', 'chi_tieu.nguyen_lieu_id')
-                ->selectRaw("SUM(CASE WHEN chi_tieu.phuong_thuc_thanh_toan = 'tiền mặt' THEN {$totalExpression} ELSE 0 END) as tong_tien_mat")
-                ->selectRaw("SUM(CASE WHEN chi_tieu.phuong_thuc_thanh_toan = 'chuyển khoản' THEN {$totalExpression} ELSE 0 END) as tong_tien_chuyen_khoan")
-                ->selectRaw("SUM({$totalExpression}) as tong_chi")
-                ->first();
-
-            $summary = [
-                'tong_tien_mat' => (float) ($summaryRow->tong_tien_mat ?? 0),
-                'tong_tien_chuyen_khoan' => (float) ($summaryRow->tong_tien_chuyen_khoan ?? 0),
-                'tong_chi' => (float) ($summaryRow->tong_chi ?? 0),
-            ];
-        } elseif ($currentShift) {
-            $summaryRow = ChiTieu::query()
-                ->where('chi_tieu.ca_lam_viec_id', $currentShift->id)
-                ->leftJoin('lich_su_kho', 'lich_su_kho.id', '=', 'chi_tieu.lich_su_kho_id')
-                ->leftJoin('nguyen_lieu', 'nguyen_lieu.id', '=', 'chi_tieu.nguyen_lieu_id')
-                ->selectRaw("SUM(CASE WHEN chi_tieu.phuong_thuc_thanh_toan = 'tiền mặt' THEN {$totalExpression} ELSE 0 END) as tong_tien_mat")
-                ->selectRaw("SUM(CASE WHEN chi_tieu.phuong_thuc_thanh_toan = 'chuyển khoản' THEN {$totalExpression} ELSE 0 END) as tong_tien_chuyen_khoan")
-                ->selectRaw("SUM({$totalExpression}) as tong_chi")
-                ->first();
-
-            $summary = [
-                'tong_tien_mat' => (float) ($summaryRow->tong_tien_mat ?? 0),
-                'tong_tien_chuyen_khoan' => (float) ($summaryRow->tong_tien_chuyen_khoan ?? 0),
-                'tong_chi' => (float) ($summaryRow->tong_chi ?? 0),
-            ];
-        }
+        $summary = [
+            'tong_tien_mat' => (float) ($summaryRow->tong_tien_mat ?? 0),
+            'tong_tien_chuyen_khoan' => (float) ($summaryRow->tong_tien_chuyen_khoan ?? 0),
+            'tong_chi' => (float) ($summaryRow->tong_chi ?? 0),
+        ];
 
         return view('staff.expenses.index', compact('currentShift', 'expenses', 'summary', 'shiftOptions', 'filters'));
+    }
+
+    /**
+     * Áp bộ lọc ca làm việc + khoảng ngày (theo ngày_lam của ca) cho query chi tiêu.
+     */
+    private function applyExpenseFilters(Builder $query, array $filters): void
+    {
+        // Chọn ca cụ thể thì ưu tiên ca đó, bỏ qua khoảng ngày (tránh ca khác tuần bị lọc mất).
+        if (!empty($filters['ca_lam_viec_id'])) {
+            $query->where('chi_tieu.ca_lam_viec_id', $filters['ca_lam_viec_id']);
+            return;
+        }
+
+        $from = $filters['from_date'] ?? null;
+        $to = $filters['to_date'] ?? null;
+
+        if ($from || $to) {
+            $query->whereHas('caLamViec', function (Builder $q) use ($from, $to) {
+                if ($from) {
+                    $q->whereDate('ngay_lam', '>=', $from);
+                }
+                if ($to) {
+                    $q->whereDate('ngay_lam', '<=', $to);
+                }
+            });
+        }
     }
 
     public function create()
@@ -173,6 +162,11 @@ class ExpenseController extends Controller
             ]);
         }
 
+        $shift = CaLamViec::find((int) $request->ca_lam_viec_id);
+        if ($shift && $shift->daChot()) {
+            return back()->withInput()->with('error', 'Ca đã chốt không thể thêm chi tiêu');
+        }
+
         DB::transaction(function () use ($request, $method) {
             $note = $request->filled('ghi_chu') ? trim($request->ghi_chu) : null;
             $nguyenLieuId = (int) $request->nguyen_lieu_id;
@@ -181,7 +175,6 @@ class ExpenseController extends Controller
             $history = LichSuKho::create([
                 'nguyen_lieu_id' => $nguyenLieuId,
                 'loai_giao_dich' => 'nhập kho',
-                'tham_chieu_loai' => 'chi_tieu',
                 'so_luong' => (float) $request->so_luong,
                 'gia_nhap' => $unitPrice,
                 'ghi_chu' => $note,
@@ -189,7 +182,7 @@ class ExpenseController extends Controller
                 'created_at' => now(),
             ]);
 
-            $expense = ChiTieu::create([
+            ChiTieu::create([
                 'ca_lam_viec_id' => (int) $request->ca_lam_viec_id,
                 'nguoi_tao_id' => Auth::id(),
                 'nguyen_lieu_id' => $nguyenLieuId,
@@ -197,8 +190,6 @@ class ExpenseController extends Controller
                 'phuong_thuc_thanh_toan' => $method,
                 'ghi_chu' => $note,
             ]);
-
-            $history->update(['tham_chieu_id' => $expense->id]);
         });
 
         return redirect()

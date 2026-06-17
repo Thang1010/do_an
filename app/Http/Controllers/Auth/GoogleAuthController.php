@@ -210,12 +210,20 @@ class GoogleAuthController extends Controller
         Auth::guard('nguoi_dung')->login($nguoiDung, true);
         $request->session()->regenerate();
 
-        if (! $nguoiDung->mat_khau) {
+        $needsPassword = ! $nguoiDung->mat_khau;
+
+        if ($needsPassword) {
             $request->session()->put('force_password_setup', true);
         }
 
         if ($nguoiDung->vai_tro === 'khách hàng') {
-            $request->session()->flash('show_voucher_popup', true);
+            if ($needsPassword) {
+                // Tài khoản mới: hoãn popup voucher đến sau khi đặt mật khẩu xong
+                // (cờ bền, không dùng flash vì còn phải qua bước đặt mật khẩu).
+                $request->session()->put('pending_voucher_popup', true);
+            } else {
+                $request->session()->flash('show_voucher_popup', true);
+            }
         }
 
         return $this->redirectByRole($nguoiDung);

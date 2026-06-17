@@ -22,6 +22,7 @@ class StoreProductRequest extends FormRequest
             'gia_goc'                   => 'required|numeric|min:0',
             'gia_khuyen_mai'            => 'nullable|numeric|min:0',
             'trang_thai_ban'            => 'required|in:dang_ban,ngung_ban',
+            'co_cong_thuc'              => 'nullable|in:0,1',
             'nhiet_do'                  => 'nullable|array',
             'nhiet_do.*'                => 'in:nóng,lạnh',
             'anh_chinh'                 => 'nullable|mimes:jpg,jpeg,png,gif,webp,avif,bmp,tiff,svg|max:5120',

@@ -300,7 +300,7 @@ class ChatbotController extends Controller
                 'ten_san_pham',
                 'gia_goc',
                 'gia_khuyen_mai',
-                'hinh_anh_chinh',
+                'hinh_anh',
                 'noi_bat',
                 'nhiet_do',
             ])
@@ -323,7 +323,7 @@ class ChatbotController extends Controller
                 'san_pham.ten_san_pham',
                 'san_pham.gia_goc',
                 'san_pham.gia_khuyen_mai',
-                'san_pham.hinh_anh_chinh',
+                'san_pham.hinh_anh',
                 'san_pham.nhiet_do',
             ])
             ->map(fn ($item) => $this->mapMenuItem($item))
@@ -409,7 +409,7 @@ class ChatbotController extends Controller
 
         $products = SanPham::with('danhMuc')
             ->whereIn('trang_thai_ban', ['dang_ban', 'đang bán'])
-            ->get(['id', 'danh_muc_id', 'ten_san_pham', 'gia_goc', 'gia_khuyen_mai', 'hinh_anh_chinh', 'noi_bat', 'nhiet_do']);
+            ->get(['id', 'danh_muc_id', 'ten_san_pham', 'gia_goc', 'gia_khuyen_mai', 'hinh_anh', 'noi_bat', 'nhiet_do']);
 
         // Group by category, pick best-seller (most sold → featured → newest) per category
         $byCategory = $products->groupBy('danh_muc_id');

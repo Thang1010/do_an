@@ -81,11 +81,9 @@
                 <div class="sidebar-user-menu" id="sidebar-user-menu">
                     <a href="{{ route('staff.profile.edit') }}" class="sidebar-user-menu-item">Hồ sơ cá nhân</a>
                     <a href="{{ route('staff.profile.edit') }}#password" class="sidebar-user-menu-item">Đổi mật khẩu</a>
-                    <form method="POST" action="{{ route('auth.logout') }}">
-                        @csrf
-                        <button type="submit" class="sidebar-user-menu-item sidebar-user-menu-logout">Đăng xuất</button>
-                    </form>
-
+                    <form method="POST" action="{{ route('auth.logout') }}" id="logout-form">@csrf</form>
+                    <button type="button" class="sidebar-user-menu-item sidebar-user-menu-logout"
+                        onclick="openLogoutModal()">Đăng xuất</button>
                 </div>
             </div>
         </div>
@@ -342,6 +340,35 @@
         </div>
     </div>
 
+    <!-- =============== LOGOUT CONFIRM MODAL =============== -->
+    <div id="logout-confirm-modal" class="force-password-modal" style="display:none;" role="dialog" aria-modal="true">
+        <div id="logout-confirm-backdrop" class="force-password-modal__backdrop"></div>
+        <div class="force-password-modal__panel" style="width: min(400px, 92vw);">
+            <div class="force-password-modal__title" style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c49a6c" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                Xác nhận đăng xuất
+            </div>
+            <p class="force-password-modal__desc" style="margin-top: 10px; margin-bottom: 28px; padding: 0 10px;">
+                Bạn có chắc chắn muốn đăng xuất khỏi hệ thống không?
+            </p>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button id="logout-confirm-cancel" type="button" class="force-password-modal__submit"
+                    style="background: transparent; border: 1px solid rgba(241, 240, 238, 0.4); color: rgba(241, 240, 238, 0.8);">
+                    Hủy
+                </button>
+                <button id="logout-confirm-ok" type="button" class="force-password-modal__submit"
+                    style="background: #c49a6c; color: #1a120c;">
+                    Đăng xuất
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- =============== SCRIPTS =============== -->
     <style>
         .force-password-modal {
@@ -507,6 +534,31 @@
             event.stopPropagation();
             document.getElementById('sidebar-user-menu').classList.toggle('open');
         }
+
+        // Logout confirm modal
+        (function () {
+            var modal = document.getElementById('logout-confirm-modal');
+            var backdrop = document.getElementById('logout-confirm-backdrop');
+            var okBtn = document.getElementById('logout-confirm-ok');
+            var cancelBtn = document.getElementById('logout-confirm-cancel');
+
+            window.openLogoutModal = function () {
+                document.getElementById('sidebar-user-menu').classList.remove('open');
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+            };
+
+            function closeLogoutModal() {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+
+            if (okBtn) okBtn.addEventListener('click', function () {
+                document.getElementById('logout-form').submit();
+            });
+            if (cancelBtn) cancelBtn.addEventListener('click', closeLogoutModal);
+            if (backdrop) backdrop.addEventListener('click', closeLogoutModal);
+        })();
 
         function toggleNotif(event) {
             event.stopPropagation();

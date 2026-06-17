@@ -13,7 +13,7 @@
     </div>
     <div class="page-actions">
         <a href="{{ route('manager.ingredients.create') }}" class="btn btn-primary">
-            {{ $isStoreOwner ? 'Thêm nguyên liệu' : 'Gửi yêu cầu thêm nguyên liệu' }}
+            {{ $isStoreOwner ? 'Thêm nguyên liệu' : 'Gửi yêu cầu' }}
         </a>
     </div>
 </div>

@@ -453,7 +453,8 @@ class TableController extends Controller
         $request->validate([
             'order_id' => 'nullable|exists:don_hang,id',
             'action' => 'required|in:draft,payment',
-            'voucher_id' => 'nullable|exists:voucher,id',
+            'chiet_khau_loai' => 'nullable|in:phần trăm,tiền',
+            'chiet_khau_gia_tri' => 'nullable|numeric|min:0',
             'category' => 'nullable|integer',
         ]);
 
@@ -549,49 +550,39 @@ class TableController extends Controller
             }
         });
 
-        $voucherId = $request->input('voucher_id');
         $subtotal = $this->calculateSubtotal($order);
         $discount = 0;
 
-        $voucher = null;
-        if ($voucherId) {
-            $voucher = Voucher::query()->whereKey($voucherId)->first();
-        } elseif ($order && $order->voucher_nguoi_dung_id) {
+        $chietKhauLoai = $request->input('chiet_khau_loai');
+        $chietKhauGiaTri = (float) $request->input('chiet_khau_gia_tri', 0);
+
+        if ($order && $order->voucher_nguoi_dung_id) {
+            // Giảm giá do khách tự áp dụng bằng voucher — giữ nguyên
             $vu = \App\Models\VoucherNguoiDung::with('voucher')->find($order->voucher_nguoi_dung_id);
-            if ($vu) $voucher = $vu->voucher;
-        }
-
-        if ($voucher) {
-            if ($voucher->trang_thai !== 'đang hoạt động') {
-                return back()->with('error', 'Voucher không hợp lệ.');
-            }
-
-            $now = now();
-            if ($voucher->ngay_bat_dau && $voucher->ngay_bat_dau->gt($now)) {
-                return back()->with('error', 'Voucher chưa đến thời gian sử dụng.');
-            }
-
-            if ($voucher->ngay_ket_thuc && $voucher->ngay_ket_thuc->lt($now)) {
-                return back()->with('error', 'Voucher đã hết hạn.');
-            }
-
-            $minTotal = (float) ($voucher->don_toi_thieu ?? 0);
-            if ($minTotal > 0 && $subtotal < $minTotal) {
-                return back()->with('error', 'Đơn hàng chưa đủ điều kiện áp dụng voucher.');
-            }
-
-            if ($voucher->loai_giam === 'phần trăm') {
-                $discount = $subtotal * ((float) $voucher->gia_tri_giam / 100);
-                $maxDiscount = (float) ($voucher->giam_toi_da ?? 0);
-                if ($maxDiscount > 0) {
-                    $discount = min($discount, $maxDiscount);
+            $voucher = $vu?->voucher;
+            // 'ngừng phát hành' chỉ dừng phát thêm; voucher khách đã áp vẫn giữ giảm giá.
+            if ($voucher && in_array($voucher->trang_thai, ['đang hoạt động', 'ngừng phát hành'], true)) {
+                if ($voucher->loai_giam === 'phần trăm') {
+                    $discount = $subtotal * ((float) $voucher->gia_tri_giam / 100);
+                    $maxDiscount = (float) ($voucher->giam_toi_da ?? 0);
+                    if ($maxDiscount > 0) {
+                        $discount = min($discount, $maxDiscount);
+                    }
+                } else {
+                    $discount = (float) $voucher->gia_tri_giam;
                 }
-            } else {
-                $discount = (float) $voucher->gia_tri_giam;
             }
-
-            $discount = min($discount, $subtotal);
+        } elseif ($chietKhauGiaTri > 0 && in_array($chietKhauLoai, ['phần trăm', 'tiền'], true)) {
+            // Chiết khấu thủ công do nhân viên nhập, trừ thẳng vào hóa đơn
+            if ($chietKhauLoai === 'phần trăm') {
+                $chietKhauGiaTri = min($chietKhauGiaTri, 100);
+                $discount = $subtotal * ($chietKhauGiaTri / 100);
+            } else {
+                $discount = $chietKhauGiaTri;
+            }
         }
+
+        $discount = max(0, round(min($discount, $subtotal), 2));
 
         // Distribute discount proportionally across chi_tiet_don_hang items
         $items = $order->chiTietDonHang()->get();
@@ -617,7 +608,6 @@ class TableController extends Controller
                 ->route('staff.tables.index', array_filter([
                     'table' => $table->id,
                     'category' => $request->input('category'),
-                    'voucher_id' => $voucherId,
                     'payment' => 1,
                 ]));
         }
@@ -627,7 +617,6 @@ class TableController extends Controller
         $redirect = redirect()->route('staff.tables.index', array_filter([
             'table' => $table->id,
             'category' => $request->input('category'),
-            'voucher_id' => $voucherId,
         ]));
 
         if ($request->boolean('auto_voucher')) {

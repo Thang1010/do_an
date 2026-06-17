@@ -19,8 +19,8 @@ class ShiftController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $fromDate = $request->input('from_date', now()->startOfMonth()->toDateString());
-        $toDate = $request->input('to_date', now()->endOfMonth()->toDateString());
+        $fromDate = $request->input('from_date', now()->startOfWeek()->toDateString());
+        $toDate = $request->input('to_date', now()->endOfWeek()->toDateString());
 
         $shifts = CaLamViec::where('nguoi_dung_id', $user->id)
             ->whereDate('ngay_lam', '>=', $fromDate)

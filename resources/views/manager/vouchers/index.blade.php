@@ -24,6 +24,8 @@
                 <option value="">Tất cả trạng thái</option>
                 <option value="đang hoạt động" {{ request('trang_thai') === 'đang hoạt động' ? 'selected' : '' }}>Đang hoạt
                     động</option>
+                <option value="ngừng phát hành" {{ request('trang_thai') === 'ngừng phát hành' ? 'selected' : '' }}>Ngừng phát
+                    hành</option>
                 <option value="ngưng hoạt động" {{ request('trang_thai') === 'ngưng hoạt động' ? 'selected' : '' }}>Ngưng hoạt
                     động</option>
                 <option value="chưa phát hành" {{ request('trang_thai') === 'chưa phát hành' ? 'selected' : '' }}>Chưa phát
@@ -95,6 +97,8 @@
                             <td>
                                 @if($voucher->trang_thai === 'ngưng hoạt động')
                                     <span class="badge badge-inactive">Ngưng hoạt động</span>
+                                @elseif($voucher->trang_thai === 'ngừng phát hành')
+                                    <span class="badge badge-pending">Ngừng phát hành</span>
                                 @elseif($isExpired)
                                     <span class="badge badge-inactive">Hết hạn</span>
                                 @elseif($isNotReleased)
@@ -113,12 +117,17 @@
                                         class="btn btn-primary btn-sm">Chi tiết</a>
                                     <a href="{{ route('manager.vouchers.edit', $voucher->id) }}"
                                         class="btn btn-secondary btn-sm">Sửa</a>
-                                    <form method="POST" action="{{ route('manager.vouchers.destroy', $voucher->id) }}"
-                                        onsubmit="return confirmDelete(this, 'Xóa mã giảm giá {{ $voucher->ma_voucher }}?')">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="btn btn-danger btn-sm">Xóa</button>
-                                    </form>
+                                    @php $daCap = ($voucher->voucher_nguoi_dung_count ?? 0) > 0; @endphp
+                                    @if($daCap && $voucher->trang_thai === 'ngừng phát hành')
+                                        <button type="button" class="btn btn-secondary btn-sm" disabled>Đã ngừng phát</button>
+                                    @else
+                                        <form method="POST" action="{{ route('manager.vouchers.destroy', $voucher->id) }}"
+                                            onsubmit="return confirmDelete(this, '{{ $daCap ? 'Ngừng phát hành mã ' . $voucher->ma_voucher . '? Sẽ dừng phát thêm, người đã nhận vẫn dùng được đến khi hết hạn.' : 'Xóa mã giảm giá ' . $voucher->ma_voucher . '?' }}')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-danger btn-sm">{{ $daCap ? 'Ngừng phát' : 'Xóa' }}</button>
+                                        </form>
+                                    @endif
                                 </div>
                             </td>
                         </tr>

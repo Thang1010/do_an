@@ -109,8 +109,8 @@
                 <div class="card-body">
                     <div class="img-upload-area" onclick="document.getElementById('img-input').click()">
                         <img id="img-preview"
-                             src="{{ old('anh_chinh') ? '' : ($product->hinh_anh_chinh ? $product->image_url : '') }}"
-                             class="img-preview-upload {{ $product->hinh_anh_chinh ? '' : 'hidden' }}">
+                             src="{{ old('anh_chinh') ? '' : ($product->hinh_anh ? $product->image_url : '') }}"
+                             class="img-preview-upload {{ $product->hinh_anh ? '' : 'hidden' }}">
                         <p>Nhấn để sửa hình ảnh</p>
                         <p class="img-upload-hint">Sửa ảnh sản phẩm</p>
                     </div>

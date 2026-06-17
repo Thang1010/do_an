@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Manager\StoreProductRequest;
 use App\Models\SanPham;
 use App\Models\DanhMuc;
-use App\Models\HinhAnhSanPham;
 use App\Models\CongThucSanPham;
 use App\Models\KichCo;
 use App\Models\NguyenLieu;
@@ -51,7 +50,10 @@ class ProductController extends Controller
 
         if ($product->loai_quan_ly_kho === 'theo nguyên liệu' && rtrim($product->trang_thai_ban) === 'đang bán') {
             $ingredientIds = $cleaned->pluck('nguyen_lieu_id')->all();
-            if (!empty($ingredientIds)) {
+            if (empty($ingredientIds)) {
+                // Có công thức nhưng chưa điền công thức → tự động ngừng bán
+                $product->update(['trang_thai_ban' => 'ngừng bán']);
+            } else {
                 $balanceExpression = \App\Enums\TransactionType::stockBalanceExpression('lich_su_kho');
                 $stocks = DB::table('lich_su_kho')
                     ->whereIn('nguyen_lieu_id', $ingredientIds)
@@ -131,7 +133,7 @@ class ProductController extends Controller
 
     public function index(Request $request)
     {
-        $query = SanPham::with(['danhMuc', 'hinhAnhSanPham'])
+        $query = SanPham::with(['danhMuc'])
             ->withCount(['chiTietDonHang as so_luong_ban']);
 
         if ($request->filled('search')) {
@@ -155,7 +157,7 @@ class ProductController extends Controller
         $danhMucs = DanhMuc::where('trang_thai', 'đang dùng')
             ->orderBy('ten_danh_muc')
             ->get();
-        $kichCos = KichCo::orderBy('ten_kich_co')->get();
+        $kichCos = KichCo::orderBy('he_so_gia')->orderBy('ten_kich_co')->get();
         $nguyenLieus = NguyenLieu::orderBy('ten_nguyen_lieu')->get();
 
         return view('manager.products.create', compact('danhMucs', 'kichCos', 'nguyenLieus'));
@@ -175,6 +177,8 @@ class ProductController extends Controller
             'nhiet_do' => isset($validated['nhiet_do']) ? implode(',', (array) $validated['nhiet_do']) : null,
         ];
         $data['trang_thai_ban'] = $this->toDbTrangThaiBan($data['trang_thai_ban']);
+        $coCongThuc = $request->boolean('co_cong_thuc');
+        $data['loai_quan_ly_kho'] = $coCongThuc ? 'theo nguyên liệu' : 'theo số lượng';
         $data['slug'] = Str::slug($request->ten_san_pham) . '-' . time();
 
         // Upload ảnh chính
@@ -190,31 +194,36 @@ class ProductController extends Controller
             $filename = 'products/' . Str::uuid() . '-' . time() . '.' . $file->getClientOriginalExtension();
             Storage::disk('s3')->put($filename, (string) $image->encodeUsingFileExtension('jpg', 80));
             
-            $data['hinh_anh_chinh'] = $filename;
+            $data['hinh_anh'] = $filename;
         }
 
-        $product = DB::transaction(function () use ($data, $validated) {
+        $intendedStatus = $data['trang_thai_ban'];
+
+        $product = DB::transaction(function () use ($data, $validated, $coCongThuc) {
             $product = SanPham::create($data);
-            $this->syncProductSizes(
-                $product,
-                $validated['sizes'] ?? []
-            );
-            $this->syncProductRecipes($product, $validated['recipes'] ?? []);
+            $this->syncProductSizes($product, $validated['sizes'] ?? []);
+            $this->syncProductRecipes($product, $coCongThuc ? ($validated['recipes'] ?? []) : []);
             return $product;
         });
 
-        return redirect()->route('manager.products.index')
+        $redirect = redirect()->route('manager.products.index')
             ->with('success', "Sản phẩm «{$product->ten_san_pham}» đã được thêm thành công.");
+
+        if ($intendedStatus === 'đang bán' && $product->trang_thai_ban === 'ngừng bán') {
+            $redirect->with('warning', 'Sản phẩm được chuyển sang "Ngừng bán" vì chưa đủ điều kiện bán (chưa điền công thức hoặc nguyên liệu đã hết).');
+        }
+
+        return $redirect;
     }
 
     public function edit(int $id)
     {
-        $product = SanPham::with(['hinhAnhSanPham', 'congThucSanPham.nguyenLieu', 'kichCo'])->findOrFail($id);
+        $product = SanPham::with(['congThucSanPham.nguyenLieu', 'kichCo'])->findOrFail($id);
         $product->trang_thai_ban = $this->toFormTrangThaiBan($product->trang_thai_ban);
         $danhMucs = DanhMuc::where('trang_thai', 'đang dùng')
             ->orderBy('ten_danh_muc')
             ->get();
-        $kichCos = KichCo::orderBy('ten_kich_co')->get();
+        $kichCos = KichCo::orderBy('he_so_gia')->orderBy('ten_kich_co')->get();
         $nguyenLieus = NguyenLieu::orderBy('ten_nguyen_lieu')->get();
 
         return view('manager.products.create', compact('product', 'danhMucs', 'kichCos', 'nguyenLieus'));
@@ -235,11 +244,13 @@ class ProductController extends Controller
             'nhiet_do' => isset($validated['nhiet_do']) ? implode(',', (array) $validated['nhiet_do']) : null,
         ];
         $data['trang_thai_ban'] = $this->toDbTrangThaiBan($data['trang_thai_ban']);
+        $coCongThuc = $request->boolean('co_cong_thuc');
+        $data['loai_quan_ly_kho'] = $coCongThuc ? 'theo nguyên liệu' : 'theo số lượng';
 
         if ($request->hasFile('anh_chinh')) {
-            if ($product->hinh_anh_chinh) {
-                Storage::disk('s3')->delete($product->hinh_anh_chinh);
-                Storage::disk('public')->delete($product->hinh_anh_chinh); // Fallback for old local files
+            if ($product->hinh_anh) {
+                Storage::disk('s3')->delete($product->hinh_anh);
+                Storage::disk('public')->delete($product->hinh_anh); // Fallback for old local files
             }
             $file = $request->file('anh_chinh');
             $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
@@ -247,20 +258,25 @@ class ProductController extends Controller
             
             $filename = 'products/' . Str::uuid() . '-' . time() . '.' . $file->getClientOriginalExtension();
             Storage::disk('s3')->put($filename, (string) $image->encodeUsingFileExtension('jpg', 80));
-            $data['hinh_anh_chinh'] = $filename;
+            $data['hinh_anh'] = $filename;
         }
 
-        DB::transaction(function () use ($product, $data, $validated) {
+        $intendedStatus = $data['trang_thai_ban'];
+
+        DB::transaction(function () use ($product, $data, $validated, $coCongThuc) {
             $product->update($data);
-            $this->syncProductSizes(
-                $product,
-                $validated['sizes'] ?? []
-            );
-            $this->syncProductRecipes($product, $validated['recipes'] ?? []);
+            $this->syncProductSizes($product, $validated['sizes'] ?? []);
+            $this->syncProductRecipes($product, $coCongThuc ? ($validated['recipes'] ?? []) : []);
         });
 
-        return redirect()->route('manager.products.index')
+        $redirect = redirect()->route('manager.products.index')
             ->with('success', "Sản phẩm «{$product->ten_san_pham}» đã được cập nhật.");
+
+        if ($intendedStatus === 'đang bán' && $product->trang_thai_ban === 'ngừng bán') {
+            $redirect->with('warning', '◆ Sản phẩm đã tự động chuyển sang "Ngừng bán" vì có nguyên liệu hết hàng trong kho.');
+        }
+
+        return $redirect;
     }
 
     public function exportRecipesExcel()
@@ -269,7 +285,7 @@ class ProductController extends Controller
             ->orderBy('ten_san_pham')
             ->get();
 
-        $allSizes = KichCo::whereNull('san_pham_id')->orderBy('ten_kich_co')->get();
+        $allSizes = KichCo::orderBy('he_so_gia')->orderBy('ten_kich_co')->get();
 
         $ingredientIds = CongThucSanPham::query()
             ->select('nguyen_lieu_id')
@@ -327,6 +343,8 @@ class ProductController extends Controller
                     $sizeLabel,
                 ];
 
+                $heSoGia = $size ? (float) ($size->he_so_gia ?? 1) : 1;
+
                 foreach ($ingredients as $ingredient) {
                     $recipe = $recipesByIngredient->get($ingredient->id);
                     if (!$recipe) {
@@ -334,7 +352,7 @@ class ProductController extends Controller
                         continue;
                     }
 
-                    $qty = (float) $recipe->so_luong_can;
+                    $qty = (float) $recipe->so_luong_can * $heSoGia;
                     $qtyText = rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.');
                     $row[] = $qtyText !== '' ? ($qtyText . ' ' . $ingredient->don_vi_tinh) : '';
                 }
@@ -396,15 +414,10 @@ class ProductController extends Controller
         $product = SanPham::findOrFail($id);
 
         // Xóa ảnh
-        if ($product->hinh_anh_chinh) {
-            Storage::disk('s3')->delete($product->hinh_anh_chinh);
-            Storage::disk('public')->delete($product->hinh_anh_chinh);
+        if ($product->hinh_anh) {
+            Storage::disk('s3')->delete($product->hinh_anh);
+            Storage::disk('public')->delete($product->hinh_anh);
         }
-        $product->hinhAnhSanPham()->each(function ($img) {
-            Storage::disk('s3')->delete($img->duong_dan_anh);
-            Storage::disk('public')->delete($img->duong_dan_anh);
-            $img->delete();
-        });
 
         $product->delete();
 
@@ -449,46 +462,4 @@ class ProductController extends Controller
         ]);
     }
 
-    /** Quản lý hình ảnh sản phẩm */
-    public function images(int $id)
-    {
-        $product = SanPham::with('hinhAnhSanPham')->findOrFail($id);
-        return view('manager.products.images', compact('product'));
-    }
-
-    /** Upload thêm ảnh */
-    public function storeImage(Request $request, int $id)
-    {
-        $request->validate([
-            'hinh_anh' => 'required|mimes:jpg,jpeg,png,gif,webp,avif,bmp,tiff,svg|max:5120',
-            'la_anh_chinh' => 'nullable|boolean',
-        ]);
-
-        $product = SanPham::findOrFail($id);
-        
-        $file = $request->file('hinh_anh');
-        $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
-        $image = $manager->decode($file)->scaleDown(width: 1200);
-        
-        $filename = 'products/' . Str::uuid() . '-' . time() . '.' . $file->getClientOriginalExtension();
-        Storage::disk('s3')->put($filename, (string) $image->encodeUsingFileExtension('jpg', 80));
-
-        HinhAnhSanPham::create([
-            'san_pham_id' => $product->id,
-            'duong_dan_anh' => $filename,
-            'la_anh_chinh' => $request->boolean('la_anh_chinh'),
-        ]);
-
-        return redirect()->route('manager.products.index')->with('success', 'Đã thêm ảnh sản phẩm.');
-    }
-
-    /** Xóa ảnh sản phẩm */
-    public function destroyImage(int $id, int $imageId)
-    {
-        $image = HinhAnhSanPham::where('san_pham_id', $id)->findOrFail($imageId);
-        Storage::disk('s3')->delete($image->duong_dan_anh);
-        Storage::disk('public')->delete($image->duong_dan_anh);
-        $image->delete();
-        return redirect()->route('manager.products.index')->with('success', 'Đã xóa ảnh.');
-    }
 }

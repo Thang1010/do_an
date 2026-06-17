@@ -43,4 +43,22 @@ class CaLamViec extends Model
     {
         return $this->hasOne(ChotCa::class, 'ca_lam_viec_id');
     }
+
+    /**
+     * Ca đã chốt hay chưa (chot_luc khác null). Kiểm tra theo cả nhóm ca
+     * cùng (ngày, tên ca, giờ) vì bản ghi chốt có thể gắn ở ca khác trong nhóm.
+     */
+    public function daChot(): bool
+    {
+        $groupIds = static::query()
+            ->where('ngay_lam', $this->ngay_lam)
+            ->where('ten_ca', $this->ten_ca)
+            ->where('gio_bat_dau', $this->gio_bat_dau)
+            ->where('gio_ket_thuc', $this->gio_ket_thuc)
+            ->pluck('id');
+
+        return ChotCa::whereIn('ca_lam_viec_id', $groupIds)
+            ->whereNotNull('chot_luc')
+            ->exists();
+    }
 }

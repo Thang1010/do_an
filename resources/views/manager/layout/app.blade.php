@@ -50,13 +50,6 @@
                         ->values()
                         ->toArray();
                 });
-                $hasUnclassifiedInventory = \Illuminate\Support\Facades\Cache::remember('manager.inventory.unclassified', now()->addMinutes(5), function () {
-                    return \App\Models\NguyenLieu::query()
-                        ->where(function ($q) {
-                            $q->whereNull('muc_dich_su_dung')->orWhere('muc_dich_su_dung', '');
-                        })
-                        ->exists();
-                });
                 $currentInventoryPurpose = request('muc_dich_su_dung', '');
             @endphp
 
@@ -184,18 +177,6 @@
                         {{ $purposeStr }}
                     </a>
                 @endforeach
-                @if($hasUnclassifiedInventory)
-                    <a href="{{ route('manager.inventory.index', ['muc_dich_su_dung' => '__none__']) }}"
-                        class="nav-item {{ request()->routeIs('manager.inventory*') && $currentInventoryPurpose === '__none__' ? 'active' : '' }}">
-                        Kho chưa phân loại
-                    </a>
-                @endif
-                @if(empty($inventoryPurposes) && !$hasUnclassifiedInventory)
-                    <a href="{{ route('manager.inventory.index') }}"
-                        class="nav-item {{ request()->routeIs('manager.inventory*') ? 'active' : '' }}">
-                        Quản lý kho
-                    </a>
-                @endif
             </div>
 
             <!-- BÁO CÁO -->
@@ -254,10 +235,11 @@
 
                 <div class="sidebar-user-menu" id="sidebar-user-menu">
                     <a href="{{ route('manager.profile.edit') }}" class="sidebar-user-menu-item">Hồ sơ cá nhân</a>
-                    <form method="POST" action="{{ route('auth.logout') }}">
+                    <form method="POST" action="{{ route('auth.logout') }}" id="logout-form">
                         @csrf
-                        <button type="submit" class="sidebar-user-menu-item sidebar-user-menu-logout">Đăng xuất</button>
                     </form>
+                    <button type="button" class="sidebar-user-menu-item sidebar-user-menu-logout"
+                        onclick="openLogoutModal()">Đăng xuất</button>
                 </div>
             </div>
         </div>
@@ -389,6 +371,32 @@
             </div>
         @endif
 
+        <!-- Modal thông báo không có quyền truy cập -->
+        @if(session('access_denied'))
+            <div class="modal-backdrop" id="access-denied-modal">
+                <div class="modal-box" style="max-width: 420px; width: calc(100% - 32px);">
+                    <div class="modal-header">
+                        <span class="modal-title">Không có quyền truy cập</span>
+                        <button type="button" class="modal-close" onclick="closeModal('access-denied-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body" style="text-align:center;">
+                        <div style="font-size:42px; line-height:1; margin-bottom:12px;">🔒</div>
+                        <p style="margin:0;">{{ session('access_denied') }}</p>
+                    </div>
+                    <div class="modal-footer" style="justify-content:center;">
+                        <button type="button" class="btn btn-primary" onclick="closeModal('access-denied-modal')">Đã hiểu</button>
+                    </div>
+                </div>
+            </div>
+            <script>
+                document.addEventListener('DOMContentLoaded', function () {
+                    if (typeof openModal === 'function') {
+                        openModal('access-denied-modal');
+                    }
+                });
+            </script>
+        @endif
+
         @if(session('force_password_setup') && auth()->check())
             <div id="force-password-modal" class="force-password-modal" role="dialog" aria-modal="true"
                 aria-label="Đặt mật khẩu XM COFFEE">
@@ -478,6 +486,35 @@
                     style="background: transparent; border: 1px solid rgba(241, 240, 238, 0.4); color: rgba(241, 240, 238, 0.8);">Hủy</button>
                 <button id="delete-confirm-ok" type="button" class="force-password-modal__submit"
                     style="background: #d92d20; color: #fff;">Xác nhận xóa</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =============== LOGOUT CONFIRM MODAL =============== -->
+    <div id="logout-confirm-modal" class="force-password-modal" style="display:none;" role="dialog" aria-modal="true">
+        <div id="logout-confirm-backdrop" class="force-password-modal__backdrop"></div>
+        <div class="force-password-modal__panel" style="width: min(400px, 92vw);">
+            <div class="force-password-modal__title" style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c49a6c" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                Xác nhận đăng xuất
+            </div>
+            <p class="force-password-modal__desc" style="margin-top: 10px; margin-bottom: 28px; padding: 0 10px;">
+                Bạn có chắc chắn muốn đăng xuất khỏi hệ thống không?
+            </p>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button id="logout-confirm-cancel" type="button" class="force-password-modal__submit"
+                    style="background: transparent; border: 1px solid rgba(241, 240, 238, 0.4); color: rgba(241, 240, 238, 0.8);">
+                    Hủy
+                </button>
+                <button id="logout-confirm-ok" type="button" class="force-password-modal__submit"
+                    style="background: #c49a6c; color: #1a120c;">
+                    Đăng xuất
+                </button>
             </div>
         </div>
     </div>
@@ -681,6 +718,31 @@
             const menu = document.getElementById('sidebar-user-menu');
             menu.classList.toggle('open');
         }
+
+        // Logout confirm modal
+        (function () {
+            var modal = document.getElementById('logout-confirm-modal');
+            var backdrop = document.getElementById('logout-confirm-backdrop');
+            var okBtn = document.getElementById('logout-confirm-ok');
+            var cancelBtn = document.getElementById('logout-confirm-cancel');
+
+            window.openLogoutModal = function () {
+                document.getElementById('sidebar-user-menu').classList.remove('open');
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+            };
+
+            function closeLogoutModal() {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+
+            if (okBtn) okBtn.addEventListener('click', function () {
+                document.getElementById('logout-form').submit();
+            });
+            if (cancelBtn) cancelBtn.addEventListener('click', closeLogoutModal);
+            if (backdrop) backdrop.addEventListener('click', closeLogoutModal);
+        })();
 
         document.addEventListener('click', function (event) {
             const wrap = document.getElementById('sidebar-user-menu-wrap');

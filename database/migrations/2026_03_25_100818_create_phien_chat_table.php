@@ -14,13 +14,8 @@ return new class extends Migration
         Schema::create('phien_chat', function (Blueprint $table) {
             $table->id();
             $table->foreignId('nguoi_dung_id')->nullable()->constrained('nguoi_dung')->nullOnDelete();
-            $table->string('ma_phien', 100)->unique();
-            $table->enum('kenh_chat', ['website khách vãng lai', 'website khách hàng', 'hỗ trợ nhân viên'])
+            $table->enum('kenh_chat', ['website khách vãng lai', 'website khách hàng'])
                 ->default('website khách vãng lai');
-            $table->foreignId('ban_an_id')->nullable()->constrained('ban_an')->nullOnDelete();
-            $table->string('tieu_de')->nullable();
-            $table->dateTime('bat_dau_luc')->useCurrent();
-            $table->dateTime('ket_thuc_luc')->nullable();
             $table->enum('trang_thai', ['đang hoạt động', 'đã đóng'])->default('đang hoạt động');
             $table->timestamps();
 

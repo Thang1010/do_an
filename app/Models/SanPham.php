@@ -18,7 +18,7 @@ class SanPham extends Model
         'mo_ta_chi_tiet',
         'gia_goc',
         'gia_khuyen_mai',
-        'hinh_anh_chinh',
+        'hinh_anh',
         'trang_thai_ban',
         'nhiet_do',
         'loai_quan_ly_kho',
@@ -38,11 +38,6 @@ class SanPham extends Model
         return $this->belongsTo(DanhMuc::class, 'danh_muc_id');
     }
 
-    public function hinhAnhSanPham()
-    {
-        return $this->hasMany(HinhAnhSanPham::class, 'san_pham_id');
-    }
-
     public function chiTietDonHang()
     {
         return $this->hasMany(ChiTietDonHang::class, 'san_pham_id');
@@ -59,7 +54,8 @@ class SanPham extends Model
     public function kichCo()
     {
         return $this->belongsToMany(KichCo::class, 'san_pham_kich_co', 'san_pham_id', 'kich_co_id')
-                    ->withTimestamps();
+                    ->withTimestamps()
+                    ->orderBy('he_so_gia');
     }
 
     /**
@@ -88,19 +84,19 @@ class SanPham extends Model
 
     public function getImageUrlAttribute(): string
     {
-        if ($this->hinh_anh_chinh) {
-            if (Str::startsWith($this->hinh_anh_chinh, ['http://', 'https://'])) {
-                return $this->hinh_anh_chinh;
+        if ($this->hinh_anh) {
+            if (Str::startsWith($this->hinh_anh, ['http://', 'https://'])) {
+                return $this->hinh_anh;
             }
 
-            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($this->hinh_anh_chinh)) {
-                return asset('storage/' . $this->hinh_anh_chinh);
+            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($this->hinh_anh)) {
+                return asset('storage/' . $this->hinh_anh);
             }
 
             try {
-                return \Illuminate\Support\Facades\Storage::disk('s3')->url($this->hinh_anh_chinh);
+                return \Illuminate\Support\Facades\Storage::disk('s3')->url($this->hinh_anh);
             } catch (\Exception $e) {
-                return asset('storage/' . $this->hinh_anh_chinh);
+                return asset('storage/' . $this->hinh_anh);
             }
         }
 

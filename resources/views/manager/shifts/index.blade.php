@@ -11,10 +11,7 @@
 		<p class="page-subtitle">Danh sách ca làm theo khoảng ngày, có thể thêm, sửa, xóa và xem chi tiết</p>
 	</div>
 	<div class="page-actions" style="display: flex; gap: 8px;">
-		<form method="POST" action="{{ route('manager.shifts.send-next-week') }}" style="display:inline;" onsubmit="return confirm('Bạn có chắc chắn muốn gửi lịch làm việc tuần tới cho tất cả nhân viên?')">
-			@csrf
-			<button type="submit" class="btn btn-secondary">Gửi lịch tuần tới</button>
-		</form>
+		<button type="button" class="btn btn-secondary" onclick="openModal('send-next-week-modal')">Gửi lịch tuần tới</button>
 		<a class="btn btn-primary" href="{{ route('manager.shifts.create') }}">Thêm ca làm việc</a>
 	</div>
 </div>
@@ -131,6 +128,26 @@
 </div>
 
 @endsection
+
+<div class="modal-backdrop" id="send-next-week-modal">
+	<div class="modal-box modal-md">
+		<div class="modal-header">
+			<span class="modal-title">Gửi lịch làm việc tuần tới</span>
+			<button class="modal-close" onclick="closeModal('send-next-week-modal')">&#x2715;</button>
+		</div>
+		<div class="modal-body">
+			<p>Hệ thống sẽ gửi lịch làm việc tuần tới đến email của tất cả nhân sự có ca.</p>
+			<p class="text-muted text-12" style="margin-top: 6px;">Mỗi nhân sự sẽ nhận được file Excel đính kèm và thông báo trong ứng dụng.</p>
+		</div>
+		<div class="modal-footer">
+			<button type="button" class="btn btn-secondary" onclick="closeModal('send-next-week-modal')">Hủy</button>
+			<form method="POST" action="{{ route('manager.shifts.send-next-week') }}" style="display:inline;">
+				@csrf
+				<button type="submit" class="btn btn-primary">Xác nhận gửi</button>
+			</form>
+		</div>
+	</div>
+</div>
 
 @push('styles')
 <style>

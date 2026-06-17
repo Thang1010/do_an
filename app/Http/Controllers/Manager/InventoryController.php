@@ -128,6 +128,11 @@ class InventoryController extends Controller
                 ->with('error', 'Không tìm thấy ca làm việc để ghi nhận chi tiêu. Vui lòng tạo ca trước khi nhập kho.');
         }
 
+        $shift = CaLamViec::find($shiftId);
+        if ($shift && $shift->daChot()) {
+            return back()->withInput()->with('error', 'Ca đã chốt không thể thêm chi tiêu');
+        }
+
         $totalItems = 0;
 
         DB::transaction(function () use ($request, $shiftId, &$totalItems): void {
@@ -141,7 +146,6 @@ class InventoryController extends Controller
                 $history = LichSuKho::create([
                     'nguyen_lieu_id'   => $nguyenLieu->id,
                     'loai_giao_dich'   => 'nhập kho',
-                    'tham_chieu_loai'  => 'chi_tieu',
                     'so_luong'         => (float) $itemData['so_luong'],
                     'gia_nhap'         => $unitPrice,
                     'nguoi_tao_id'     => Auth::id(),
@@ -149,17 +153,13 @@ class InventoryController extends Controller
                     'created_at'       => now(),
                 ]);
 
-                $expense = ChiTieu::create([
+                ChiTieu::create([
                     'ca_lam_viec_id' => $shiftId,
                     'nguoi_tao_id' => Auth::id(),
                     'nguyen_lieu_id' => $nguyenLieu->id,
                     'lich_su_kho_id' => $history->id,
                     'phuong_thuc_thanh_toan' => 'tiền mặt',
                     'ghi_chu' => $ghiChu !== '' ? $ghiChu : null,
-                ]);
-
-                $history->update([
-                    'tham_chieu_id' => $expense->id,
                 ]);
 
                 $totalItems++;
@@ -516,7 +516,7 @@ class InventoryController extends Controller
 
     private function buildHistoryQuery(Request $request, string $type): Builder
     {
-        $query = LichSuKho::with('nguyenLieu', 'nguoiTao')
+        $query = LichSuKho::with('nguyenLieu', 'nguoiTao', 'chiTieu')
             ->whereIn('loai_giao_dich', $this->transactionTypeValues($type));
 
         $currentPurpose = $this->normalizePurposeFilter($request->input('muc_dich_su_dung'));
@@ -856,20 +856,4 @@ class InventoryController extends Controller
         }
     }
 
-    private function formatReference(?string $type, ?int $id): string
-    {
-        if (!$type || !$id) {
-            return '—';
-        }
-
-        if ($type === 'don_hang') {
-            return 'Đơn hàng #' . $id;
-        }
-
-        if ($type === 'phieu_nhap') {
-            return 'Phiếu nhập #' . $id;
-        }
-
-        return strtoupper($type) . ' #' . $id;
-    }
 }

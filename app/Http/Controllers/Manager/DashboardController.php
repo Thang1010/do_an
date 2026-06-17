@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Manager;
 
+use App\Enums\TransactionType;
 use App\Http\Controllers\Controller;
 use App\Models\DonHang;
 use App\Models\NguoiDung;
-use App\Models\SanPham;
 use App\Models\NguyenLieu;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -32,9 +32,17 @@ class DashboardController extends Controller
             ->where('vai_tro', 'khách hàng')
             ->count();
 
-        // Nguyên liệu sắp hết
-        $nguyenLieuSapHet = 0;
-        $dsNguyenLieuSapHet = collect();
+        // Nguyên liệu sắp hết (tồn kho <= 0)
+        $balanceExpr = TransactionType::stockBalanceExpression('lich_su_kho');
+        $dsNguyenLieuSapHet = NguyenLieu::query()
+            ->leftJoin('lich_su_kho', 'lich_su_kho.nguyen_lieu_id', '=', 'nguyen_lieu.id')
+            ->select('nguyen_lieu.id', 'nguyen_lieu.ten_nguyen_lieu', 'nguyen_lieu.don_vi_tinh')
+            ->selectRaw("COALESCE({$balanceExpr}, 0) as so_luong")
+            ->groupBy('nguyen_lieu.id', 'nguyen_lieu.ten_nguyen_lieu', 'nguyen_lieu.don_vi_tinh')
+            ->having('so_luong', '<=', 0)
+            ->orderBy('nguyen_lieu.ten_nguyen_lieu')
+            ->get();
+        $nguyenLieuSapHet = $dsNguyenLieuSapHet->count();
 
         // ===== DOANH THU TRONG TUẦN =====
         $startOfWeek = $today->copy()->startOfWeek(); // Thứ Hai

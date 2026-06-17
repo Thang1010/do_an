@@ -7,15 +7,15 @@
 
 @php
     $formatReference = function ($log) {
-        if (! $log->tham_chieu_loai || ! $log->tham_chieu_id) {
-            return '—';
+        if ($log->don_hang_id) {
+            return 'Đơn hàng #' . $log->don_hang_id;
         }
 
-        return match ($log->tham_chieu_loai) {
-            'don_hang' => 'Đơn hàng #' . $log->tham_chieu_id,
-            'phieu_nhap' => 'Phiếu nhập #' . $log->tham_chieu_id,
-            default => strtoupper($log->tham_chieu_loai) . ' #' . $log->tham_chieu_id,
-        };
+        if ($log->chiTieu) {
+            return 'Phiếu chi #' . $log->chiTieu->id;
+        }
+
+        return '—';
     };
     $currentPurposeValue = $currentPurpose ?? '';
     $isSupplyPurpose = $currentPurposeValue === 'Vật tư';
@@ -116,12 +116,22 @@
                         </td>
                         <td>
                             <div class="action-row">
-                                <a href="{{ route('manager.inventory.import', array_filter(['nguyen_lieu_id' => $item->id, 'muc_dich_su_dung' => $currentPurposeValue])) }}" class="btn btn-secondary btn-sm">
+                                <button type="button" class="btn btn-secondary btn-sm"
+                                        onclick="openInventoryImportModal(this)"
+                                        data-id="{{ $item->id }}"
+                                        data-name="{{ $item->ten_nguyen_lieu }}"
+                                        data-unit="{{ $item->don_vi_tinh }}"
+                                        data-stock="{{ number_format((float) $item->so_luong, 2, '.', '') }}">
                                     Nhập
-                                </a>
-                                <a href="{{ route('manager.inventory.export', array_filter(['nguyen_lieu_id' => $item->id, 'muc_dich_su_dung' => $currentPurposeValue])) }}" class="btn btn-danger btn-sm">
+                                </button>
+                                <button type="button" class="btn btn-danger btn-sm"
+                                        onclick="openInventoryExportModal(this)"
+                                        data-id="{{ $item->id }}"
+                                        data-name="{{ $item->ten_nguyen_lieu }}"
+                                        data-unit="{{ $item->don_vi_tinh }}"
+                                        data-stock="{{ number_format((float) $item->so_luong, 2, '.', '') }}">
                                     Xuất
-                                </a>
+                                </button>
                                 @if($isSupplyPurpose)
                                     @if($isSupplyPurpose)
                                         <form method="POST" action="{{ route('manager.inventory.stock.update') }}" class="inline-form">
@@ -425,6 +435,94 @@
     </div>
 </div>
 
+{{-- Modal nhập kho cho 1 nguyên liệu --}}
+<div class="modal-backdrop" id="inventory-import-modal">
+    <div class="modal-box" style="max-width: 460px; width: calc(100% - 32px);">
+        <form method="POST" action="{{ route('manager.inventory.import.store') }}">
+            @csrf
+            <input type="hidden" name="return_muc_dich_su_dung" value="{{ $currentPurposeValue }}">
+            <input type="hidden" name="items[0][nguyen_lieu_id]" id="import-modal-id">
+            <div class="modal-header">
+                <span class="modal-title">Nhập kho nguyên liệu</span>
+                <button type="button" class="modal-close" onclick="closeModal('inventory-import-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Nguyên liệu</label>
+                    <input type="text" class="form-control" id="import-modal-name" readonly
+                           style="background-color:#f3f4f6; color:#374151; cursor:not-allowed;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tồn kho hiện tại</label>
+                    <input type="text" class="form-control" id="import-modal-stock" readonly
+                           style="background-color:#f3f4f6; color:#6b7280; cursor:not-allowed;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Số lượng nhập <span>*</span></label>
+                    <input type="number" step="0.01" min="0.01" name="items[0][so_luong]" id="import-modal-qty"
+                           class="form-control" placeholder="Ví dụ: 10" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Đơn giá nhập</label>
+                    <input type="number" step="1" min="0" name="items[0][don_gia]" class="form-control"
+                           placeholder="VNĐ / đơn vị (tùy chọn)">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Ghi chú</label>
+                    <input type="text" name="items[0][ghi_chu]" class="form-control" maxlength="500"
+                           placeholder="Nhập từ nhà cung cấp...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('inventory-import-modal')">Hủy</button>
+                <button type="submit" class="btn btn-primary">Xác nhận nhập kho</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Modal xuất kho cho 1 nguyên liệu --}}
+<div class="modal-backdrop" id="inventory-export-modal">
+    <div class="modal-box" style="max-width: 460px; width: calc(100% - 32px);">
+        <form method="POST" action="{{ route('manager.inventory.export.store') }}">
+            @csrf
+            <input type="hidden" name="return_muc_dich_su_dung" value="{{ $currentPurposeValue }}">
+            <input type="hidden" name="items[0][nguyen_lieu_id]" id="export-modal-id">
+            <div class="modal-header">
+                <span class="modal-title">Xuất kho nguyên liệu</span>
+                <button type="button" class="modal-close" onclick="closeModal('inventory-export-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Nguyên liệu</label>
+                    <input type="text" class="form-control" id="export-modal-name" readonly
+                           style="background-color:#f3f4f6; color:#374151; cursor:not-allowed;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tồn kho hiện tại</label>
+                    <input type="text" class="form-control" id="export-modal-stock" readonly
+                           style="background-color:#f3f4f6; color:#6b7280; cursor:not-allowed;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Số lượng xuất <span>*</span></label>
+                    <input type="number" step="0.01" min="0.01" name="items[0][so_luong]" id="export-modal-qty"
+                           class="form-control" placeholder="Ví dụ: 2.5" required>
+                    <p class="form-hint" id="export-modal-hint">Không được vượt quá tồn kho hiện tại.</p>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Lý do xuất kho</label>
+                    <input type="text" name="items[0][ly_do]" class="form-control" maxlength="500"
+                           placeholder="Xuất pha chế, hao hụt, hủy...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('inventory-export-modal')">Hủy</button>
+                <button type="submit" class="btn btn-danger">Xác nhận xuất kho</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @push('scripts')
 <script>
     function activateInventoryTab(tabKey, btnEl) {
@@ -457,6 +555,39 @@
         document.getElementById('inv-detail-user').textContent = data.nguoi_thao_tac;
         document.getElementById('inv-detail-note').textContent = data.ghi_chu;
         openModal('inventory-detail-modal');
+    }
+
+    function formatStockLabel(rawStock, unit) {
+        const value = parseFloat(rawStock || '0');
+        const formatted = isNaN(value)
+            ? '0'
+            : value.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return formatted + (unit ? ' ' + unit : '');
+    }
+
+    function openInventoryImportModal(button) {
+        const d = button.dataset;
+        document.getElementById('import-modal-id').value = d.id;
+        document.getElementById('import-modal-name').value = d.name;
+        document.getElementById('import-modal-stock').value = formatStockLabel(d.stock, d.unit);
+        const qty = document.getElementById('import-modal-qty');
+        qty.value = '';
+        openModal('inventory-import-modal');
+        setTimeout(() => qty.focus(), 60);
+    }
+
+    function openInventoryExportModal(button) {
+        const d = button.dataset;
+        document.getElementById('export-modal-id').value = d.id;
+        document.getElementById('export-modal-name').value = d.name;
+        document.getElementById('export-modal-stock').value = formatStockLabel(d.stock, d.unit);
+        const qty = document.getElementById('export-modal-qty');
+        qty.value = '';
+        qty.max = d.stock;
+        document.getElementById('export-modal-hint').textContent =
+            'Tối đa ' + formatStockLabel(d.stock, d.unit) + ' (theo tồn kho hiện tại).';
+        openModal('inventory-export-modal');
+        setTimeout(() => qty.focus(), 60);
     }
 
     function showInventoryDetailFromEl(button) {

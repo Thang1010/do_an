@@ -31,21 +31,7 @@
 
         {{-- Gallery --}}
         <div class="show-gallery">
-            @php
-                $images = $product->hinhAnhSanPham;
-                $firstImg = $images->first();
-                $mainImg = $firstImg ? $firstImg->image_url : $product->image_url;
-            @endphp
-            <img id="show-main-img" src="{{ $mainImg }}" alt="{{ $product->ten_san_pham }}" class="show-main-img" />
-            @if($images->count() > 1)
-                <div class="show-thumbs">
-                    @foreach($images as $idx => $img)
-                        <img src="{{ $img->image_url }}" alt="Ảnh {{ $idx + 1 }}"
-                             class="show-thumb {{ $idx === 0 ? 'active' : '' }}"
-                             onclick="switchImage(this, '{{ $img->image_url }}')" />
-                    @endforeach
-                </div>
-            @endif
+            <img id="show-main-img" src="{{ $product->image_url }}" alt="{{ $product->ten_san_pham }}" class="show-main-img" />
         </div>
 
         {{-- Info --}}

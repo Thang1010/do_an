@@ -3,14 +3,16 @@
 namespace App\Http\Controllers\Manager;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Manager\AutoScheduleShiftRequest;
 use App\Http\Requests\Manager\StoreShiftRequest;
-use App\Models\BangLuong;
 use App\Models\CaLamViec;
 use App\Models\ChamCong;
-use App\Models\CuaHang;
 use App\Models\NguoiDung;
-use App\Notifications\ShiftAssignedNotification;
+use App\Mail\NextWeekScheduleMail;
+use App\Mail\ShiftDeletedMail;
+use App\Mail\ShiftUpdatedMail;
+use App\Notifications\ScheduleSentNotification;
+use App\Notifications\ShiftDeletedNotification;
+use App\Notifications\ShiftUpdatedNotification;
 use App\Services\ShiftService;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -18,10 +20,12 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class ShiftController extends Controller
 {
@@ -78,7 +82,7 @@ class ShiftController extends Controller
 
     public function create()
     {
-        return view('manager.shifts.create', $this->shiftService->buildShiftAssignmentData());
+        return view('manager.shifts.create');
     }
 
     public function edit(Request $request, int $id)
@@ -124,34 +128,28 @@ class ShiftController extends Controller
 
     public function store(Request $request)
     {
-        $addMode = (string) $request->input('add_mode', 'manual');
-        if ($addMode === 'auto_schedule') {
-            return $this->storeAutoSchedule($request);
-        }
-
-        return $this->storeManual($request);
-    }
-
-    private function storeManual(Request $request)
-    {
         $formRequest = new StoreShiftRequest();
         $validatedShift = $request->validate($formRequest->rules(), $formRequest->messages());
 
-        $assignmentMode = (string) $request->input('assignment_mode', 'manual');
-        if ($request->filled('nguoi_dung_id') && !in_array($assignmentMode, ['single', 'manual', 'auto'], true)) {
-            $assignmentMode = 'single';
-        }
+        $request->merge([
+            'selected_user_ids' => collect($request->input('selected_user_ids', []))
+                ->filter(fn ($id) => is_scalar($id) && trim((string) $id) !== '')
+                ->values()
+                ->all(),
+        ]);
 
-        $selectedUserIds = $this->resolveAssignedUserIds($request, $assignmentMode)
+        $validated = $request->validate([
+            'selected_user_ids' => ['required', 'array', 'min:1'],
+            'selected_user_ids.*' => ['integer', 'exists:nguoi_dung,id'],
+        ], [
+            'selected_user_ids.required' => 'Vui lòng chọn ít nhất một nhân sự rảnh để phân ca.',
+            'selected_user_ids.min' => 'Vui lòng chọn ít nhất một nhân sự rảnh để phân ca.',
+        ]);
+
+        $selectedUserIds = collect($validated['selected_user_ids'])
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
-
-        if ($selectedUserIds->isEmpty()) {
-            throw ValidationException::withMessages([
-                'assignment_mode' => 'Vui lòng chọn ít nhất một nhân sự để phân ca.',
-            ]);
-        }
 
         $validUserIds = NguoiDung::query()
             ->whereIn('id', $selectedUserIds)
@@ -161,7 +159,7 @@ class ShiftController extends Controller
 
         if ($validUserIds->isEmpty()) {
             throw ValidationException::withMessages([
-                'assignment_mode' => 'Danh sách nhân sự được chọn không hợp lệ hoặc không ở trạng thái hoạt động.',
+                'selected_user_ids' => 'Danh sách nhân sự được chọn không hợp lệ hoặc không ở trạng thái hoạt động.',
             ]);
         }
 
@@ -193,179 +191,97 @@ class ShiftController extends Controller
         });
 
         CaLamViec::query()->insert($rows->all());
-        $this->notifyShiftAssignments($validUserIds, $validatedShift);
 
         return redirect()
             ->route('manager.shifts.index')
             ->with('success', 'Đã thêm ca làm việc cho ' . $validUserIds->count() . ' nhân sự.');
     }
 
-    private function resolveAssignedUserIds(Request $request, string $assignmentMode): Collection
+    /**
+     * Danh sách nhân sự đang rảnh (không có ca trùng giờ) cho ngày + giờ đã chọn.
+     */
+    public function availableUsers(Request $request)
     {
-        if ($assignmentMode === 'single') {
-            $request->merge([
-                'nguoi_dung_id' => collect($request->input('nguoi_dung_id'))
-                    ->filter(fn ($id) => is_scalar($id) && trim((string) $id) !== '')
-                    ->values()
-                    ->all(),
-            ]);
-
-            $validated = $request->validate([
-                'nguoi_dung_id' => ['required', 'array'],
-                'nguoi_dung_id.*' => ['integer', 'exists:nguoi_dung,id'],
-            ]);
-
-            return collect($validated['nguoi_dung_id'] ?? []);
-        }
-
-        if ($assignmentMode === 'auto') {
-            $validated = $request->validate([
-                'auto_use_manager_count' => ['nullable', 'in:1'],
-                'auto_use_position_counts' => ['nullable', 'in:1'],
-                'manager_count' => ['nullable', 'integer', 'min:0'],
-                'position_counts' => ['nullable', 'array'],
-                'position_counts.*' => ['nullable', 'integer', 'min:0'],
-                'position_labels' => ['nullable', 'array'],
-                'position_labels.*' => ['nullable', 'string', 'max:100'],
-            ]);
-
-            $useManagerCount = ($validated['auto_use_manager_count'] ?? null) === '1';
-            $usePositionCounts = ($validated['auto_use_position_counts'] ?? null) === '1';
-
-            $managerCount = $useManagerCount
-                ? (int) ($validated['manager_count'] ?? 0)
-                : 0;
-
-            $positionCounts = collect($validated['position_counts'] ?? [])
-                ->map(fn ($count) => (int) $count)
-                ->filter(fn (int $count) => $count > 0);
-
-            if (! $usePositionCounts) {
-                $positionCounts = collect();
-            }
-
-            $positionLabels = collect($validated['position_labels'] ?? [])
-                ->map(fn ($label) => trim((string) $label));
-
-            try {
-                return $this->shiftService->resolveAutoAssignedUserIdsByCounts(
-                    $managerCount,
-                    $positionCounts,
-                    (string) $request->input('gio_bat_dau'),
-                    (string) $request->input('gio_ket_thuc'),
-                    $positionLabels,
-                    (string) $request->input('ngay_lam'),
-                    collect()
-                );
-            } catch (ValidationException $exception) {
-                $mappedErrors = [];
-                foreach ($exception->errors() as $key => $messages) {
-                    if (str_starts_with($key, 'auto_manager_count')) {
-                        $mappedErrors['manager_count'] = $messages;
-                        continue;
-                    }
-
-                    if (str_starts_with($key, 'auto_position_counts.')) {
-                        $mappedKey = 'position_counts.' . substr($key, strlen('auto_position_counts.'));
-                        $mappedErrors[$mappedKey] = $messages;
-                        continue;
-                    }
-
-                    if (str_starts_with($key, 'auto_position_counts')) {
-                        $mappedErrors['position_counts'] = $messages;
-                        continue;
-                    }
-
-                    $mappedErrors[$key] = $messages;
-                }
-
-                throw ValidationException::withMessages($mappedErrors);
-            }
-        }
-
         $validated = $request->validate([
-            'selected_manager_ids' => ['nullable', 'array'],
-            'selected_manager_ids.*' => ['integer', 'exists:nguoi_dung,id'],
-            'selected_staff_ids' => ['nullable', 'array'],
-            'selected_staff_ids.*' => ['integer', 'exists:nguoi_dung,id'],
+            'ngay_lam' => ['required', 'date'],
+            'gio_bat_dau' => ['required', 'date_format:H:i'],
+            'gio_ket_thuc' => ['required', 'date_format:H:i', 'different:gio_bat_dau'],
+            'exclude_shift_id' => ['nullable', 'integer', 'exists:ca_lam_viec,id'],
         ]);
 
-        return collect($validated['selected_manager_ids'] ?? [])
-            ->merge($validated['selected_staff_ids'] ?? [])
-            ->values();
-    }
-
-    private function storeAutoSchedule(AutoScheduleShiftRequest $request)
-    {
-        $validated = $request->validated();
-
-        $managerCount = (int) ($validated['auto_manager_count'] ?? 0);
-        $positionCounts = collect($validated['auto_position_counts'] ?? [])
-            ->map(fn ($count) => (int) $count)
-            ->filter(fn (int $count) => $count > 0);
-        $positionLabels = collect($validated['auto_position_labels'] ?? [])
-            ->map(fn ($label) => trim((string) $label));
-
-        $staffPerShift = $managerCount + $positionCounts->sum();
-        if ($staffPerShift < 3) {
-            throw ValidationException::withMessages([
-                'auto_manager_count' => 'Mỗi ca tự động cần ít nhất 3 nhân sự (admin + nhân viên).',
-            ]);
+        // Khi sửa ca: loại trừ chính nhóm ca đang sửa khỏi kiểm tra trùng giờ,
+        // để nhân sự đang thuộc ca này vẫn hiện ra (được chọn lại).
+        $excludeShiftIds = collect();
+        if (! empty($validated['exclude_shift_id'])) {
+            $editingShift = CaLamViec::find($validated['exclude_shift_id']);
+            if ($editingShift) {
+                $excludeShiftIds = $this->shiftService->buildShiftGroupQuery($editingShift)->pluck('id');
+            }
         }
 
-        $fromDate = Carbon::parse((string) $validated['date_from'])->startOfDay();
-        $toDate = Carbon::parse((string) $validated['date_to'])->startOfDay();
-        $shiftTemplates = $this->shiftService->buildDailyShiftTemplates((int) $validated['shifts_per_day']);
+        $candidates = NguoiDung::query()
+            ->with(['hoSoNhanVien.chucVu', 'hoSoQuanLy.chucVu'])
+            ->whereIn('vai_tro', ['nhân viên', 'quản lý'])
+            ->where('trang_thai', 'hoạt động')
+            ->get();
 
-        $rows = collect();
-        $timestamp = now();
-        $dateCursor = $fromDate->copy();
+        $availableIds = $this->shiftService->filterAvailableUsersForSlot(
+            $candidates->pluck('id')->map(fn ($id) => (int) $id),
+            (string) $validated['ngay_lam'],
+            (string) $validated['gio_bat_dau'],
+            (string) $validated['gio_ket_thuc'],
+            collect(),
+            $excludeShiftIds
+        )->all();
 
-        while ($dateCursor->lessThanOrEqualTo($toDate)) {
-            $dateString = $dateCursor->format('Y-m-d');
+        // Gom nhân sự rảnh theo chức vụ. loai_order: quản lý (0) → nhân viên (1) → chưa gán (2)
+        $groups = [];
+        foreach ($candidates->whereIn('id', $availableIds) as $user) {
+            $isManager = (string) $user->vai_tro === 'quản lý';
 
-            foreach ($shiftTemplates as $template) {
-                $assignedUserIds = $this->shiftService->resolveAutoAssignedUserIdsByCounts(
-                    $managerCount,
-                    $positionCounts,
-                    $template['gio_bat_dau'],
-                    $template['gio_ket_thuc'],
-                    $positionLabels,
-                    $dateString,
-                    $rows
-                );
-
-                foreach ($assignedUserIds as $userId) {
-                    $rows->push([
-                        'nguoi_dung_id' => (int) $userId,
-                        'ten_ca' => $template['ten_ca'],
-                        'ngay_lam' => $dateString,
-                        'gio_bat_dau' => $template['gio_bat_dau'],
-                        'gio_ket_thuc' => $template['gio_ket_thuc'],
-                        'created_at' => $timestamp,
-                        'updated_at' => $timestamp,
-                    ]);
+            if ($isManager) {
+                $tenChucVu = trim((string) ($user->hoSoQuanLy?->chucVu?->ten_chuc_vu ?? '')) ?: 'Quản lý';
+                $loaiOrder = 0;
+            } else {
+                $tenChucVu = trim((string) ($user->hoSoNhanVien?->chucVu?->ten_chuc_vu ?? ''));
+                if ($tenChucVu !== '') {
+                    $loaiOrder = 1;
+                } else {
+                    $tenChucVu = 'Chưa gán chức vụ';
+                    $loaiOrder = 2;
                 }
             }
 
-            $dateCursor->addDay();
+            $key = $loaiOrder . '|' . $tenChucVu;
+            if (! isset($groups[$key])) {
+                $groups[$key] = [
+                    'ten_chuc_vu' => $tenChucVu,
+                    'loai_order' => $loaiOrder,
+                    'users' => [],
+                ];
+            }
+
+            $groups[$key]['users'][] = [
+                'id' => (int) $user->id,
+                'ho_ten' => $user->ho_ten ?? ('Người dùng #' . $user->id),
+            ];
         }
 
-        if ($rows->isEmpty()) {
-            throw ValidationException::withMessages([
-                'date_from' => 'Không có dữ liệu ca nào được tạo. Vui lòng kiểm tra lại thông tin cấu hình.',
-            ]);
-        }
+        $orderedGroups = collect($groups)
+            ->sortBy([
+                fn ($g) => $g['loai_order'],
+                fn ($g) => $g['ten_chuc_vu'],
+            ])
+            ->map(function (array $g) {
+                $g['users'] = collect($g['users'])
+                    ->sortBy('ho_ten', SORT_NATURAL | SORT_FLAG_CASE)
+                    ->values()
+                    ->all();
+                return $g;
+            })
+            ->values();
 
-        CaLamViec::query()->insert($rows->all());
-        $this->notifyAutoShiftAssignments($rows, $fromDate, $toDate, $timestamp);
-
-        $totalDays = $fromDate->diffInDays($toDate) + 1;
-        $totalShiftGroups = $totalDays * count($shiftTemplates);
-
-        return redirect()
-            ->route('manager.shifts.index')
-            ->with('success', 'Đã tạo tự động ' . $totalShiftGroups . ' ca trong ' . $totalDays . ' ngày, tổng ' . $rows->count() . ' phân công nhân sự.');
+        return response()->json(['groups' => $orderedGroups]);
     }
 
     public function update(Request $request, int $id)
@@ -389,12 +305,13 @@ class ShiftController extends Controller
             ->unique()
             ->values();
 
-        $shiftPayload = [
+        $oldShift = [
             'ten_ca' => $shift->ten_ca,
             'ngay_lam' => $shift->ngay_lam ? Carbon::parse($shift->ngay_lam)->format('Y-m-d') : now()->toDateString(),
             'gio_bat_dau' => Carbon::parse($shift->gio_bat_dau)->format('H:i'),
             'gio_ket_thuc' => Carbon::parse($shift->gio_ket_thuc)->format('H:i'),
         ];
+        $shiftPayload = $oldShift;
 
         if (in_array($editMode, ['all', 'info'], true)) {
             $validatedShift = $request->validate([
@@ -414,24 +331,25 @@ class ShiftController extends Controller
 
         $targetUserIds = $groupUserIds;
         if (in_array($editMode, ['all', 'staff'], true)) {
-            $validatedMembers = $request->validate([
-                'selected_manager_ids' => ['nullable', 'array'],
-                'selected_manager_ids.*' => ['integer', 'exists:nguoi_dung,id'],
-                'selected_staff_ids' => ['nullable', 'array'],
-                'selected_staff_ids.*' => ['integer', 'exists:nguoi_dung,id'],
+            $request->merge([
+                'selected_user_ids' => collect($request->input('selected_user_ids', []))
+                    ->filter(fn ($id) => is_scalar($id) && trim((string) $id) !== '')
+                    ->values()
+                    ->all(),
             ]);
 
-            $selectedUserIds = collect($validatedMembers['selected_manager_ids'] ?? [])
-                ->merge($validatedMembers['selected_staff_ids'] ?? [])
+            $validatedMembers = $request->validate([
+                'selected_user_ids' => ['required', 'array', 'min:1'],
+                'selected_user_ids.*' => ['integer', 'exists:nguoi_dung,id'],
+            ], [
+                'selected_user_ids.required' => 'Vui lòng chọn ít nhất một nhân sự cho ca làm.',
+                'selected_user_ids.min' => 'Vui lòng chọn ít nhất một nhân sự cho ca làm.',
+            ]);
+
+            $selectedUserIds = collect($validatedMembers['selected_user_ids'])
                 ->map(fn ($userId) => (int) $userId)
                 ->unique()
                 ->values();
-
-            if ($selectedUserIds->isEmpty()) {
-                throw ValidationException::withMessages([
-                    'assignment_mode' => 'Vui lòng chọn ít nhất một nhân sự cho ca làm.',
-                ]);
-            }
 
             $validUserIds = NguoiDung::query()
                 ->whereIn('id', $selectedUserIds)
@@ -443,7 +361,7 @@ class ShiftController extends Controller
 
             if ($validUserIds->count() !== $selectedUserIds->count()) {
                 throw ValidationException::withMessages([
-                    'assignment_mode' => 'Danh sách nhân sự chọn có tài khoản không hợp lệ hoặc không ở trạng thái hoạt động.',
+                    'selected_user_ids' => 'Danh sách nhân sự chọn có tài khoản không hợp lệ hoặc không ở trạng thái hoạt động.',
                 ]);
             }
 
@@ -497,6 +415,8 @@ class ShiftController extends Controller
         }
 
         if ($shiftIdsToRemove->isNotEmpty()) {
+            $removedUsers = NguoiDung::whereIn('id', $usersToRemove)->whereNotNull('email')->get();
+
             ChamCong::query()
                 ->whereIn('ca_lam_viec_id', $shiftIdsToRemove)
                 ->delete();
@@ -504,6 +424,12 @@ class ShiftController extends Controller
             CaLamViec::query()
                 ->whereIn('id', $shiftIdsToRemove)
                 ->delete();
+
+            $ngayLamFormatted = Carbon::parse($oldShift['ngay_lam'])->format('d/m/Y');
+            foreach ($removedUsers as $user) {
+                Mail::to($user->email)->send(new ShiftDeletedMail($user, $oldShift));
+                $user->notify(new ShiftDeletedNotification($oldShift['ten_ca'], $ngayLamFormatted));
+            }
         }
 
         if ($usersToAdd->isNotEmpty()) {
@@ -521,10 +447,11 @@ class ShiftController extends Controller
             });
 
             CaLamViec::query()->insert($insertRows->all());
-            $this->notifyShiftAssignments($usersToAdd, $shiftPayload);
         }
 
         if ($editMode === 'info') {
+            $this->notifyShiftUpdated($groupUserIds, $oldShift, $shiftPayload);
+
             return redirect()
                 ->route('manager.shifts.show', $shift->id)
                 ->with('success', 'Đã cập nhật thông tin ca làm việc.');
@@ -535,6 +462,8 @@ class ShiftController extends Controller
                 ->route('manager.shifts.show', $shift->id)
                 ->with('success', 'Đã cập nhật danh sách nhân sự trong ca.');
         }
+
+        $this->notifyShiftUpdated($targetUserIds, $oldShift, $shiftPayload);
 
         return redirect()
             ->route('manager.shifts.index')
@@ -548,6 +477,9 @@ class ShiftController extends Controller
             'shifts.checkin.scan',
             now()->addHours(12),
             ['id' => $shift->id]
+        );
+        $checkinQrImageUrl = 'data:image/svg+xml;base64,' . base64_encode(
+            QrCode::format('svg')->size(300)->generate($checkinQrUrl)
         );
 
         $shiftGroup = $this->shiftService->buildShiftGroupQuery($shift)
@@ -601,9 +533,9 @@ class ShiftController extends Controller
                 'check_in' => $checkIn,
                 'check_out' => $checkOut,
                 'so_gio' => $workedHours,
-                'ghi_chu' => $noteParts->isNotEmpty() ? $noteParts->implode(' | ') : 'Chưa có ghi chú',
-                'can_force_checkin' => $checkIn === null,
-                'can_force_checkout' => $checkIn !== null && $checkOut === null,
+                'ghi_chu' => $groupShift->nguoiDung?->vai_tro === 'quản lý' ? 'Miễn chấm công' : ($noteParts->isNotEmpty() ? $noteParts->implode(' | ') : 'Chưa có ghi chú'),
+                'can_force_checkin' => $checkIn === null && $groupShift->nguoiDung?->vai_tro !== 'quản lý',
+                'can_force_checkout' => $checkIn !== null && $checkOut === null && $groupShift->nguoiDung?->vai_tro !== 'quản lý',
             ];
         });
 
@@ -627,6 +559,7 @@ class ShiftController extends Controller
             'shiftDurationHours' => $shiftDurationHours,
             'totalAssignedUsers' => $shiftGroup->count(),
             'checkinQrUrl' => $checkinQrUrl,
+            'checkinQrImageUrl' => $checkinQrImageUrl,
             'isShiftActive' => $isShiftActive,
         ]);
     }
@@ -654,16 +587,37 @@ class ShiftController extends Controller
             'ca_lam_viec_id' => $assignedShift->id,
         ]);
 
-        if ($attendance->cham_cong_vao) {
+        if ($actor->vai_tro === 'quản lý') {
             return redirect()
                 ->route($this->resolveCheckinRedirectRoute($actor))
-                ->with('info', 'Bạn đã check-in ca này trước đó.');
+                ->with('info', 'Tài khoản quản lý không yêu cầu chấm công.');
         }
 
-        $attendance->cham_cong_vao = now();
-        $attendance->ghi_chu = trim((string) $attendance->ghi_chu) === ''
-            ? 'Check-in bằng QR.'
-            : $attendance->ghi_chu;
+        // Đã check-in và check-out rồi
+        if ($attendance->cham_cong_vao && $attendance->cham_cong_ra) {
+            return redirect()
+                ->route($this->resolveCheckinRedirectRoute($actor))
+                ->with('info', 'Bạn đã hoàn thành chấm công ca ' . $assignedShift->ten_ca . '.');
+        }
+
+        // Đã check-in, chưa check-out → ghi check-out
+        if ($attendance->cham_cong_vao && ! $attendance->cham_cong_ra) {
+            $now = now();
+            $existingNote = trim((string) ($attendance->ghi_chu ?? ''));
+            $checkoutNote = 'Check-out bằng QR lúc ' . $now->format('H:i d/m/Y') . '.';
+            $attendance->cham_cong_ra = $now;
+            $attendance->ghi_chu = $existingNote !== '' ? $existingNote . ' | ' . $checkoutNote : $checkoutNote;
+            $attendance->save();
+
+            return redirect()
+                ->route($this->resolveCheckinRedirectRoute($actor))
+                ->with('success', 'Đã check-out ca ' . $assignedShift->ten_ca . ' thành công.');
+        }
+
+        // Chưa check-in → ghi check-in
+        $now = now();
+        $attendance->cham_cong_vao = $now;
+        $attendance->ghi_chu = 'Check-in bằng QR lúc ' . $now->format('H:i d/m/Y') . '.';
         $attendance->save();
 
         return redirect()
@@ -678,7 +632,7 @@ class ShiftController extends Controller
             : 'manager.shifts.index';
     }
 
-    public function forceCheckin(Request $request, int $id, int $userId)
+    public function forceCheckin(int $id, int $userId)
     {
         $shift = CaLamViec::findOrFail($id);
 
@@ -713,7 +667,7 @@ class ShiftController extends Controller
             ->with('success', 'Đã chấm công vào hộ cho nhân sự.');
     }
 
-    public function forceCheckout(Request $request, int $id, int $userId)
+    public function forceCheckout(int $id, int $userId)
     {
         $shift = CaLamViec::findOrFail($id);
 
@@ -750,40 +704,131 @@ class ShiftController extends Controller
             ->with('success', 'Đã kết thúc ca hộ cho nhân sự.');
     }
 
-    private function notifyShiftAssignments(Collection $userIds, array $shiftData): void
+    private function notifyShiftUpdated(Collection $userIds, array $oldShift, array $newShift): void
     {
-        $shifts = CaLamViec::whereIn('nguoi_dung_id', $userIds)
-            ->whereDate('ngay_lam', $shiftData['ngay_lam'])
-            ->where('ten_ca', $shiftData['ten_ca'])
-            ->whereTime('gio_bat_dau', $shiftData['gio_bat_dau'])
-            ->whereTime('gio_ket_thuc', $shiftData['gio_ket_thuc'])
+        $users = NguoiDung::whereIn('id', $userIds)
+            ->whereNotNull('email')
             ->get();
 
-        $users = NguoiDung::whereIn('id', $userIds)->get()->keyBy('id');
-
-        foreach ($shifts as $shift) {
-            if ($user = $users->get($shift->nguoi_dung_id)) {
-                $user->notify(new ShiftAssignedNotification($shift));
-            }
+        foreach ($users as $user) {
+            Mail::to($user->email)->send(new ShiftUpdatedMail($user, $oldShift, $newShift));
+            $user->notify(new ShiftUpdatedNotification());
         }
     }
 
-    private function notifyAutoShiftAssignments(Collection $rows, Carbon $fromDate, Carbon $toDate, string $timestamp): void
+    public function sendNextWeekSchedule(): \Illuminate\Http\RedirectResponse
     {
-        $userIds = $rows->pluck('nguoi_dung_id')->unique()->values();
+        $fromDate = Carbon::now()->startOfWeek(CarbonInterface::MONDAY)->addWeek();
+        $toDate = $fromDate->copy()->endOfWeek(CarbonInterface::SUNDAY);
 
-        $shifts = CaLamViec::whereIn('nguoi_dung_id', $userIds)
+        $fromStr = $fromDate->format('d/m/Y');
+        $toStr = $toDate->format('d/m/Y');
+
+        $shifts = CaLamViec::with('nguoiDung')
             ->whereDate('ngay_lam', '>=', $fromDate->toDateString())
             ->whereDate('ngay_lam', '<=', $toDate->toDateString())
-            ->where('created_at', $timestamp)
+            ->orderBy('ngay_lam')
+            ->orderBy('gio_bat_dau')
             ->get();
 
-        $users = NguoiDung::whereIn('id', $userIds)->get()->keyBy('id');
-
-        foreach ($shifts as $shift) {
-            if ($user = $users->get($shift->nguoi_dung_id)) {
-                $user->notify(new ShiftAssignedNotification($shift));
-            }
+        if ($shifts->isEmpty()) {
+            return redirect()
+                ->route('manager.shifts.index')
+                ->with('error', 'Không có ca làm việc nào trong tuần tới để gửi.');
         }
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Lịch tuần tới');
+
+        $headers = ['STT', 'Họ tên', 'Vai trò', 'Ca làm', 'Ngày làm', 'Giờ bắt đầu', 'Giờ kết thúc'];
+        $sheet->fromArray($headers, null, 'A1');
+        $sheet->getStyle('A1:G1')->getFont()->setBold(true);
+
+        $rowIndex = 2;
+        foreach ($shifts as $i => $shift) {
+            $sheet->fromArray([
+                $i + 1,
+                $shift->nguoiDung?->ho_ten ?? '—',
+                $shift->nguoiDung?->vai_tro ?? '—',
+                $shift->ten_ca,
+                Carbon::parse($shift->ngay_lam)->format('d/m/Y'),
+                Carbon::parse($shift->gio_bat_dau)->format('H:i'),
+                Carbon::parse($shift->gio_ket_thuc)->format('H:i'),
+            ], null, "A{$rowIndex}");
+            $rowIndex++;
+        }
+
+        foreach (range('A', 'G') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'schedule_next_week_');
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($tempFile);
+        $spreadsheet->disconnectWorksheets();
+        unset($spreadsheet);
+
+        $userIds = $shifts->pluck('nguoi_dung_id')->unique()->values();
+        $users = NguoiDung::whereIn('id', $userIds)
+            ->whereNotNull('email')
+            ->get();
+
+        foreach ($users as $user) {
+            Mail::to($user->email)->send(new NextWeekScheduleMail($user, $fromStr, $toStr, $tempFile));
+            $user->notify(new ScheduleSentNotification($fromStr, $toStr));
+        }
+
+        @unlink($tempFile);
+
+        return redirect()
+            ->route('manager.shifts.index')
+            ->with('success', 'Lịch làm tuần tới đã được gửi tới email của bạn.');
+    }
+
+    public function destroy(int $id)
+    {
+        $shift = CaLamViec::findOrFail($id);
+
+        $shiftStart = $this->shiftService->resolveShiftDateTime($shift->ngay_lam, (string) $shift->gio_bat_dau);
+        $shiftEnd = $this->shiftService->resolveShiftDateTime($shift->ngay_lam, (string) $shift->gio_ket_thuc);
+        if ($shiftEnd->lessThanOrEqualTo($shiftStart)) {
+            $shiftEnd->addDay();
+        }
+
+        if (now()->greaterThanOrEqualTo($shiftStart)) {
+            $label = now()->lessThanOrEqualTo($shiftEnd) ? 'đang diễn ra' : 'đã kết thúc';
+
+            return redirect()
+                ->route('manager.shifts.index')
+                ->with('error', "Không thể xóa ca \"{$shift->ten_ca}\" vì ca này {$label}.");
+        }
+
+        $shiftData = [
+            'ten_ca'      => $shift->ten_ca,
+            'ngay_lam'    => $shift->ngay_lam,
+            'gio_bat_dau' => Carbon::parse($shift->gio_bat_dau)->format('H:i'),
+            'gio_ket_thuc' => Carbon::parse($shift->gio_ket_thuc)->format('H:i'),
+        ];
+
+        $ngayLamFormatted = Carbon::parse($shift->ngay_lam)->format('d/m/Y');
+
+        $shiftGroup = $this->shiftService->buildShiftGroupQuery($shift)->get(['id', 'nguoi_dung_id']);
+        $shiftIds   = $shiftGroup->pluck('id');
+        $userIds    = $shiftGroup->pluck('nguoi_dung_id')->unique()->values();
+
+        CaLamViec::query()
+            ->whereIn('id', $shiftIds)
+            ->delete();
+
+        $users = NguoiDung::whereIn('id', $userIds)->whereNotNull('email')->get();
+        foreach ($users as $user) {
+            Mail::to($user->email)->send(new ShiftDeletedMail($user, $shiftData));
+            $user->notify(new ShiftDeletedNotification($shift->ten_ca, $ngayLamFormatted));
+        }
+
+        return redirect()
+            ->route('manager.shifts.index')
+            ->with('success', 'Đã xóa ca làm việc thành công.');
     }
 }

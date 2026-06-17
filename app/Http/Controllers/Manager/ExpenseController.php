@@ -133,6 +133,11 @@ class ExpenseController extends Controller
             ]);
         }
 
+        $shift = CaLamViec::find((int) $request->input('ca_lam_viec_id'));
+        if ($shift && $shift->daChot()) {
+            return back()->withInput()->with('error', 'Ca đã chốt không thể thêm chi tiêu');
+        }
+
         DB::transaction(function () use ($request, $method): void {
             $note = $request->filled('ghi_chu') ? trim((string) $request->input('ghi_chu')) : null;
             $nguyenLieuId = (int) $request->input('nguyen_lieu_id');
@@ -141,7 +146,6 @@ class ExpenseController extends Controller
             $history = LichSuKho::create([
                 'nguyen_lieu_id' => $nguyenLieuId,
                 'loai_giao_dich' => 'nhập kho',
-                'tham_chieu_loai' => 'chi_tieu',
                 'so_luong' => (float) $request->input('so_luong'),
                 'gia_nhap' => $unitPrice,
                 'ghi_chu' => $note,
@@ -149,17 +153,13 @@ class ExpenseController extends Controller
                 'created_at' => now(),
             ]);
 
-            $expense = ChiTieu::create([
+            ChiTieu::create([
                 'ca_lam_viec_id' => (int) $request->input('ca_lam_viec_id'),
                 'nguoi_tao_id' => Auth::id(),
                 'nguyen_lieu_id' => $nguyenLieuId,
                 'lich_su_kho_id' => $history->id,
                 'phuong_thuc_thanh_toan' => $method,
                 'ghi_chu' => $note,
-            ]);
-
-            $history->update([
-                'tham_chieu_id' => $expense->id,
             ]);
         });
 

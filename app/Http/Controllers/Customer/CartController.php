@@ -636,7 +636,9 @@ class CartController extends Controller
                 $vu = \App\Models\VoucherNguoiDung::with('voucher')->find($voucherNguoiDungId);
                 if ($vu && $vu->trang_thai === 'chưa dùng' && $vu->voucher) {
                     $v = $vu->voucher;
-                    if ($v->trang_thai === 'đang hoạt động' && now()->between($v->ngay_bat_dau, $v->ngay_ket_thuc)) {
+                    // 'ngừng phát hành' chi dung phat them, tai khoan da nhan van dung duoc.
+                    $voucherUsable = in_array($v->trang_thai, ['đang hoạt động', 'ngừng phát hành'], true);
+                    if ($voucherUsable && now()->between($v->ngay_bat_dau, $v->ngay_ket_thuc)) {
                         if ($tamTinh >= $v->don_toi_thieu) {
                             if ($v->loai_giam === 'phần trăm') {
                                 $soTienGiam = $tamTinh * ($v->gia_tri_giam / 100);

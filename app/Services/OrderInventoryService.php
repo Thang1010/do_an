@@ -72,8 +72,7 @@ class OrderInventoryService
             LichSuKho::create([
                 'nguyen_lieu_id' => (int) $item->nguyen_lieu_id,
                 'loai_giao_dich' => 'xuất kho',
-                'tham_chieu_loai' => 'don_hang',
-                'tham_chieu_id' => $order->id,
+                'don_hang_id' => $order->id,
                 'so_luong' => $required,
                 'nguoi_tao_id' => Auth::id(),
                 'ghi_chu' => 'Xuất theo xác nhận đơn hàng #' . $order->id,
@@ -162,8 +161,7 @@ class OrderInventoryService
                 LichSuKho::create([
                     'nguyen_lieu_id' => (int) $ingredientId,
                     'loai_giao_dich' => 'xuất kho',
-                    'tham_chieu_loai' => 'don_hang',
-                    'tham_chieu_id' => $orderId,
+                    'don_hang_id' => $orderId,
                     'so_luong' => $delta,
                     'nguoi_tao_id' => Auth::id(),
                     'ghi_chu' => 'Xuất bổ sung do cập nhật đơn hàng #' . $orderId,
@@ -175,8 +173,7 @@ class OrderInventoryService
             LichSuKho::create([
                 'nguyen_lieu_id' => (int) $ingredientId,
                 'loai_giao_dich' => 'điều chỉnh',
-                'tham_chieu_loai' => 'don_hang',
-                'tham_chieu_id' => $orderId,
+                'don_hang_id' => $orderId,
                 'so_luong' => abs($delta),
                 'nguoi_tao_id' => Auth::id(),
                 'ghi_chu' => 'Hoàn kho do cập nhật đơn hàng #' . $orderId,
@@ -196,8 +193,7 @@ class OrderInventoryService
                 LichSuKho::create([
                     'nguyen_lieu_id' => (int) $ingredientId,
                     'loai_giao_dich' => 'điều chỉnh',
-                    'tham_chieu_loai' => 'don_hang',
-                    'tham_chieu_id' => $order->id,
+                    'don_hang_id' => $order->id,
                     'so_luong' => $data['qty'],
                     'nguoi_tao_id' => Auth::id(),
                     'ghi_chu' => 'Hoàn kho do hủy/xóa đơn hàng #' . $order->id,

@@ -27,7 +27,8 @@ Nhân viên / <strong>Chi tiêu</strong>
                 <option value="" disabled>Chưa có ca làm việc</option>
             @endforelse
         </select>
-        <input type="date" name="ngay_lam" class="form-control" value="{{ $filters['ngay_lam'] ?? '' }}" style="max-width: 170px;">
+        <input type="date" name="from_date" class="form-control" value="{{ $filters['from_date'] ?? '' }}" style="max-width: 170px;" title="Từ ngày">
+        <input type="date" name="to_date" class="form-control" value="{{ $filters['to_date'] ?? '' }}" style="max-width: 170px;" title="Đến ngày">
         <button type="submit" class="btn btn-primary">Lọc</button>
         <a href="{{ route('staff.expenses.index', ['clear' => 1]) }}" class="btn btn-secondary">Xóa lọc</a>
     </form>
@@ -49,7 +50,6 @@ Nhân viên / <strong>Chi tiêu</strong>
                     <th>Giá nhập / sản phẩm</th>
                     <th>Thành tiền</th>
                     <th>Thanh toán</th>
-                    <th>Người tạo</th>
                     <th>Thời gian</th>
                 </tr>
             </thead>
@@ -67,11 +67,10 @@ Nhân viên / <strong>Chi tiêu</strong>
                     <td>{{ $price !== null ? number_format($price, 0, ',', '.') . 'đ' : '—' }}</td>
                     <td class="price-text">{{ $total !== null ? number_format($total, 0, ',', '.') . 'đ' : '—' }}</td>
                     <td><span class="badge {{ $exp->phuong_thuc_thanh_toan === 'tiền mặt' ? 'badge-active' : 'badge-brew' }}">{{ $exp->phuong_thuc_thanh_toan }}</span></td>
-                    <td>{{ $exp->nguoiTao?->ho_ten ?? '—' }}</td>
                     <td class="text-muted text-12">{{ optional($exp->created_at)->format('d/m/Y H:i') }}</td>
                 </tr>
                 @empty
-                <tr><td colspan="8" class="empty-state">Chưa có khoản chi nào.</td></tr>
+                <tr><td colspan="7" class="empty-state">Chưa có khoản chi nào.</td></tr>
                 @endforelse
             </tbody>
         </table>

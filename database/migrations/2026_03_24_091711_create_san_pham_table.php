@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('mo_ta_chi_tiet', 300)->nullable();
             $table->float('gia_goc')->default(0);
             $table->float('gia_khuyen_mai')->default(0);
-            $table->string('hinh_anh_chinh')->nullable();
+            $table->string('hinh_anh')->nullable();
             $table->enum('trang_thai_ban', ['đang bán', 'ngừng bán'])->default('đang bán');
             $table->set('nhiet_do', ['nóng', 'lạnh'])->nullable();
             $table->enum('loai_quan_ly_kho', ['theo nguyên liệu', 'theo số lượng'])->default('theo nguyên liệu');

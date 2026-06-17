@@ -42,13 +42,13 @@ class HomeController extends Controller
         });
 
         $categoryImages = SanPham::whereIn('danh_muc_id', $categories->pluck('id'))
-            ->whereNotNull('hinh_anh_chinh')
+            ->whereNotNull('hinh_anh')
             ->orderByDesc('noi_bat')
             ->orderByDesc('created_at')
-            ->get(['danh_muc_id', 'hinh_anh_chinh'])
+            ->get(['danh_muc_id', 'hinh_anh'])
             ->groupBy('danh_muc_id')
             ->map(function ($items) {
-                return asset('storage/' . $items->first()->hinh_anh_chinh);
+                return asset('storage/' . $items->first()->hinh_anh);
             });
 
         $from = Carbon::now()->subDays(6)->startOfDay();

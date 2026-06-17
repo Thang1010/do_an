@@ -14,8 +14,7 @@ class LichSuKho extends Model
     protected $fillable = [
         'nguyen_lieu_id',
         'loai_giao_dich',
-        'tham_chieu_loai',
-        'tham_chieu_id',
+        'don_hang_id',
         'so_luong',
         'gia_nhap',
         'ghi_chu',
@@ -26,7 +25,7 @@ class LichSuKho extends Model
     protected function casts(): array
     {
         return [
-            'tham_chieu_id' => 'integer',
+            'don_hang_id' => 'integer',
             'so_luong' => 'decimal:2',
             'gia_nhap' => 'decimal:2',
             'created_at' => 'datetime',
@@ -67,5 +66,15 @@ class LichSuKho extends Model
     public function nguoiTao()
     {
         return $this->belongsTo(NguoiDung::class, 'nguoi_tao_id');
+    }
+
+    public function donHang()
+    {
+        return $this->belongsTo(DonHang::class, 'don_hang_id');
+    }
+
+    public function chiTieu()
+    {
+        return $this->hasOne(ChiTieu::class, 'lich_su_kho_id');
     }
 }

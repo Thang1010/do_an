@@ -15,8 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('nguyen_lieu_id')->constrained('nguyen_lieu')->cascadeOnDelete();
             $table->enum('loai_giao_dich', ['nhập kho', 'xuất kho', 'điều chỉnh']);
-            $table->string('tham_chieu_loai', 30)->nullable();
-            $table->unsignedBigInteger('tham_chieu_id')->nullable();
+            $table->foreignId('don_hang_id')->nullable()->constrained('don_hang')->nullOnDelete();
             $table->decimal('so_luong', 12, 2);
             $table->decimal('gia_nhap', 12, 2)->nullable();
             $table->text('ghi_chu')->nullable();
@@ -24,7 +23,6 @@ return new class extends Migration
             $table->timestamp('created_at')->useCurrent();
 
             $table->index(['nguyen_lieu_id', 'loai_giao_dich']);
-            $table->index(['tham_chieu_loai', 'tham_chieu_id']);
         });
     }
 

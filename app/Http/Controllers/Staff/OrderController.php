@@ -28,15 +28,11 @@ class OrderController extends Controller
     {
         $user = Auth::user();
 
+        // Chỉ hiển thị đơn do chính tài khoản nhân viên này tạo
+        // (không phải toàn bộ đơn của cửa hàng).
         $query = DonHang::query()
             ->with(['banAn', 'nguoiDung', 'nhanVien', 'chiTietDonHang'])
-            ->where(function ($q) use ($user) {
-                $q->where('nhan_vien_id', $user->id)
-                  ->orWhereHas('banAn'); // show all table orders for staff
-            })
-            ->where(function ($q) {
-                // Show all orders, whether staff-assigned or customer-placed
-            })
+            ->where('nhan_vien_id', $user->id)
             ->latest();
 
         if ($request->filled('order_code')) {

@@ -125,7 +125,7 @@ class TableController extends Controller
             ->orderBy('ten_san_pham')
             ->get(['id', 'ten_san_pham', 'gia_goc', 'gia_khuyen_mai']);
 
-        $allSizes = \App\Models\KichCo::all();
+        $allSizes = \App\Models\KichCo::orderBy('he_so_gia')->orderBy('ten_kich_co')->get();
         $productSizeMap = [];
         foreach ($availableProducts as $product) {
             $sizes = [];

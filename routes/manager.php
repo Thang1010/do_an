@@ -38,24 +38,25 @@ Route::prefix('manager')->name('manager.')->middleware(['auth', 'role:quản lý
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
 
     // ── Products ──────────────────────────────────────────────────────
+    // Quản lý: chỉ xem danh sách
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');
-    Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
-    Route::get('/products/recipes/excel', [ProductController::class, 'exportRecipesExcel'])->name('products.recipes.excel');
-    Route::post('/products', [ProductController::class, 'store'])->name('products.store');
-    Route::get('/products/{id}/edit', [ProductController::class, 'edit'])->name('products.edit');
-    Route::put('/products/{id}', [ProductController::class, 'update'])->name('products.update');
-    Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('products.destroy');
-    Route::get('/products/{id}/images', [ProductController::class, 'images'])->name('products.images');
-    Route::post('/products/{id}/images', [ProductController::class, 'storeImage'])->name('products.images.store');
-    Route::delete('/products/{id}/images/{imgId}', [ProductController::class, 'destroyImage'])->name('products.images.destroy');
-    Route::post('/products/{id}/status', [ProductController::class, 'updateStatus'])->name('products.status');
+    // Chủ cửa hàng: toàn quyền thêm/sửa/xóa
+    Route::get('/products/create', [ProductController::class, 'create'])->middleware('role:chủ cửa hàng')->name('products.create');
+    Route::get('/products/recipes/excel', [ProductController::class, 'exportRecipesExcel'])->middleware('role:chủ cửa hàng')->name('products.recipes.excel');
+    Route::post('/products', [ProductController::class, 'store'])->middleware('role:chủ cửa hàng')->name('products.store');
+    Route::get('/products/{id}/edit', [ProductController::class, 'edit'])->middleware('role:chủ cửa hàng')->name('products.edit');
+    Route::put('/products/{id}', [ProductController::class, 'update'])->middleware('role:chủ cửa hàng')->name('products.update');
+    Route::delete('/products/{id}', [ProductController::class, 'destroy'])->middleware('role:chủ cửa hàng')->name('products.destroy');
+    Route::post('/products/{id}/status', [ProductController::class, 'updateStatus'])->middleware('role:chủ cửa hàng')->name('products.status');
 
     // ── Categories ────────────────────────────────────────────────────
+    // Quản lý: chỉ xem
     Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
-    Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
     Route::get('/categories/{id}', [CategoryController::class, 'show'])->name('categories.show');
-    Route::put('/categories/{id}', [CategoryController::class, 'update'])->name('categories.update');
-    Route::delete('/categories/{id}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+    // Chủ cửa hàng: toàn quyền thêm/sửa/xóa
+    Route::post('/categories', [CategoryController::class, 'store'])->middleware('role:chủ cửa hàng')->name('categories.store');
+    Route::put('/categories/{id}', [CategoryController::class, 'update'])->middleware('role:chủ cửa hàng')->name('categories.update');
+    Route::delete('/categories/{id}', [CategoryController::class, 'destroy'])->middleware('role:chủ cửa hàng')->name('categories.destroy');
 
     // ── Tables ────────────────────────────────────────────────────────
     Route::get('/tables', [TableController::class, 'index'])->name('tables.index');
@@ -81,15 +82,17 @@ Route::prefix('manager')->name('manager.')->middleware(['auth', 'role:quản lý
 
 
     // ── Positions ─────────────────────────────────────────────────────
+    // Quản lý: chỉ xem
     Route::get('/positions', [PositionController::class, 'index'])->name('positions.index');
-    Route::get('/positions/create', [PositionController::class, 'create'])->name('positions.create');
-    Route::post('/positions', [PositionController::class, 'store'])->name('positions.store');
-    Route::get('/positions/{id}/edit', [PositionController::class, 'edit'])->name('positions.edit');
-    Route::put('/positions/{id}', [PositionController::class, 'update'])->name('positions.update');
-    Route::delete('/positions/{id}', [PositionController::class, 'destroy'])->name('positions.destroy');
     Route::get('/positions/{id}', [PositionController::class, 'show'])->name('positions.show');
-    Route::post('/positions/{id}/assign', [PositionController::class, 'assignProfiles'])->name('positions.assign');
-    Route::delete('/positions/{id}/remove-profile/{profileId}', [PositionController::class, 'removeProfile'])->name('positions.remove-profile');
+    // Chủ cửa hàng: toàn quyền tạo/sửa/xóa/gán nhân viên
+    Route::get('/positions/create', [PositionController::class, 'create'])->middleware('role:chủ cửa hàng')->name('positions.create');
+    Route::post('/positions', [PositionController::class, 'store'])->middleware('role:chủ cửa hàng')->name('positions.store');
+    Route::get('/positions/{id}/edit', [PositionController::class, 'edit'])->middleware('role:chủ cửa hàng')->name('positions.edit');
+    Route::put('/positions/{id}', [PositionController::class, 'update'])->middleware('role:chủ cửa hàng')->name('positions.update');
+    Route::delete('/positions/{id}', [PositionController::class, 'destroy'])->middleware('role:chủ cửa hàng')->name('positions.destroy');
+    Route::post('/positions/{id}/assign', [PositionController::class, 'assignProfiles'])->middleware('role:chủ cửa hàng')->name('positions.assign');
+    Route::delete('/positions/{id}/remove-profile/{profileId}', [PositionController::class, 'removeProfile'])->middleware('role:chủ cửa hàng')->name('positions.remove-profile');
 
     // ── Users ─────────────────────────────────────────────────────────
     Route::get('/users/customers', [UserController::class, 'customers'])->name('users.customers');
@@ -109,6 +112,7 @@ Route::prefix('manager')->name('manager.')->middleware(['auth', 'role:quản lý
     // ── Shifts & Attendance ───────────────────────────────────────────
     Route::get('/shifts', [ShiftController::class, 'index'])->name('shifts.index');
     Route::get('/shifts/create', [ShiftController::class, 'create'])->name('shifts.create');
+    Route::get('/shifts/available-users', [ShiftController::class, 'availableUsers'])->name('shifts.available-users');
     Route::get('/shifts/attendance', [ShiftController::class, 'attendance'])->name('shifts.attendance');
     Route::get('/shifts/attendance/export-payroll', [ShiftController::class, 'exportPayroll'])->name('shifts.attendance.export-payroll');
     Route::post('/shifts', [ShiftController::class, 'store'])->name('shifts.store');
@@ -144,11 +148,13 @@ Route::prefix('manager')->name('manager.')->middleware(['auth', 'role:quản lý
     Route::post('/expenses', [ExpenseController::class, 'store'])->name('expenses.store');
 
     // ── Salary ────────────────────────────────────────────────────────
-    Route::get('/salary/export', [\App\Http\Controllers\Manager\SalaryController::class, 'export'])->name('salary.export');
+    // Quản lý: chỉ xem bảng lương
     Route::get('/salary', [\App\Http\Controllers\Manager\SalaryController::class, 'index'])->name('salary.index');
+    // Chủ cửa hàng: xuất file và chỉnh sửa mức lương (static routes trước wildcard {id})
+    Route::get('/salary/export', [\App\Http\Controllers\Manager\SalaryController::class, 'export'])->middleware('role:chủ cửa hàng')->name('salary.export');
+    Route::get('/salary/{id}/edit', [\App\Http\Controllers\Manager\SalaryController::class, 'edit'])->middleware('role:chủ cửa hàng')->name('salary.edit');
+    Route::put('/salary/{id}', [\App\Http\Controllers\Manager\SalaryController::class, 'update'])->middleware('role:chủ cửa hàng')->name('salary.update');
     Route::get('/salary/{id}', [\App\Http\Controllers\Manager\SalaryController::class, 'show'])->name('salary.show');
-    Route::get('/salary/{id}/edit', [\App\Http\Controllers\Manager\SalaryController::class, 'edit'])->name('salary.edit');
-    Route::put('/salary/{id}', [\App\Http\Controllers\Manager\SalaryController::class, 'update'])->name('salary.update');
 
     // ── Inventory ─────────────────────────────────────────────────────
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
@@ -169,19 +175,23 @@ Route::prefix('manager')->name('manager.')->middleware(['auth', 'role:quản lý
     Route::post('/shift-close', [ShiftCloseController::class, 'store'])->name('shift-close.store');
 
     // ── Reports ───────────────────────────────────────────────────────
+    // Quản lý: chỉ xem báo cáo
     Route::get('/reports/revenue', [ReportController::class, 'revenue'])->name('reports.revenue');
-    Route::get('/reports/revenue/export', [ReportController::class, 'exportRevenueExcel'])->name('reports.revenue.export');
+    // Chủ cửa hàng: xuất Excel
+    Route::get('/reports/revenue/export', [ReportController::class, 'exportRevenueExcel'])->middleware('role:chủ cửa hàng')->name('reports.revenue.export');
 
 
     // ── Vouchers ──────────────────────────────────────────────────────
+    // Quản lý: chỉ xem danh sách và chi tiết voucher
     Route::get('/vouchers', [VoucherController::class, 'index'])->name('vouchers.index');
-    Route::get('/vouchers/create', [VoucherController::class, 'create'])->name('vouchers.create');
-    Route::post('/vouchers', [VoucherController::class, 'store'])->name('vouchers.store');
-    Route::get('/vouchers/{id}/edit', [VoucherController::class, 'edit'])->name('vouchers.edit');
+    // Chủ cửa hàng: toàn quyền tạo/sửa/xóa/xuất (static routes trước wildcard {id})
+    Route::get('/vouchers/create', [VoucherController::class, 'create'])->middleware('role:chủ cửa hàng')->name('vouchers.create');
+    Route::post('/vouchers', [VoucherController::class, 'store'])->middleware('role:chủ cửa hàng')->name('vouchers.store');
+    Route::get('/vouchers/{id}/edit', [VoucherController::class, 'edit'])->middleware('role:chủ cửa hàng')->name('vouchers.edit');
+
     Route::get('/vouchers/{id}', [VoucherController::class, 'show'])->name('vouchers.show');
-    Route::get('/vouchers/{id}/export-users', [VoucherController::class, 'exportUsers'])->name('vouchers.export-users');
-    Route::put('/vouchers/{id}', [VoucherController::class, 'update'])->name('vouchers.update');
-    Route::delete('/vouchers/{id}', [VoucherController::class, 'destroy'])->name('vouchers.destroy');
+    Route::put('/vouchers/{id}', [VoucherController::class, 'update'])->middleware('role:chủ cửa hàng')->name('vouchers.update');
+    Route::delete('/vouchers/{id}', [VoucherController::class, 'destroy'])->middleware('role:chủ cửa hàng')->name('vouchers.destroy');
 });
 
 // ── Standalone manager routes (đặc biệt — không nằm trong prefix group) ──

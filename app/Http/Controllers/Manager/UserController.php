@@ -385,7 +385,7 @@ class UserController extends Controller
                     $payload['vai_tro'] = $newRole;
                 }
 
-                if ($statusChanged)
+                if ($statusChanged) {
                     $payload['trang_thai'] = $newStatus;
                 }
 

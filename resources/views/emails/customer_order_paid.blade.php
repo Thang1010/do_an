@@ -39,6 +39,11 @@
         <div style="margin-bottom: 4px;">Voucher áp dụng: <strong>{{ $v->ma_voucher }}</strong> (Giảm {{ $voucherText }})</div>
     @endif
 
+    @if(($order->so_tien_giam ?? 0) > 0)
+        <div style="margin-bottom: 4px; margin-top: 8px;">Tạm tính: {{ number_format($order->tam_tinh ?? 0, 0, ',', '.') }}đ</div>
+        <div style="margin-bottom: 4px; color: #16a34a;">Chiết khấu: -{{ number_format($order->so_tien_giam, 0, ',', '.') }}đ</div>
+    @endif
+
     <div style="margin-bottom: 12px; margin-top: 8px;">Tổng tiền: <strong>{{ number_format($order->tong_tien ?? 0, 0, ',', '.') }}đ</strong></div>
     
     <p>Món ngon của bạn đang được chuẩn bị. Rất hân hạnh được phục vụ bạn!</p>

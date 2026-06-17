@@ -26,13 +26,13 @@ class MenuController extends Controller
 
         // Build category images map
         $categoryImages = SanPham::whereIn('danh_muc_id', $categories->pluck('id'))
-            ->whereNotNull('hinh_anh_chinh')
+            ->whereNotNull('hinh_anh')
             ->orderByDesc('noi_bat')
             ->orderByDesc('created_at')
-            ->get(['danh_muc_id', 'hinh_anh_chinh'])
+            ->get(['danh_muc_id', 'hinh_anh'])
             ->groupBy('danh_muc_id')
             ->map(function ($items) {
-                $img = $items->first()->hinh_anh_chinh;
+                $img = $items->first()->hinh_anh;
                 if (Str::startsWith($img, ['http://', 'https://'])) {
                     return $img;
                 }
@@ -90,7 +90,7 @@ class MenuController extends Controller
 
     public function show(int $id)
     {
-        $product = SanPham::with(['danhMuc', 'kichCo', 'hinhAnhSanPham', 'danhGiaSanPham.nguoiDung'])->findOrFail($id);
+        $product = SanPham::with(['danhMuc', 'kichCo', 'danhGiaSanPham.nguoiDung'])->findOrFail($id);
 
         $avgRating = $product->danhGiaSanPham->avg('so_sao') ?? 0;
 

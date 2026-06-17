@@ -46,6 +46,11 @@ class PasswordSetupController extends Controller
 
         $request->session()->forget('force_password_setup');
 
+        // Đặt mật khẩu xong mới hiển thị popup nhận voucher (đúng thứ tự cho tài khoản mới).
+        if ($request->session()->pull('pending_voucher_popup') && $user->vai_tro === 'khách hàng') {
+            $request->session()->flash('show_voucher_popup', true);
+        }
+
         return $this->redirectByRole($user)
             ->with('success', 'Đã cập nhật mật khẩu.');
     }

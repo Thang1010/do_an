@@ -1,9 +1,24 @@
 @if(isset($selectedTable) || isset($assignOrder))
     <div class="card">
-        <div class="card-header">
-            <span class="card-title">Chi tiết Bàn {{ isset($selectedTable) ? $selectedTable->so_ban : '(Chưa gán)' }}</span>
-            @if($selectedOrder)
-                <span class="badge badge-brew">Đơn #{{ $selectedOrder->ma_don_hang ?? $selectedOrder->id }}</span>
+        <div class="card-header" style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+            <div>
+                <span class="card-title">Chi tiết Bàn {{ isset($selectedTable) ? $selectedTable->so_ban : '(Chưa gán)' }}</span>
+                @if($selectedOrder)
+                    <div style="margin-top:6px;">
+                        <span class="badge badge-brew">Đơn #{{ $selectedOrder->ma_don_hang ?? $selectedOrder->id }}</span>
+                    </div>
+                @endif
+            </div>
+            @if(isset($selectedTable) && $selectedTable->trang_thai === 'đã đặt')
+                <form method="POST" action="{{ route('staff.tables.enter', $selectedTable->id) }}">
+                    @csrf @method('PATCH')
+                    <button type="submit" class="btn btn-primary btn-sm">Vào bàn</button>
+                </form>
+            @elseif(isset($selectedTable) && $selectedTable->trang_thai === 'đang phục vụ')
+                <form id="release-table-form" method="POST" action="{{ route('staff.tables.release', $selectedTable->id) }}">
+                    @csrf @method('PATCH')
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="openReleaseTableModal()">Trả bàn</button>
+                </form>
             @endif
         </div>
         <div class="card-body">
@@ -69,71 +84,33 @@
         </div>
     </div>
 
-    @if(isset($selectedTable))
-        <div class="order-actions" style="margin-top: 16px;">
-            @if($selectedTable->trang_thai === 'đã đặt')
-                <form method="POST" action="{{ route('staff.tables.enter', $selectedTable->id) }}" style="width: 100%;">
-                    @csrf @method('PATCH')
-                    <button type="submit" class="btn btn-primary w-full" style="justify-content:center;">Vào bàn</button>
-                </form>
-            @elseif($selectedTable->trang_thai === 'đang phục vụ')
-                <form id="release-table-form" method="POST" action="{{ route('staff.tables.release', $selectedTable->id) }}" style="width: 100%;">
-                    @csrf @method('PATCH')
-                    <button type="button" class="btn btn-secondary w-full" style="justify-content:center;"
-                            onclick="openReleaseTableModal()">
-                        Trả bàn
-                    </button>
-                </form>
-            @endif
-        </div>
-    @endif
-
-    <form method="POST" action="{{ isset($selectedTable) ? route('staff.tables.order.update', $selectedTable->id) : '#' }}" id="order-update-form">
+    <form method="POST" action="{{ isset($selectedTable) ? route('staff.tables.order.update', $selectedTable->id) : '#' }}" id="order-update-form" style="margin-top:16px;">
         @csrf @method('PATCH')
         <input type="hidden" name="order_id" value="{{ $selectedOrder?->id }}">
         <input type="hidden" name="category" value="{{ request('category') }}">
         <input type="hidden" name="auto_voucher" id="auto-voucher-flag" value="0">
 
-        <div class="voucher-row">
-            <div class="voucher-row__header">
-                <label class="form-label">Mã giảm giá</label>
-                <button type="button" class="voucher-detail-link" id="voucher-detail-trigger" {{ (!$selectedOrder && count($selectedItems ?? []) === 0) ? 'disabled' : '' }}>
-                    Chi tiết
-                </button>
-            </div>
-            <select name="voucher_id" class="form-control" id="voucher-select" {{ ((!$selectedOrder && count($selectedItems ?? []) === 0) || ($selectedOrder && $selectedOrder->voucher_nguoi_dung_id)) ? 'disabled' : '' }}>
-                @if($selectedOrder && $selectedOrder->voucher_nguoi_dung_id)
-                    <option value="">Mã giảm giá do khách tự áp dụng</option>
-                @else
-                    <option value="">Không dùng mã giảm giá</option>
-                @endif
-                @foreach($availableVouchers as $voucher)
-                    @php
-                        $percentValue = rtrim(rtrim(number_format($voucher->gia_tri_giam, 2, ',', '.'), '0'), ',');
-                        $discountLabel = $voucher->loai_giam === 'phần trăm'
-                            ? $percentValue . '%'
-                            : number_format($voucher->gia_tri_giam, 0, ',', '.') . 'đ';
-                        $minLabel = (float) $voucher->don_toi_thieu > 0
-                            ? number_format($voucher->don_toi_thieu, 0, ',', '.') . 'đ'
-                            : 'Không';
-                    @endphp
-                    <option value="{{ $voucher->id }}"
-                            data-code="{{ $voucher->ma_voucher }}"
-                            data-name="{{ $voucher->ten_voucher }}"
-                            data-discount="{{ $discountLabel }}"
-                            data-discount-type="{{ $voucher->loai_giam }}"
-                            data-min="{{ $minLabel }}"
-                            {{ (string) $selectedVoucherId === (string) $voucher->id ? 'selected' : '' }}>
-                        {{ $voucher->ma_voucher }} — {{ $voucher->ten_voucher }} ({{ $discountLabel }})
-                    </option>
-                @endforeach
-            </select>
-        </div>
+        @php
+            $hasItemsForDiscount = $selectedOrder || (isset($selectedItems) && count($selectedItems) > 0);
+            $hasCustomerVoucher = $selectedOrder && $selectedOrder->voucher_nguoi_dung_id;
+            $appliedDiscount = $selectedOrder ? (float) $selectedOrder->so_tien_giam : 0;
+            $discountSubtotal = 0;
+            if (isset($selectedItems)) {
+                foreach ($selectedItems as $dItem) {
+                    $discountSubtotal += ($dItem->don_gia ?? 0) * ($dItem->so_luong ?? 1);
+                }
+            }
+            // Chiết khấu thủ công (không phải voucher của khách) để giữ qua các lần tạm tính
+            $manualDiscount = (!$hasCustomerVoucher && $appliedDiscount > 0) ? $appliedDiscount : 0;
+        @endphp
 
-        @if(isset($selectedOrder) && $selectedOrder->so_tien_giam > 0)
+        <input type="hidden" name="chiet_khau_loai" id="chiet-khau-loai" value="{{ $manualDiscount > 0 ? 'tiền' : '' }}">
+        <input type="hidden" name="chiet_khau_gia_tri" id="chiet-khau-gia-tri" value="{{ $manualDiscount > 0 ? number_format($manualDiscount, 0, '.', '') : '0' }}">
+
+        @if(isset($selectedOrder) && $appliedDiscount > 0)
             <div class="order-total" style="color: #10b981; font-size: 14px; border-top: none; padding-top: 0; padding-bottom: 8px;">
-                <span class="order-total__label" style="color: #10b981;">Đã giảm giá (Khách đặt):</span>
-                <span class="order-total__value">-{{ number_format($selectedOrder->so_tien_giam, 0, ',', '.') }}đ</span>
+                <span class="order-total__label" style="color: #10b981;">{{ $hasCustomerVoucher ? 'Đã giảm giá (Khách đặt):' : 'Chiết khấu:' }}</span>
+                <span class="order-total__value">-{{ number_format($appliedDiscount, 0, ',', '.') }}đ</span>
             </div>
         @endif
         <div class="order-total">
@@ -153,6 +130,14 @@
             @else
                 <button type="submit" name="action" value="draft" class="btn btn-secondary w-full"
                     style="justify-content:center;" {{ count($selectedItems ?? []) === 0 ? 'disabled' : '' }}>Tạm tính</button>
+                @if(!$hasCustomerVoucher)
+                    <button type="button" id="discount-trigger" class="btn w-full"
+                        style="justify-content:center; background:#8a6d3b; color:#fff; border:none;"
+                        onclick="openDiscountModal()"
+                        data-subtotal="{{ $discountSubtotal }}"
+                        data-current="{{ $manualDiscount > 0 ? number_format($manualDiscount, 0, '.', '') : '0' }}"
+                        {{ count($selectedItems ?? []) === 0 ? 'disabled' : '' }}>Chiết khấu</button>
+                @endif
                 <button type="submit" name="action" value="payment" class="btn btn-primary w-full"
                     style="justify-content:center;" {{ count($selectedItems ?? []) === 0 ? 'disabled' : '' }}>Thanh toán</button>
             @endif
@@ -176,21 +161,31 @@
         </form>
     @endif
 
-    <div class="modal" id="voucher-modal" aria-hidden="true">
-        <div class="modal__backdrop" data-modal-close></div>
+    <div class="modal" id="discount-modal" aria-hidden="true">
+        <div class="modal__backdrop" onclick="closeDiscountModal()"></div>
         <div class="modal__content modal__content--sm">
             <div class="modal__header">
-                <div class="modal__title">Chi tiết mã giảm giá</div>
-                <button type="button" class="modal__close" data-modal-close>&times;</button>
+                <div class="modal__title">Chiết khấu hóa đơn</div>
+                <button type="button" class="modal__close" onclick="closeDiscountModal()">&times;</button>
             </div>
             <div class="modal__body">
-                <div class="voucher-modal__title" id="voucher-modal-title">—</div>
-                <div class="voucher-modal__row"><span>Mã giảm giá</span><strong id="voucher-modal-code">—</strong></div>
-                <div class="voucher-modal__row"><span>Đơn tối thiểu</span><strong id="voucher-modal-min">—</strong></div>
-                <div class="voucher-modal__row"><span>Mức giảm</span><strong id="voucher-modal-discount">—</strong></div>
+                <div class="form-group">
+                    <label class="form-label" style="color:#F0DDB8;">Kiểu chiết khấu</label>
+                    <div style="display:flex; gap:8px;">
+                        <button type="button" class="payment-method is-active" id="discount-type-percent" onclick="setDiscountType('phần trăm')">Theo %</button>
+                        <button type="button" class="payment-method" id="discount-type-amount" onclick="setDiscountType('tiền')">Theo tiền</button>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-top:14px;">
+                    <label class="form-label" id="discount-value-label" style="color:#F0DDB8;">Phần trăm giảm (%)</label>
+                    <input type="number" min="0" step="0.01" id="discount-value-input" class="form-control"
+                           placeholder="Nhập giá trị" oninput="updateDiscountPreview()">
+                    <p id="discount-hint" style="font-size:12px; color:#9b8e77; margin-top:6px;">—</p>
+                </div>
             </div>
-            <div class="modal__footer">
-                <button type="button" class="btn btn-secondary" data-modal-close>Đóng</button>
+            <div class="modal__footer" style="justify-content:space-between;">
+                <button type="button" class="btn btn-secondary" onclick="clearDiscount()">Bỏ chiết khấu</button>
+                <button type="button" class="btn btn-primary" onclick="applyDiscount()">Áp dụng</button>
             </div>
         </div>
     </div>
@@ -333,35 +328,35 @@ function generatePayOSQrStaff(orderCode) {
 @if(isset($selectedTable) && $selectedTable->trang_thai === 'đang phục vụ')
 <div id="release-table-modal" style="position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:10001;padding:20px;" role="dialog" aria-modal="true">
     <div onclick="closeReleaseTableModal()" style="position:absolute;inset:0;background:rgba(18,12,8,0.72);backdrop-filter:blur(2px);"></div>
-    <div style="position:relative;width:min(460px,92vw);background:#fff;border-radius:16px;padding:28px 26px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.18);font-family:'Outfit',sans-serif;">
+    <div style="position:relative;width:min(460px,92vw);background:rgba(30,17,6,0.92);border-radius:18px;border:1px solid rgba(240,221,184,0.16);backdrop-filter:blur(14px);padding:28px 26px 22px;box-shadow:0 24px 60px rgba(0,0,0,0.45);font-family:'Outfit',sans-serif;">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
             @if($selectedTableHasUnpaid ?? false)
-                <div style="width:44px;height:44px;border-radius:50%;background:#fff1f0;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d92d20" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,107,107,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 </div>
-                <div style="font-size:18px;font-weight:700;color:#1a0a00;">Không thể trả bàn {{ $selectedTable->so_ban }}</div>
+                <div style="font-size:18px;font-weight:700;color:#F0DDB8;">Không thể trả bàn {{ $selectedTable->so_ban }}</div>
             @else
-                <div style="width:44px;height:44px;border-radius:50%;background:#f0fdf4;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                <div style="width:44px;height:44px;border-radius:50%;background:rgba(22,163,74,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                 </div>
-                <div style="font-size:18px;font-weight:700;color:#1a0a00;">Xác nhận trả bàn {{ $selectedTable->so_ban }}</div>
+                <div style="font-size:18px;font-weight:700;color:#F0DDB8;">Xác nhận trả bàn {{ $selectedTable->so_ban }}</div>
             @endif
-            <button type="button" onclick="closeReleaseTableModal()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#888;font-size:20px;line-height:1;">&times;</button>
+            <button type="button" onclick="closeReleaseTableModal()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.55);font-size:20px;line-height:1;">&times;</button>
         </div>
-        
+
         @if($selectedTableHasUnpaid ?? false)
-            <p style="font-size:14px;color:#b42318;font-weight:600;margin-bottom:22px;line-height:1.6;">
+            <p style="font-size:14px;color:#ff8a8a;font-weight:600;margin-bottom:22px;line-height:1.6;">
                 Bàn này vẫn còn đơn chưa thanh toán. Vui lòng thanh toán tất cả các đơn để trả bàn.
             </p>
             <div style="display:flex;gap:10px;justify-content:flex-end;">
-                <button type="button" onclick="closeReleaseTableModal()" style="padding:10px 22px;border-radius:8px;border:none;background:#3d2c1e;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;">Đóng</button>
+                <button type="button" onclick="closeReleaseTableModal()" style="padding:10px 22px;border-radius:8px;border:1px solid rgba(240,221,184,0.3);background:rgba(255,255,255,0.05);color:#F0DDB8;font-size:14px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;">Đóng</button>
             </div>
         @else
-            <p style="font-size:14px;color:#5f544a;margin-bottom:22px;line-height:1.6;">
+            <p style="font-size:14px;color:rgba(255,255,255,0.78);margin-bottom:22px;line-height:1.6;">
                 Bạn có chắc chắn muốn trả bàn không? Bàn sẽ trở về trạng thái trống.
             </p>
             <div style="display:flex;gap:10px;justify-content:flex-end;">
-                <button type="button" onclick="closeReleaseTableModal()" style="padding:10px 22px;border-radius:8px;border:1px solid #e0d8d0;background:#fff;color:#3d2c1e;font-size:14px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;">Hủy</button>
+                <button type="button" onclick="closeReleaseTableModal()" style="padding:10px 22px;border-radius:8px;border:1px solid rgba(240,221,184,0.3);background:rgba(255,255,255,0.05);color:#F0DDB8;font-size:14px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;">Hủy</button>
                 <button type="button" onclick="document.getElementById('release-table-form').submit()" style="padding:10px 22px;border-radius:8px;border:none;background:#16a34a;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;">Xác nhận trả bàn</button>
             </div>
         @endif

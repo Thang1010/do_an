@@ -206,11 +206,26 @@
             </div>
 
             {{-- Recipes --}}
+            @php
+                $coCongThuc = old('co_cong_thuc') !== null
+                    ? old('co_cong_thuc') === '1'
+                    : (isset($product) ? ($product->loai_quan_ly_kho === 'theo nguyên liệu') : true);
+            @endphp
             <div class="card">
-                <div class="card-header">
+                <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
                     <span class="card-title">Công thức nguyên liệu</span>
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:500;">
+                        <input type="hidden" name="co_cong_thuc" value="0">
+                        <input type="checkbox" id="co-cong-thuc-toggle" name="co_cong_thuc" value="1"
+                               {{ $coCongThuc ? 'checked' : '' }} onchange="toggleRecipeSection()">
+                        <span>Món này có công thức</span>
+                    </label>
                 </div>
                 <div class="card-body">
+                    <div id="no-recipe-note" class="form-hint" style="display:none; padding:6px 0;">
+                        Món không dùng công thức — quản lý theo số lượng, không trừ kho nguyên liệu.
+                    </div>
+                    <div id="recipe-section">
                     @php
                         $recipes = old('recipes');
                         if ($recipes === null) {
@@ -275,6 +290,7 @@
                     </div>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="addRecipeRow()">+ Thêm nguyên liệu</button>
                     <div class="form-hint mt-8">Công thức này sẽ dùng để trừ kho khi đơn hàng được xác nhận.</div>
+                    </div>{{-- /#recipe-section --}}
                 </div>
             </div>
         </div>
@@ -287,8 +303,8 @@
                 <div class="card-body">
                     <div class="img-upload-area" id="upload-area" onclick="document.getElementById('img-input').click()">
                         <img id="img-preview"
-                             src="{{ old('anh_chinh') ? '' : (isset($product) && $product->hinh_anh_chinh ? $product->image_url : '') }}"
-                             class="img-preview-upload {{ isset($product) && $product->hinh_anh_chinh ? '' : 'hidden' }}">
+                             src="{{ old('anh_chinh') ? '' : (isset($product) && $product->hinh_anh ? $product->image_url : '') }}"
+                             class="img-preview-upload {{ isset($product) && $product->hinh_anh ? '' : 'hidden' }}">
                         <p>Nhấn để tải ảnh lên</p>
                         <p class="img-upload-hint">JPG, PNG, WEBP — tối đa 2MB</p>
                     </div>
@@ -465,5 +481,19 @@ function removeRecipeRow(button) {
 }
 
 document.querySelectorAll('.recipe-ingredient').forEach(syncRecipeUnit);
+
+function toggleRecipeSection() {
+    const toggle = document.getElementById('co-cong-thuc-toggle');
+    const section = document.getElementById('recipe-section');
+    const note = document.getElementById('no-recipe-note');
+    if (!toggle || !section) return;
+    const on = toggle.checked;
+    section.style.display = on ? '' : 'none';
+    if (note) note.style.display = on ? 'none' : 'block';
+    // Vô hiệu hóa input công thức khi không có công thức để không gửi lên server
+    section.querySelectorAll('select, input').forEach((el) => { el.disabled = !on; });
+}
+
+toggleRecipeSection();
 </script>
 @endpush

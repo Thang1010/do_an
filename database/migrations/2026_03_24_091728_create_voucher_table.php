@@ -22,7 +22,7 @@ return new class extends Migration
             $table->integer('so_luong')->default(0);
             $table->dateTime('ngay_bat_dau')->nullable();
             $table->dateTime('ngay_ket_thuc')->nullable();
-            $table->enum('trang_thai', ['đang hoạt động', 'ngưng hoạt động', 'hết hạn'])->default('đang hoạt động');
+            $table->enum('trang_thai', ['đang hoạt động', 'ngừng phát hành', 'ngưng hoạt động', 'hết hạn'])->default('đang hoạt động');
             $table->timestamps();
 
             $table->index(['ma_voucher', 'trang_thai']);

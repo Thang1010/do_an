@@ -8,7 +8,7 @@ Nhân viên / <strong>Lịch sử đơn hàng</strong>
     <div class="page-header">
         <div>
             <h1 class="page-title">Lịch sử đơn hàng</h1>
-            <p class="page-subtitle">Tra cứu đơn hàng theo thời gian và khách hàng</p>
+            <p class="page-subtitle">Các đơn hàng do bạn tạo — tra cứu theo thời gian và khách hàng</p>
         </div>
     </div>
 
@@ -57,7 +57,7 @@ Nhân viên / <strong>Lịch sử đơn hàng</strong>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="empty-state">Chưa có đơn hàng nào.</td>
+                            <td colspan="7" class="empty-state">Bạn chưa tạo đơn hàng nào.</td>
                         </tr>
                     @endforelse
                 </tbody>

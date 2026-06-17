@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Validation\Rule;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class VoucherController extends Controller
 {
@@ -20,9 +19,11 @@ class VoucherController extends Controller
 
     public function edit(int $id)
     {
-        $voucher = Voucher::findOrFail($id);
+        $voucher = Voucher::withCount('voucherNguoiDung')->findOrFail($id);
+        $issuedCount = $voucher->voucher_nguoi_dung_count;
+        $isLocked = $issuedCount > 0;
 
-        return view('manager.vouchers.edit', compact('voucher'));
+        return view('manager.vouchers.edit', compact('voucher', 'isLocked', 'issuedCount'));
     }
 
     private function applyFilters($query, Request $request): void
@@ -46,21 +47,26 @@ class VoucherController extends Controller
                     return;
                 }
 
+                if ($normalizedStatus === 'ngừng phát hành') {
+                    $query->where('trang_thai', 'ngừng phát hành');
+                    return;
+                }
+
                 if ($normalizedStatus === 'hết hạn') {
-                    $query->where('trang_thai', '!=', 'ngưng hoạt động')
+                    $query->whereNotIn('trang_thai', ['ngưng hoạt động', 'ngừng phát hành'])
                         ->whereNotNull('ngay_ket_thuc')
                         ->where('ngay_ket_thuc', '<', $todayStart);
                     return;
                 }
 
                 if ($normalizedStatus === 'chưa phát hành') {
-                    $query->where('trang_thai', '!=', 'ngưng hoạt động')
+                    $query->whereNotIn('trang_thai', ['ngưng hoạt động', 'ngừng phát hành'])
                         ->whereNotNull('ngay_bat_dau')
                         ->where('ngay_bat_dau', '>', $todayEnd);
                     return;
                 }
 
-                $query->where('trang_thai', '!=', 'ngưng hoạt động')
+                $query->whereNotIn('trang_thai', ['ngưng hoạt động', 'ngừng phát hành'])
                     ->where(function ($q) use ($todayEnd) {
                         $q->whereNull('ngay_bat_dau')
                             ->orWhere('ngay_bat_dau', '<=', $todayEnd);
@@ -94,6 +100,7 @@ class VoucherController extends Controller
 
         return match ($value) {
             'hoat_dong', 'đang hoạt động' => 'đang hoạt động',
+            'ngung_phat_hanh', 'ngừng phát hành' => 'ngừng phát hành',
             'vo_hieu', 'ngưng hoạt động' => 'ngưng hoạt động',
             'het_han', 'hết hạn' => 'hết hạn',
             'chua_phat_hanh', 'chưa phát hành' => 'chưa phát hành',
@@ -123,6 +130,7 @@ class VoucherController extends Controller
     {
         $query = Voucher::query()
             ->withCount([
+                'voucherNguoiDung',
                 'voucherNguoiDung as so_da_dung_thuc' => function ($q) {
                     $q->where('trang_thai', 'đã dùng');
                 },
@@ -137,7 +145,7 @@ class VoucherController extends Controller
         $todayEnd = $now->copy()->endOfDay();
 
         $activeVouchers = Voucher::query()
-            ->where('trang_thai', '!=', 'ngưng hoạt động')
+            ->whereNotIn('trang_thai', ['ngưng hoạt động', 'ngừng phát hành'])
             ->where(function ($q) use ($todayEnd) {
                 $q->whereNull('ngay_bat_dau')
                     ->orWhere('ngay_bat_dau', '<=', $todayEnd);
@@ -153,7 +161,7 @@ class VoucherController extends Controller
             ->sum('so_tien_giam');
 
         $expiringSoon = Voucher::query()
-            ->where('trang_thai', '!=', 'ngưng hoạt động')
+            ->whereNotIn('trang_thai', ['ngưng hoạt động', 'ngừng phát hành'])
             ->where(function ($q) use ($todayEnd) {
                 $q->whereNull('ngay_bat_dau')
                     ->orWhere('ngay_bat_dau', '<=', $todayEnd);
@@ -196,64 +204,6 @@ class VoucherController extends Controller
         ));
     }
 
-    public function exportUsers(Request $request, int $id): StreamedResponse
-    {
-        $voucher = Voucher::findOrFail($id);
-
-        $userVoucherQuery = $voucher->voucherNguoiDung()
-            ->with('nguoiDung')
-            ->orderByDesc('duoc_cap_luc');
-
-        $this->applyUserVoucherFilters($userVoucherQuery, $request);
-
-        $records = $userVoucherQuery->get();
-        $fileVoucherCode = preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) $voucher->ma_voucher) ?: ('voucher-' . $voucher->id);
-        $fileName = 'danh-sach-nguoi-nhan-' . $fileVoucherCode . '-' . now()->format('Ymd_His') . '.csv';
-
-        return response()->streamDownload(function () use ($records, $voucher) {
-            $output = fopen('php://output', 'w');
-            if ($output === false) {
-                return;
-            }
-
-            fwrite($output, "\xEF\xBB\xBF");
-
-            fputcsv($output, [
-                'STT',
-                'Ma voucher',
-                'Ten voucher',
-                'Nguoi dung',
-                'So dien thoai',
-                'Email',
-                'Trang thai su dung',
-                'Da dung?',
-                'Duoc cap luc',
-                'Da dung luc',
-            ]);
-
-            foreach ($records as $index => $item) {
-                $isUsed = $item->trang_thai === 'đã dùng';
-
-                fputcsv($output, [
-                    $index + 1,
-                    $voucher->ma_voucher,
-                    $voucher->ten_voucher,
-                    $item->nguoiDung->ho_ten ?? $item->nguoiDung->email ?? 'Khong xac dinh',
-                    '',
-                    $item->nguoiDung->email ?? '',
-                    $item->trang_thai,
-                    $isUsed ? 'Da dung' : 'Chua dung',
-                    $item->duoc_cap_luc ? Carbon::parse($item->duoc_cap_luc)->format('d/m/Y H:i:s') : '',
-                    $item->da_dung_luc ? Carbon::parse($item->da_dung_luc)->format('d/m/Y H:i:s') : '',
-                ]);
-            }
-
-            fclose($output);
-        }, $fileName, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-        ]);
-    }
-
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -266,7 +216,7 @@ class VoucherController extends Controller
             'so_luong'      => 'required|integer|min:0',
             'ngay_bat_dau'  => 'required|date',
             'ngay_ket_thuc' => 'required|date|after_or_equal:ngay_bat_dau',
-            'trang_thai'    => ['nullable', 'string', 'max:50', Rule::in(['đang hoạt động', 'ngưng hoạt động', 'hoat_dong', 'vo_hieu'])],
+            'trang_thai'    => ['nullable', 'string', 'max:50', Rule::in(['đang hoạt động', 'ngừng phát hành', 'ngưng hoạt động', 'hoat_dong', 'ngung_phat_hanh', 'vo_hieu'])],
         ], [
             'ma_voucher.unique'           => 'Mã voucher này đã tồn tại.',
             'ngay_ket_thuc.after_or_equal' => 'Ngày kết thúc phải sau ngày bắt đầu.',
@@ -283,7 +233,7 @@ class VoucherController extends Controller
         }
 
         $status = $this->normalizeVoucherStatus($validated['trang_thai'] ?? null) ?? 'đang hoạt động';
-        if (! in_array($status, ['đang hoạt động', 'ngưng hoạt động'], true)) {
+        if (! in_array($status, ['đang hoạt động', 'ngừng phát hành', 'ngưng hoạt động'], true)) {
             $status = 'đang hoạt động';
         }
 
@@ -310,7 +260,45 @@ class VoucherController extends Controller
 
     public function update(Request $request, int $id)
     {
-        $voucher = Voucher::findOrFail($id);
+        $voucher = Voucher::withCount('voucherNguoiDung')->findOrFail($id);
+        $issuedCount = $voucher->voucher_nguoi_dung_count;
+
+        // Voucher đã được cấp cho người dùng: chỉ cho sửa các trường an toàn
+        // (tên, ngày kết thúc, trạng thái, giới hạn sử dụng). Các điều khoản giảm giá
+        // được khóa để không phá vỡ cam kết với những khách đã nhận voucher.
+        if ($issuedCount > 0) {
+            $validated = $request->validate([
+                'ten_voucher'   => 'nullable|string|max:200',
+                'ngay_ket_thuc' => ['required', 'date', 'after_or_equal:' . $voucher->ngay_bat_dau->format('Y-m-d\TH:i')],
+                'so_luong'      => 'required|integer|min:0',
+                'trang_thai'    => ['required', 'string', 'max:50', Rule::in(['đang hoạt động', 'ngừng phát hành', 'ngưng hoạt động', 'hoat_dong', 'ngung_phat_hanh', 'vo_hieu'])],
+            ], [
+                'ngay_ket_thuc.after_or_equal' => 'Ngày kết thúc phải sau ngày bắt đầu.',
+            ]);
+
+            // so_luong = 0 nghĩa là không giới hạn (luôn hợp lệ). Nếu có giới hạn cụ thể
+            // thì không được nhỏ hơn số voucher đã phát hành.
+            if ((int) $validated['so_luong'] !== 0 && (int) $validated['so_luong'] < $issuedCount) {
+                return back()->withInput()->withErrors([
+                    'so_luong' => 'Giới hạn sử dụng không được nhỏ hơn số voucher đã phát hành (' . $issuedCount . '). Nhập 0 nếu muốn không giới hạn.',
+                ]);
+            }
+
+            $status = $this->normalizeVoucherStatus($validated['trang_thai']);
+            if (! in_array($status, ['đang hoạt động', 'ngừng phát hành', 'ngưng hoạt động'], true)) {
+                $status = 'đang hoạt động';
+            }
+
+            $voucher->update([
+                'ten_voucher'   => $validated['ten_voucher'] ?? $voucher->ten_voucher,
+                'so_luong'      => (int) $validated['so_luong'],
+                'ngay_ket_thuc' => $validated['ngay_ket_thuc'],
+                'trang_thai'    => $status,
+            ]);
+
+            return redirect()->route('manager.vouchers.index')
+                ->with('success', 'Đã cập nhật voucher. Lưu ý: các điều khoản giảm giá bị khóa vì voucher đã được cấp cho người dùng.');
+        }
 
         $validated = $request->validate([
             'ma_voucher'    => ['required', 'string', 'max:50', Rule::unique('voucher', 'ma_voucher')->ignore($voucher->id)],
@@ -322,7 +310,7 @@ class VoucherController extends Controller
             'so_luong'      => 'required|integer|min:0',
             'ngay_bat_dau'  => 'required|date',
             'ngay_ket_thuc' => 'required|date|after_or_equal:ngay_bat_dau',
-            'trang_thai'    => ['required', 'string', 'max:50', Rule::in(['đang hoạt động', 'ngưng hoạt động', 'hoat_dong', 'vo_hieu'])],
+            'trang_thai'    => ['required', 'string', 'max:50', Rule::in(['đang hoạt động', 'ngừng phát hành', 'ngưng hoạt động', 'hoat_dong', 'ngung_phat_hanh', 'vo_hieu'])],
         ]);
 
         $discountType = $this->normalizeDiscountType($validated['loai_giam']);
@@ -332,7 +320,7 @@ class VoucherController extends Controller
             return back()->withInput()->with('error', 'Thông tin voucher không hợp lệ.');
         }
 
-        if (! in_array($status, ['đang hoạt động', 'ngưng hoạt động'], true)) {
+        if (! in_array($status, ['đang hoạt động', 'ngừng phát hành', 'ngưng hoạt động'], true)) {
             $status = 'đang hoạt động';
         }
 
@@ -364,8 +352,16 @@ class VoucherController extends Controller
     {
         $voucher = Voucher::withCount('voucherNguoiDung')->findOrFail($id);
 
+        // Voucher đã được cấp: không xóa (giữ lịch sử & khóa ngoại) mà chuyển sang
+        // 'ngừng phát hành' để dừng phát thêm; tài khoản đã nhận vẫn dùng được đến khi hết hạn.
         if ($voucher->voucher_nguoi_dung_count > 0) {
-            return back()->with('error', 'Không thể xóa voucher đã được cấp hoặc đã sử dụng.');
+            if ($voucher->trang_thai === 'ngừng phát hành') {
+                return back()->with('info', 'Voucher đã ở trạng thái Ngừng phát hành.');
+            }
+
+            $voucher->update(['trang_thai' => 'ngừng phát hành']);
+
+            return back()->with('success', 'Voucher đã được cấp nên không thể xóa. Đã chuyển sang "Ngừng phát hành": dừng phát thêm, người đã nhận vẫn dùng được đến khi hết hạn.');
         }
 
         $voucher->delete();

@@ -86,7 +86,21 @@ class LoginController extends Controller
             $request->session()->flash('show_voucher_popup', true);
         }
 
-        return $this->redirectByRole($nguoiDung);
+        // Quay lại URL đã định trước khi bị bắt đăng nhập (vd: link QR chấm công)
+        // để tự động chấm công vào/ra ngay sau khi đăng nhập thành công.
+        return redirect()->intended($this->defaultRedirectUrl($nguoiDung));
+    }
+
+    /**
+     * URL mặc định theo vai trò (dùng làm fallback cho redirect()->intended()).
+     */
+    private function defaultRedirectUrl(NguoiDung $nguoiDung): string
+    {
+        return match ($nguoiDung->vai_tro) {
+            'quản lý', 'chủ cửa hàng' => route('manager.dashboard'),
+            'nhân viên' => route('staff.dashboard'),
+            default => route('home'), // khách hàng
+        };
     }
 
     /**

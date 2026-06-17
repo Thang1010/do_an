@@ -68,46 +68,103 @@ function bindModalClose(modal) {
     });
 }
 
-function initVoucherDetails() {
-    var modal = document.getElementById('voucher-modal');
-    var trigger = document.getElementById('voucher-detail-trigger');
-    var select = document.getElementById('voucher-select');
-    var form = document.getElementById('order-update-form');
-    var autoFlag = document.getElementById('auto-voucher-flag');
-    var draftButton = form ? form.querySelector('button[name="action"][value="draft"]') : null;
-    if (!modal || !trigger || !select || modal.dataset.bound === '1') return;
-    modal.dataset.bound = '1';
+var discountType = 'phần trăm';
 
-    bindModalClose(modal);
+function getDiscountSubtotal() {
+    var trigger = document.getElementById('discount-trigger');
+    return trigger ? (parseFloat(trigger.dataset.subtotal || '0') || 0) : 0;
+}
 
-    function populate() {
-        var opt = select.options[select.selectedIndex];
-        if (!opt || !opt.dataset.code) return;
-        document.getElementById('voucher-modal-title').textContent = opt.dataset.name || '—';
-        document.getElementById('voucher-modal-code').textContent = opt.dataset.code || '—';
-        var discount = opt.dataset.discount || '—';
-        var type = opt.dataset.discountType || '';
-        document.getElementById('voucher-modal-discount').textContent = type ? (discount + ' (' + type + ')') : discount;
-        document.getElementById('voucher-modal-min').textContent = opt.dataset.min || '—';
+function formatVnd(n) {
+    return Math.round(n).toLocaleString('vi-VN') + 'đ';
+}
+
+function setDiscountType(type) {
+    discountType = type;
+    var p = document.getElementById('discount-type-percent');
+    var a = document.getElementById('discount-type-amount');
+    var label = document.getElementById('discount-value-label');
+    var input = document.getElementById('discount-value-input');
+    if (p) p.classList.toggle('is-active', type === 'phần trăm');
+    if (a) a.classList.toggle('is-active', type === 'tiền');
+    if (label) label.textContent = type === 'phần trăm' ? 'Phần trăm giảm (%)' : 'Số tiền giảm (đ)';
+    if (input) {
+        input.max = type === 'phần trăm' ? '100' : String(getDiscountSubtotal());
+        input.value = '';
     }
+    updateDiscountPreview();
+}
 
-    trigger.addEventListener('click', function() {
-        if (select.disabled) return;
-        var opt = select.options[select.selectedIndex];
-        if (!opt || !opt.dataset.code) return;
-        populate();
-        modal.classList.add('modal--open');
-    });
+function updateDiscountPreview() {
+    var input = document.getElementById('discount-value-input');
+    var hint = document.getElementById('discount-hint');
+    if (!input || !hint) return;
+    var subtotal = getDiscountSubtotal();
+    var val = parseFloat(input.value || '0');
+    if (isNaN(val) || val <= 0) {
+        hint.textContent = 'Tạm tính: ' + formatVnd(subtotal);
+        return;
+    }
+    var discount = discountType === 'phần trăm'
+        ? subtotal * Math.min(val, 100) / 100
+        : Math.min(val, subtotal);
+    hint.textContent = 'Giảm ' + formatVnd(discount) + ' → còn ' + formatVnd(Math.max(0, subtotal - discount));
+}
 
-    select.addEventListener('change', function() {
-        if (!form || !draftButton) return;
-        if (autoFlag) autoFlag.value = '1';
-        if (form.requestSubmit) {
-            form.requestSubmit(draftButton);
-        } else {
-            draftButton.click();
-        }
-    });
+function openDiscountModal() {
+    var modal = document.getElementById('discount-modal');
+    if (!modal) return;
+    var trigger = document.getElementById('discount-trigger');
+    var current = trigger ? (parseFloat(trigger.dataset.current || '0') || 0) : 0;
+    if (current > 0) {
+        // Đã có chiết khấu trước đó → nạp lại theo số tiền
+        setDiscountType('tiền');
+        var input = document.getElementById('discount-value-input');
+        if (input) input.value = current;
+        updateDiscountPreview();
+    } else {
+        setDiscountType('phần trăm');
+    }
+    modal.classList.add('modal--open');
+}
+
+function closeDiscountModal() {
+    var modal = document.getElementById('discount-modal');
+    if (modal) modal.classList.remove('modal--open');
+}
+
+function submitDiscount(loai, giaTri) {
+    var form = document.getElementById('order-update-form');
+    if (!form) return;
+    var loaiInput = document.getElementById('chiet-khau-loai');
+    var giaTriInput = document.getElementById('chiet-khau-gia-tri');
+    if (loaiInput) loaiInput.value = loai;
+    if (giaTriInput) giaTriInput.value = giaTri;
+    var draftButton = form.querySelector('button[name="action"][value="draft"]');
+    if (form.requestSubmit && draftButton) {
+        form.requestSubmit(draftButton);
+    } else if (draftButton) {
+        draftButton.click();
+    } else {
+        form.submit();
+    }
+}
+
+function applyDiscount() {
+    var input = document.getElementById('discount-value-input');
+    var val = input ? parseFloat(input.value || '0') : 0;
+    if (isNaN(val) || val <= 0) {
+        closeDiscountModal();
+        return;
+    }
+    if (discountType === 'phần trăm') {
+        val = Math.min(val, 100);
+    }
+    submitDiscount(discountType, val);
+}
+
+function clearDiscount() {
+    submitDiscount('', 0);
 }
 
 function initPaymentModal() {
@@ -195,8 +252,7 @@ function startPosAutoRefresh() {
             var data = await res.json();
             if (data.left) leftPanel.innerHTML = data.left;
             if (data.detail) detailPanel.innerHTML = data.detail;
-    
-            initVoucherDetails();
+
             initPaymentModal();
         } catch (e) {
             // Ignore refresh errors to avoid blocking UI
@@ -209,7 +265,6 @@ function startPosAutoRefresh() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    initVoucherDetails();
     initPaymentModal();
     startPosAutoRefresh();
 });

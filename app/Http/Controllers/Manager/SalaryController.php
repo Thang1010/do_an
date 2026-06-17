@@ -219,11 +219,30 @@ class SalaryController extends Controller
             ->sum('so_tien');
     }
 
-    /**
-     * Tổng giờ làm việc của user trong kỳ.
-     */
     private function totalMinutesWorked(int $userId, Carbon $start, Carbon $end): float
     {
+        $user = NguoiDung::find($userId);
+        $isManager = $user && $user->vai_tro === 'quản lý';
+
+        if ($isManager) {
+            $shifts = \App\Models\CaLamViec::query()
+                ->where('nguoi_dung_id', $userId)
+                ->whereBetween('ngay_lam', [$start->toDateString(), $end->toDateString()])
+                ->get();
+            
+            return $shifts->sum(function ($shift) {
+                $shiftDate = $shift->ngay_lam instanceof \Carbon\CarbonInterface
+                    ? $shift->ngay_lam->format('Y-m-d')
+                    : \Carbon\Carbon::parse($shift->ngay_lam)->format('Y-m-d');
+                $shiftStart = Carbon::parse($shiftDate . ' ' . $shift->gio_bat_dau);
+                $shiftEnd = Carbon::parse($shiftDate . ' ' . $shift->gio_ket_thuc);
+                if ($shiftEnd->lessThanOrEqualTo($shiftStart)) {
+                    $shiftEnd->addDay();
+                }
+                return $shiftStart->diffInMinutes($shiftEnd);
+            });
+        }
+
         $records = ChamCong::query()
             ->where('nguoi_dung_id', $userId)
             ->whereNotNull('cham_cong_vao')

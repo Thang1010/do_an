@@ -92,7 +92,6 @@ class CategoryController extends Controller
     {
         $category = DanhMuc::findOrFail($id);
         $products = $category->sanPham()
-            ->with('hinhAnhSanPham')
             ->withCount(['chiTietDonHang as so_luong_ban'])
             ->latest()
             ->paginate(15);

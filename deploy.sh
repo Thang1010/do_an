@@ -1,8 +1,12 @@
 #!/bin/bash
-echo "Đang tải code mới nhất từ GitHub..."
+echo 'Đang tải code mới nhất từ GitHub...'
 git pull origin main
 
-echo "Đang đóng gói và khởi động lại ứng dụng (quá trình này có thể mất 1-2 phút)..."
+echo 'Đang đóng gói và khởi động lại ứng dụng...'
 docker compose up -d --build app
 
-echo "Cập nhật thành công!"
+echo 'Xóa cache Laravel...'
+docker compose exec app php artisan optimize:clear
+docker compose exec app php artisan view:clear
+
+echo 'Cập nhật thành công!'

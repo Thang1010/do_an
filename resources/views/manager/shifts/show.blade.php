@@ -8,10 +8,6 @@
 
 @section('content')
 
-    @php
-        $checkinQrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' . urlencode($checkinQrUrl ?? '');
-    @endphp
-
     <div class="page-header">
         <div>
             <h1 class="page-title">{{ $shift->ten_ca }}</h1>

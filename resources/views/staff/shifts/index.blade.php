@@ -80,16 +80,20 @@ Nhân viên / <strong>Ca làm việc</strong>
                     <td style="display: flex; gap: 8px;">
                         <a href="{{ route('staff.shifts.show', $shift->id) }}" class="btn btn-primary btn-sm">Chi tiết</a>
                         @if($canCheckin)
-                            <form method="POST" action="{{ route('staff.shifts.checkin') }}" style="display:inline;">
+                            <form method="POST" action="{{ route('staff.shifts.checkin') }}" style="display:inline;" class="js-geo-form">
                                 @csrf
                                 <input type="hidden" name="ca_lam_viec_id" value="{{ $shift->id }}">
+                                <input type="hidden" name="latitude">
+                                <input type="hidden" name="longitude">
                                 <button type="submit" class="btn btn-success btn-sm">Chấm công vào</button>
                             </form>
                         @endif
                         @if($canCheckout)
-                            <form method="POST" action="{{ route('staff.shifts.checkout') }}" style="display:inline;" onsubmit="return confirm('Xác nhận chấm công ra?')">
+                            <form method="POST" action="{{ route('staff.shifts.checkout') }}" style="display:inline;" class="js-geo-form" onsubmit="return confirm('Xác nhận chấm công ra?')">
                                 @csrf
                                 <input type="hidden" name="attendance_id" value="{{ $attendance->id }}">
+                                <input type="hidden" name="latitude">
+                                <input type="hidden" name="longitude">
                                 <button type="submit" class="btn btn-danger btn-sm">Chấm công ra</button>
                             </form>
                         @endif
@@ -104,4 +108,6 @@ Nhân viên / <strong>Ca làm việc</strong>
         </table>
     </div>
 </div>
+
+@include('staff.shifts.partials.geo-capture')
 @endsection

@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers\Staff;
 
+use App\Exceptions\AttendanceException;
 use App\Http\Controllers\Controller;
 use App\Models\CaLamViec;
 use App\Models\ChamCong;
 use App\Models\ChotCa;
-use App\Notifications\ShiftCheckoutNotification;
+use App\Services\AttendanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Carbon;
@@ -16,6 +17,10 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ShiftController extends Controller
 {
+    public function __construct(
+        private readonly AttendanceService $attendanceService,
+    ) {}
+
     public function index(Request $request)
     {
         $user = Auth::user();
@@ -39,7 +44,9 @@ class ShiftController extends Controller
                 ->map(fn($rows) => $rows->first());
         }
 
-        return view('staff.shifts.index', compact('shifts', 'attendanceMap', 'fromDate', 'toDate'));
+        $geoRequired = $this->attendanceService->geoEnforced($user->cuaHang);
+
+        return view('staff.shifts.index', compact('shifts', 'attendanceMap', 'fromDate', 'toDate', 'geoRequired'));
     }
 
     public function show(int $id)
@@ -72,7 +79,27 @@ class ShiftController extends Controller
             ->map(fn($c) => $c->nguoiDung)
             ->filter();
 
-        return view('staff.shifts.show', compact('shift', 'attendance', 'canCheckin', 'canCheckout', 'isInShiftTime', 'start', 'end', 'coworkers'));
+        $geoRequired = $this->attendanceService->geoEnforced($user->cuaHang);
+
+        return view('staff.shifts.show', compact('shift', 'attendance', 'canCheckin', 'canCheckout', 'isInShiftTime', 'start', 'end', 'coworkers', 'geoRequired'));
+    }
+
+    /**
+     * Lấy toạ độ GPS gửi kèm từ form (nullable).
+     *
+     * @return array{0: ?float, 1: ?float}
+     */
+    private function requestCoords(Request $request): array
+    {
+        $validated = $request->validate([
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+        ]);
+
+        return [
+            isset($validated['latitude']) ? (float) $validated['latitude'] : null,
+            isset($validated['longitude']) ? (float) $validated['longitude'] : null,
+        ];
     }
 
     public function checkin(Request $request)
@@ -81,24 +108,22 @@ class ShiftController extends Controller
             'ca_lam_viec_id' => 'required|exists:ca_lam_viec,id',
         ]);
 
+        /** @var \App\Models\NguoiDung $user */
         $user = Auth::user();
-        $shiftId = (int) $request->ca_lam_viec_id;
+        [$lat, $lng] = $this->requestCoords($request);
 
-        // Check if already checked in
-        $existing = ChamCong::where('nguoi_dung_id', $user->id)
-            ->where('ca_lam_viec_id', $shiftId)
-            ->whereNull('cham_cong_ra')
-            ->first();
+        // Chỉ cho check-in ca thuộc về chính nhân viên này.
+        $shift = CaLamViec::where('id', (int) $request->ca_lam_viec_id)
+            ->where('nguoi_dung_id', $user->id)
+            ->firstOrFail();
 
-        if ($existing) {
-            return back()->with('warning', 'Bạn đã check-in ca này rồi.');
+        try {
+            $this->attendanceService->assertWithinStore($user->cuaHang, $lat, $lng);
+            $this->attendanceService->assertCheckinWindow($shift, now());
+            $this->attendanceService->checkIn($user, $shift, 'manual');
+        } catch (AttendanceException $e) {
+            return back()->with($e->level === 'info' ? 'warning' : 'error', $e->getMessage());
         }
-
-        ChamCong::create([
-            'nguoi_dung_id' => $user->id,
-            'ca_lam_viec_id' => $shiftId,
-            'cham_cong_vao' => now(),
-        ]);
 
         return back()->with('success', 'Check-in thành công!');
     }
@@ -109,19 +134,24 @@ class ShiftController extends Controller
             'attendance_id' => 'required|exists:cham_cong,id',
         ]);
 
+        /** @var \App\Models\NguoiDung $user */
+        $user = Auth::user();
+        [$lat, $lng] = $this->requestCoords($request);
+
         $attendance = ChamCong::where('id', $request->attendance_id)
-            ->where('nguoi_dung_id', Auth::id())
-            ->whereNull('cham_cong_ra')
+            ->where('nguoi_dung_id', $user->id)
             ->firstOrFail();
 
-        $attendance->update([
-            'cham_cong_ra' => now(),
-        ]);
-
         $shift = CaLamViec::find($attendance->ca_lam_viec_id);
-        if ($shift) {
-            $note = $this->buildShiftDeviationNote($shift, $attendance);
-            $request->user()?->notify(new ShiftCheckoutNotification($shift, $note));
+        if (! $shift) {
+            return back()->with('error', 'Không tìm thấy ca làm việc tương ứng.');
+        }
+
+        try {
+            $this->attendanceService->assertWithinStore($user->cuaHang, $lat, $lng);
+            $this->attendanceService->checkOut($user, $shift, 'manual');
+        } catch (AttendanceException $e) {
+            return back()->with($e->level === 'info' ? 'warning' : 'error', $e->getMessage());
         }
 
         return back()->with('success', 'Check-out thành công!');

@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Manager;
 
+use App\Exceptions\AttendanceException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Manager\StoreShiftRequest;
 use App\Models\CaLamViec;
 use App\Models\ChamCong;
 use App\Models\NguoiDung;
+use App\Services\AttendanceService;
 use App\Mail\NextWeekScheduleMail;
 use App\Mail\ShiftDeletedMail;
 use App\Mail\ShiftUpdatedMail;
@@ -31,6 +33,7 @@ class ShiftController extends Controller
 {
     public function __construct(
         private readonly ShiftService $shiftService,
+        private readonly AttendanceService $attendanceService,
     ) {}
     public function index(Request $request)
     {
@@ -567,6 +570,10 @@ class ShiftController extends Controller
         ]);
     }
 
+    /**
+     * Trang quét QR (GET): KHÔNG ghi dữ liệu. Chỉ xác thực chữ ký rồi hiển thị
+     * trang xác nhận; trang này lấy GPS và POST sang submitCheckIn để ghi nhận.
+     */
     public function scanCheckIn(Request $request, int $id)
     {
         $actor = Auth::guard('nguoi_dung')->user() ?? $request->user();
@@ -593,47 +600,98 @@ class ShiftController extends Controller
                 ->with('error', 'Bạn không thuộc ca làm việc này.');
         }
 
-        $attendance = ChamCong::firstOrNew([
-            'nguoi_dung_id' => $actor->id,
-            'ca_lam_viec_id' => $assignedShift->id,
-        ]);
-
         if ($actor->vai_tro === 'quản lý') {
             return redirect()
                 ->route($this->resolveCheckinRedirectRoute($actor))
                 ->with('info', 'Tài khoản quản lý không yêu cầu chấm công.');
         }
 
-        // Đã check-in và check-out rồi
-        if ($attendance->cham_cong_vao && $attendance->cham_cong_ra) {
-            return redirect()
-                ->route($this->resolveCheckinRedirectRoute($actor))
-                ->with('info', 'Bạn đã hoàn thành chấm công ca ' . $assignedShift->ten_ca . '.');
+        $attendance = $this->attendanceService->attendanceFor((int) $actor->id, (int) $assignedShift->id);
+        $action = $this->attendanceService->nextAction($attendance);
+
+        // Link POST ký ngắn hạn — chỉ phát sinh sau khi mở trang từ QR hợp lệ,
+        // nên không thể POST trực tiếp khi đã rời quán/quá hạn.
+        $submitUrl = url(URL::temporarySignedRoute(
+            'shifts.checkin.submit',
+            now()->addMinutes((int) config('attendance.submit_ttl_minutes')),
+            ['id' => $assignedShift->id],
+            false
+        ));
+
+        return view('shifts.checkin', [
+            'shift' => $assignedShift,
+            'action' => $action,
+            'attendance' => $attendance,
+            'submitUrl' => $submitUrl,
+            'geoRequired' => $this->attendanceService->geoEnforced($actor->cuaHang),
+            'actorName' => $actor->ho_ten,
+        ]);
+    }
+
+    /**
+     * Xử lý chấm công (POST từ trang xác nhận): xác thực chữ ký + GPS + khung giờ
+     * rồi ghi nhận qua AttendanceService.
+     */
+    public function submitCheckIn(Request $request, int $id)
+    {
+        $actor = Auth::guard('nguoi_dung')->user() ?? $request->user();
+        if (! $actor) {
+            abort(403, 'Bạn cần đăng nhập để chấm công bằng QR.');
         }
 
-        // Đã check-in, chưa check-out → ghi check-out
-        if ($attendance->cham_cong_vao && ! $attendance->cham_cong_ra) {
-            $now = now();
-            $existingNote = trim((string) ($attendance->ghi_chu ?? ''));
-            $checkoutNote = 'Check-out bằng QR lúc ' . $now->format('H:i d/m/Y') . '.';
-            $attendance->cham_cong_ra = $now;
-            $attendance->ghi_chu = $existingNote !== '' ? $existingNote . ' | ' . $checkoutNote : $checkoutNote;
-            $attendance->save();
+        $redirectRoute = $this->resolveCheckinRedirectRoute($actor);
 
-            return redirect()
-                ->route($this->resolveCheckinRedirectRoute($actor))
-                ->with('success', 'Đã check-out ca ' . $assignedShift->ten_ca . ' thành công.');
+        if (! $request->hasValidRelativeSignature()) {
+            return redirect()->route($redirectRoute)
+                ->with('error', 'Phiên chấm công đã hết hạn. Vui lòng quét lại mã QR.');
         }
 
-        // Chưa check-in → ghi check-in
-        $now = now();
-        $attendance->cham_cong_vao = $now;
-        $attendance->ghi_chu = 'Check-in bằng QR lúc ' . $now->format('H:i d/m/Y') . '.';
-        $attendance->save();
+        $shift = CaLamViec::findOrFail($id);
+        $assignedShift = $this->shiftService->buildShiftGroupQuery($shift)
+            ->where('nguoi_dung_id', $actor->id)
+            ->first();
 
-        return redirect()
-            ->route($this->resolveCheckinRedirectRoute($actor))
-            ->with('success', 'Đã check-in ca ' . $assignedShift->ten_ca . ' thành công.');
+        if (! $assignedShift) {
+            return redirect()->route($redirectRoute)->with('error', 'Bạn không thuộc ca làm việc này.');
+        }
+
+        if ($actor->vai_tro === 'quản lý') {
+            return redirect()->route($redirectRoute)->with('info', 'Tài khoản quản lý không yêu cầu chấm công.');
+        }
+
+        $validated = $request->validate([
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+        ]);
+        $lat = isset($validated['latitude']) ? (float) $validated['latitude'] : null;
+        $lng = isset($validated['longitude']) ? (float) $validated['longitude'] : null;
+
+        try {
+            $this->attendanceService->assertWithinStore($actor->cuaHang, $lat, $lng);
+
+            $attendance = $this->attendanceService->attendanceFor((int) $actor->id, (int) $assignedShift->id);
+
+            switch ($this->attendanceService->nextAction($attendance)) {
+                case 'done':
+                    return redirect()->route($redirectRoute)
+                        ->with('info', 'Bạn đã hoàn thành chấm công ca ' . $assignedShift->ten_ca . '.');
+
+                case 'checkout':
+                    $this->attendanceService->checkOut($actor, $assignedShift, 'qr');
+
+                    return redirect()->route($redirectRoute)
+                        ->with('success', 'Đã check-out ca ' . $assignedShift->ten_ca . ' thành công.');
+
+                default: // checkin
+                    $this->attendanceService->assertCheckinWindow($assignedShift, now());
+                    $this->attendanceService->checkIn($actor, $assignedShift, 'qr');
+
+                    return redirect()->route($redirectRoute)
+                        ->with('success', 'Đã check-in ca ' . $assignedShift->ten_ca . ' thành công.');
+            }
+        } catch (AttendanceException $e) {
+            return redirect()->route($redirectRoute)->with($e->level, $e->getMessage());
+        }
     }
 
             private function resolveCheckinRedirectRoute(NguoiDung $actor): string

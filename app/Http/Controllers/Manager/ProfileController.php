@@ -8,6 +8,7 @@ use App\Models\CuaHang;
 use App\Models\HoSoKhachHang;
 use App\Models\HoSoNhanVien;
 use App\Models\HoSoQuanLy;
+use App\Services\GeocodingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -45,7 +46,7 @@ class ProfileController extends Controller
         return view('manager.profile.edit', compact('user', 'managerBankOptions', 'positions'));
     }
 
-    public function update(Request $request)
+    public function update(Request $request, GeocodingService $geocoding)
     {
         $user = $request->user()->loadMissing(['hoSoQuanLy', 'hoSoNhanVien', 'hoSoKhachHang']);
 
@@ -222,7 +223,18 @@ class ProfileController extends Controller
             );
         });
 
-        return redirect()->route('manager.profile.edit')->with('success', 'Cập nhật hồ sơ thành công.');
+        // Khi chủ quán lưu địa chỉ & bật chấm công GPS: kiểm tra địa chỉ có
+        // geocode được không để cảnh báo sớm (toạ độ được cache theo địa chỉ).
+        $geoWarning = '';
+        if ($user->vai_tro === 'chủ cửa hàng' && config('attendance.geo.enabled')) {
+            $storeAddress = $this->normalizeNullable($validated['cua_hang_dia_chi'] ?? null);
+            if ($storeAddress && $geocoding->geocode($storeAddress) === null) {
+                $geoWarning = ' Lưu ý: chưa xác định được toạ độ từ địa chỉ này nên chấm công GPS có thể chưa hoạt động — hãy nhập địa chỉ chi tiết hơn (số nhà, đường, phường, quận, thành phố).';
+            }
+        }
+
+        return redirect()->route('manager.profile.edit')
+            ->with('success', 'Cập nhật hồ sơ thành công.' . $geoWarning);
     }
 
 }

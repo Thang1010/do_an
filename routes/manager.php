@@ -199,3 +199,7 @@ Route::post('/account-approvals/{id}/confirm', [UserController::class, 'confirmA
 Route::get('/shift-checkin/{id}', [ShiftController::class, 'scanCheckIn'])
     ->name('shifts.checkin.scan')
     ->middleware(['auth', 'role:nhân viên,quản lý,chủ cửa hàng']);
+
+Route::post('/shift-checkin/{id}', [ShiftController::class, 'submitCheckIn'])
+    ->name('shifts.checkin.submit')
+    ->middleware(['auth', 'role:nhân viên,quản lý,chủ cửa hàng']);

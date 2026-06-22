@@ -382,7 +382,18 @@ function addSizeRow() {
             </div>
         </div>`;
     container.appendChild(row);
+    const newSelect = row.querySelector('.size-select');
+    if (newSelect) handleSizeChange(newSelect, true);
     sizeIndex++;
+}
+
+// Khoá/mở ô hệ số giá. Khi khoá → tô xám để người dùng biết không sửa được.
+function setHeSoGiaEditable(input, editable) {
+    if (!input) return;
+    input.readOnly = !editable;
+    input.style.backgroundColor = editable ? '' : '#f3f4f6';
+    input.style.color = editable ? '' : '#6b7280';
+    input.style.cursor = editable ? '' : 'not-allowed';
 }
 
 function handleSizeChange(selectEl, isInit = false) {
@@ -392,14 +403,16 @@ function handleSizeChange(selectEl, isInit = false) {
     const selectedOption = selectEl.options[selectEl.selectedIndex];
 
     if (selectEl.value === 'khac') {
+        // Thêm/sửa kích cỡ → cho phép nhập hệ số giá.
         otherFields.style.display = 'grid';
         otherFields.classList.add('visible');
+        setHeSoGiaEditable(heSoGiaInput, true);
     } else {
+        // Chọn kích cỡ có sẵn → hệ số giá lấy theo size đó, khoá lại (tô xám).
         otherFields.style.display = 'none';
         otherFields.classList.remove('visible');
-        // Khi người dùng chủ động chọn 1 size có sẵn → gợi ý hệ số giá hiện tại (vẫn cho sửa).
-        // Không ghi đè lúc tải trang (isInit) để giữ giá trị đã nhập.
-        if (!isInit && heSoGiaInput && selectedOption && selectedOption.dataset.heSoGia) {
+        setHeSoGiaEditable(heSoGiaInput, false);
+        if (heSoGiaInput && selectedOption && selectedOption.dataset.heSoGia) {
             heSoGiaInput.value = selectedOption.dataset.heSoGia;
         }
     }

@@ -10,7 +10,7 @@
         <p class="page-subtitle">Xem tài khoản nhân viên/quản lý đang chờ duyệt</p>
     </div>
     <div class="page-actions">
-        <form method="POST" action="{{ route('manager.users.pending-approvals.confirm') }}" onsubmit="return confirm('Xác nhận tất cả tài khoản theo bộ lọc hiện tại?')">
+        <form method="POST" action="{{ route('manager.users.pending-approvals.confirm') }}" onsubmit="return confirmSubmit(this, 'Xác nhận tất cả tài khoản theo bộ lọc hiện tại?')">
             @csrf
             <input type="hidden" name="confirm_scope" value="all">
             <input type="hidden" name="search" value="{{ $search }}">
@@ -48,7 +48,7 @@
             <div class="action-row">
                 <button type="button" class="btn btn-secondary btn-sm" onclick="toggleAllPending(true)">Chọn tất cả</button>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="toggleAllPending(false)">Bỏ chọn</button>
-                <button type="submit" class="btn btn-primary btn-sm" onclick="return confirmSelectedPending()">Xác nhận đã chọn</button>
+                <button type="submit" class="btn btn-primary btn-sm" onclick="return confirmSelectedPending(this.form)">Xác nhận đã chọn</button>
             </div>
         </div>
 
@@ -78,7 +78,7 @@
                         <td>{{ $user->vai_tro }}</td>
                         <td class="text-12 text-muted">{{ optional($user->created_at)->format('d/m/Y H:i') }}</td>
                         <td>
-                            <form method="POST" action="{{ route('account-approvals.confirm', $user->id) }}" onsubmit="return confirm('Xác nhận tài khoản {{ addslashes($user->ho_ten) }}?')">
+                            <form method="POST" action="{{ route('account-approvals.confirm', $user->id) }}" onsubmit="return confirmSubmit(this, 'Xác nhận tài khoản {{ addslashes($user->ho_ten) }}?')">
                                 @csrf
                                 <button type="submit" class="btn btn-primary btn-sm">Xác nhận</button>
                             </form>
@@ -113,15 +113,15 @@
         });
     }
 
-    function confirmSelectedPending() {
+    function confirmSelectedPending(form) {
         const selectedCount = document.querySelectorAll('.pending-user-checkbox:checked').length;
 
         if (selectedCount === 0) {
-            alert('Vui lòng chọn ít nhất một tài khoản để xác nhận.');
+            showNotice('Vui lòng chọn ít nhất một tài khoản để xác nhận.');
             return false;
         }
 
-        return confirm('Xác nhận ' + selectedCount + ' tài khoản đã chọn?');
+        return confirmSubmit(form, 'Xác nhận ' + selectedCount + ' tài khoản đã chọn?');
     }
 </script>
 @endpush

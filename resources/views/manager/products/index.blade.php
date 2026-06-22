@@ -138,7 +138,7 @@ function toggleStatus(productId, checkbox) {
             checkbox.checked = !checkbox.checked;
             const data = await response.json();
             if (data.message) {
-                alert(data.message);
+                showNotice(data.message);
             }
         }
     }).catch(() => {

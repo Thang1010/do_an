@@ -43,6 +43,18 @@
                 Bàn
             </a>
 
+            @php
+                $takeawayQueueCount = auth()->check()
+                    ? \App\Models\DonHang::takeawayQueue()->count()
+                    : 0;
+            @endphp
+            <a href="/staff/takeaway" class="nav-item {{ request()->routeIs('staff.takeaway*') ? 'active' : '' }}">
+                Đơn mang về
+                @if($takeawayQueueCount > 0)
+                    <span class="badge" style="background:#ea580c;color:#fff;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700;margin-left:6px;">{{ min($takeawayQueueCount, 99) }}</span>
+                @endif
+            </a>
+
             <a href="/staff/orders" class="nav-item {{ request()->routeIs('staff.orders*') ? 'active' : '' }}">
                 Lịch sử đơn hàng
             </a>
@@ -649,11 +661,11 @@
             if (!globalProductData) return;
             const sizeId = globalProductData.selectedSizeId;
             if (globalProductData.sizes.length > 0 && !sizeId) {
-                alert('Vui lòng chọn kích cỡ!');
+                showNotice('Vui lòng chọn kích cỡ!');
                 return;
             }
             if (globalProductData.showTemp && !globalProductData.selectedTemp) {
-                alert('Vui lòng chọn nhiệt độ!');
+                showNotice('Vui lòng chọn nhiệt độ!');
                 return;
             }
 
@@ -794,6 +806,7 @@
         };
     </script>
 
+    @include('partials.app-modals')
     @stack('scripts')
 </body>
 

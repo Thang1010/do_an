@@ -73,7 +73,7 @@
                     <td>
                         <div class="action-row">
                             @if($canConfirmThisUser)
-                            <form method="POST" action="{{ route('account-approvals.confirm', $user->id) }}" onsubmit="return confirm('Xác nhận kích hoạt tài khoản {{ $user->ho_ten }}?')">
+                            <form method="POST" action="{{ route('account-approvals.confirm', $user->id) }}" onsubmit="return confirmSubmit(this, 'Xác nhận kích hoạt tài khoản {{ $user->ho_ten }}?')">
                                 @csrf
                                 <button type="submit" class="btn btn-primary btn-sm">Xác nhận</button>
                             </form>

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Staff\DashboardController as StaffDashboardController;
 use App\Http\Controllers\Staff\TableController as StaffTableController;
 use App\Http\Controllers\Staff\OrderController as StaffOrderController;
+use App\Http\Controllers\Staff\TakeawayController as StaffTakeawayController;
 
 use App\Http\Controllers\Staff\ShiftController as StaffShiftController;
 use App\Http\Controllers\Staff\ExpenseController as StaffExpenseController;
@@ -34,6 +35,10 @@ Route::prefix('staff')->name('staff.')->middleware(['auth', 'role:nhân viên'])
     Route::post('/tables/{id}/add-item',            [StaffTableController::class, 'addItem'])->name('tables.add-item');
     Route::patch('/tables/{id}/update-item/{itemId}',[StaffTableController::class, 'updateItemQuantity'])->name('tables.update-item');
     Route::patch('/tables/{id}/order',              [StaffTableController::class, 'updateOrderStatus'])->name('tables.order.update');
+
+    // ── Takeaway (Đơn mang về) — hàng đợi đơn online không gắn bàn ──
+    Route::get('/takeaway',                  [StaffTakeawayController::class, 'index'])->name('takeaway.index');
+    Route::patch('/takeaway/{id}/delivered', [StaffTakeawayController::class, 'markDelivered'])->name('takeaway.delivered');
 
     // ── Orders (Đơn hàng) ────────────────────────────────────────────
     Route::get('/orders',                   [StaffOrderController::class, 'index'])->name('orders.index');

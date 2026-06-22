@@ -29,7 +29,7 @@ return new class extends Migration
             $table->integer('so_luong');
             $table->text('ghi_chu_mon')->nullable();
             $table->decimal('thanh_tien', 12, 2);
-            $table->enum('loai_don', ['đặt hàng trước', 'sử dụng ngay'])->default('sử dụng ngay');
+            $table->enum('loai_don', ['đặt hàng trước', 'sử dụng ngay', 'gọi tại bàn bằng qr', 'mang về'])->default('sử dụng ngay');
             $table->enum('trang_thai_thanh_toan', ['chưa thanh toán', 'đã thanh toán'])->default('chưa thanh toán');
             $table->enum('phuong_thuc_thanh_toan', ['tiền mặt', 'chuyển khoản'])->nullable();
             $table->float('so_tien_giam')->default(0);

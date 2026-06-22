@@ -11,6 +11,7 @@
         <p class="page-subtitle">Quản lý số bàn phục vụ cho gọi món và đặt bàn</p>
     </div>
     <div class="page-actions">
+        <a href="{{ route('manager.tables.qr-print') }}" target="_blank" class="btn btn-secondary">In QR gọi món</a>
         <button class="btn btn-primary" onclick="openModal('create-table-modal')">Thêm bàn ăn</button>
     </div>
 </div>

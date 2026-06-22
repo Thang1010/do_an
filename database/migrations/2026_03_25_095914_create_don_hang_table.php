@@ -19,6 +19,7 @@ return new class extends Migration
             $table->foreignId('ban_an_id')->nullable()->constrained('ban_an')->nullOnDelete();
             $table->foreignId('voucher_nguoi_dung_id')->nullable()->constrained('voucher_nguoi_dung')->nullOnDelete();
             $table->string('email_khach_hang')->nullable();
+            $table->dateTime('da_giao_luc')->nullable();
             $table->timestamps();
 
             $table->index(['nguoi_dung_id']);

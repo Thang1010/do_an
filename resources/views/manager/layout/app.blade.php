@@ -823,6 +823,7 @@
         });
     </script>
 
+    @include('partials.app-modals')
     @stack('scripts')
 </body>
 

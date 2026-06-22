@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use App\Traits\NormalizesPayment;
 use App\Traits\ResolvesVietQrBank;
 use App\Traits\GeneratesOrderCode;
@@ -65,6 +66,28 @@ class TableController extends Controller
         $tables = $query->orderBy('so_ban')->paginate(20)->withQueryString();
 
         return view('manager.tables.index', compact('tables'));
+    }
+
+    /**
+     * Trang in QR gọi món tại bàn (mỗi bàn 1 thẻ). QR tĩnh, không hết hạn.
+     * Dùng url(route(..., false)) để QR mang đúng host đang truy cập (domain
+     * thật) thay vì APP_URL (có thể là IP LAN).
+     */
+    public function qrPrint()
+    {
+        $tables = BanAn::where('trang_thai', '!=', 'ngưng sử dụng')
+            ->orderBy('so_ban')
+            ->get(['id', 'so_ban']);
+
+        $qrcodes = [];
+        foreach ($tables as $table) {
+            $url = url(route('order.table', ['table' => $table->id], false));
+            $qrcodes[$table->id] = 'data:image/svg+xml;base64,' . base64_encode(
+                QrCode::format('svg')->size(220)->margin(1)->generate($url)
+            );
+        }
+
+        return view('manager.tables.qr-print', compact('tables', 'qrcodes'));
     }
 
     public function show(int $id)

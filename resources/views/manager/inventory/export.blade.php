@@ -182,7 +182,7 @@
 		if (container.querySelectorAll('.export-item-row').length > 1) {
 			row.remove();
 		} else {
-			alert('Phải có ít nhất 1 nguyên liệu để xuất kho.');
+			showNotice('Phải có ít nhất 1 nguyên liệu để xuất kho.');
 		}
 	}
 

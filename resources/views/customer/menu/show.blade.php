@@ -233,7 +233,7 @@
             <h2 class="show-section-title">Sản phẩm liên quan</h2>
             <div class="related-grid">
                 @foreach($related as $rel)
-                    <div class="menu-card" style="cursor:pointer;" onclick="window.location='{{ route('menu.show', $rel->id) }}'">
+                    <div class="menu-card" style="cursor:pointer;" data-href="{{ route('menu.show', $rel->id) }}">
                         <div class="menu-card-img-wrap">
                             <img src="{{ $rel->image_url }}" alt="{{ $rel->ten_san_pham }}" class="menu-card-img" loading="lazy" />
                         </div>
@@ -272,6 +272,7 @@
 @endsection
 
 @push('scripts')
+@php $defaultKichCoId = $sizes->count() > 1 ? $sizes->first()->kich_co_id : ''; @endphp
 <script>
     // Gallery thumbnail switcher
     function switchImage(thumb, src) {
@@ -285,9 +286,7 @@
     selectedKichCoInput.type = 'hidden';
     selectedKichCoInput.name = 'kich_co_id';
     selectedKichCoInput.id = 'selected-kich-co';
-    @if($sizes->count() > 1)
-    selectedKichCoInput.value = '{{ $sizes->first()->kich_co_id }}';
-    @endif
+    selectedKichCoInput.value = '{{ $defaultKichCoId }}';
 
     function selectSize(btn) {
         document.querySelectorAll('.show-size-btn').forEach(b => b.classList.remove('active'));
@@ -368,6 +367,11 @@
           .catch(err => console.error('Cart error:', err));
     });
 
+    // Điều hướng khi bấm thẻ sản phẩm liên quan (dùng data-href thay vì onclick nội tuyến)
+    document.querySelectorAll('.menu-card[data-href]').forEach(card => {
+        card.addEventListener('click', () => { window.location = card.dataset.href; });
+    });
+
     // Heart / wishlist
     document.querySelector('.show-heart-btn')?.addEventListener('click', function() {
         const productId = this.getAttribute('data-wishlist');
@@ -376,7 +380,7 @@
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' }
         }).then(r => {
-            if (r.status === 401) { alert('Bạn cần đăng nhập để yêu thích sản phẩm.'); return Promise.reject(); }
+            if (r.status === 401) { showNotice('Bạn cần đăng nhập để yêu thích sản phẩm.'); return Promise.reject(); }
             return r.json();
         }).then(data => {
             if (data && data.success) {

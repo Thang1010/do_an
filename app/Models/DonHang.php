@@ -22,6 +22,11 @@ class DonHang extends Model
         'ban_an_id',
         'voucher_nguoi_dung_id',
         'email_khach_hang',
+        'da_giao_luc',
+    ];
+
+    protected $casts = [
+        'da_giao_luc' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -184,5 +189,17 @@ class DonHang extends Model
     public function scopeWhereLoaiDon($query, string $loai)
     {
         return $query->whereHas('chiTietDonHang', fn($q) => $q->where('loai_don', $loai));
+    }
+
+    /**
+     * Hàng đợi đơn mang về cho nhân viên: đơn mang về, không gắn bàn, đã thanh toán
+     * và chưa được đánh dấu đã giao.
+     */
+    public function scopeTakeawayQueue($query)
+    {
+        return $query->whereNull('ban_an_id')
+            ->whereNull('da_giao_luc')
+            ->whereHas('chiTietDonHang', fn($q) => $q->where('loai_don', 'mang về')
+                ->where('trang_thai_thanh_toan', 'đã thanh toán'));
     }
 }

@@ -39,7 +39,8 @@
 
             var fail = function (msg) {
                 if (typeof cfg.onFail === 'function') { cfg.onFail(msg); return; }
-                alert(msg || 'Có lỗi xảy ra. Vui lòng thử lại.');
+                var failMsg = msg || 'Có lỗi xảy ra. Vui lòng thử lại.';
+                if (typeof window.showNotice === 'function') { window.showNotice(failMsg); } else { alert(failMsg); }
                 if (btn) { btn.disabled = false; btn.innerText = origLabel || 'Tạo QR thanh toán PayOS'; }
             };
 

@@ -97,6 +97,16 @@ class CartController extends Controller
             ->orderBy('so_ban')
             ->get(['id', 'so_ban']);
 
+        // Bàn gắn theo QR (nếu khách vào từ QR tại bàn) → tự điền + khoá.
+        $qrTable = null;
+        if (session()->has('qr_ban_an_id')) {
+            $qrTable = BanAn::find(session('qr_ban_an_id'));
+            if (! $qrTable || $qrTable->trang_thai === 'ngưng sử dụng') {
+                session()->forget('qr_ban_an_id');
+                $qrTable = null;
+            }
+        }
+
         // Danh sách đơn hàng theo ngày lọc (mặc định hôm nay) nếu đã đăng nhập
         $ordersToday = collect();
         $filterDate = request()->input('date', today()->toDateString());
@@ -109,7 +119,7 @@ class CartController extends Controller
                 ->get();
         }
 
-        return view('customer.cart.index', compact('items', 'total', 'availableTables', 'ordersToday', 'filterDate'));
+        return view('customer.cart.index', compact('items', 'total', 'availableTables', 'ordersToday', 'filterDate', 'qrTable'));
     }
 
     // ── AJAX: Thêm vào giỏ ───────────────────────────────────────
@@ -259,6 +269,22 @@ class CartController extends Controller
             return back()->with('error', 'Giỏ hàng trống.');
         }
 
+        // Vào từ QR tại bàn → ép "gọi món" tại đúng bàn đó, khoá bàn (1 bàn = 1 QR),
+        // bỏ qua mọi lựa chọn bàn/hình thức gửi từ client.
+        if (session()->has('qr_ban_an_id')) {
+            $qrBan = BanAn::find(session('qr_ban_an_id'));
+            if ($qrBan && $qrBan->trang_thai !== 'ngưng sử dụng') {
+                $request->merge([
+                    'loai_don_hidden' => 'goi_mon',
+                    'loai_don' => null,
+                    'ban_an_id_goi_mon' => $qrBan->id,
+                    'phuong_thuc_thanh_toan_goi_mon' => 'chuyển khoản',
+                ]);
+            } else {
+                session()->forget('qr_ban_an_id');
+            }
+        }
+
         $loaiDonHidden = $request->input('loai_don_hidden');
         $loaiDonLegacy = $request->input('loai_don');
         $loaiDonUi = $loaiDonHidden;
@@ -270,6 +296,32 @@ class CartController extends Controller
         if (!auth()->check()) {
             if ($loaiDonUi === 'dat_ban') {
                 return back()->with('error', 'Bạn cần đăng nhập để đặt bàn trước.');
+            }
+
+            // Mang về: không cần bàn, chỉ cần email để nhận hoá đơn.
+            if ($loaiDonUi === 'mang_ve') {
+                $request->validate([
+                    'email_khach_hang' => 'required|email|max:255',
+                ]);
+
+                $order = $this->createOrder([
+                    'nguoi_dung_id' => null,
+                    'email_khach_hang' => $request->email_khach_hang,
+                    'loai_don' => 'mang về',
+                    'ban_an_id' => null,
+                    'trang_thai_thanh_toan' => 'chưa thanh toán',
+                    'phuong_thuc_thanh_toan' => 'chuyển khoản',
+                ], $cart, null);
+
+                session()->forget(['cart', 'qr_ban_an_id']);
+                if ($request->ajax()) {
+                    return response()->json([
+                        'success' => true,
+                        'order_code' => $order->ma_don_hang,
+                        'order_id' => $order->id
+                    ]);
+                }
+                return redirect()->route('cart.payment', $order->ma_don_hang);
             }
 
             $request->validate([
@@ -286,11 +338,12 @@ class CartController extends Controller
                 'phuong_thuc_thanh_toan' => 'chuyển khoản',
             ], $cart, null);
 
-            session()->forget('cart');
+            session()->forget(['cart', 'qr_ban_an_id']);
             if ($request->ajax()) {
                 return response()->json([
                     'success' => true,
-                    'order_code' => $order->ma_don_hang
+                    'order_code' => $order->ma_don_hang,
+                    'order_id' => $order->id
                 ]);
             }
             return redirect()->route('cart.payment', $order->ma_don_hang);
@@ -299,7 +352,7 @@ class CartController extends Controller
         // ── Khách ĐÃ đăng nhập ───────────────────────────────────
         if (!$request->filled('orders')) {
             $request->validate([
-                'loai_don_hidden' => 'nullable|in:dat_ban,goi_mon|required_without:loai_don',
+                'loai_don_hidden' => 'nullable|in:dat_ban,goi_mon,mang_ve|required_without:loai_don',
                 'loai_don' => 'nullable|in:dat_ban,dat_hang|required_without:loai_don_hidden',
                 'email_khach' => 'nullable|email|max:255',
             ]);
@@ -337,11 +390,39 @@ class CartController extends Controller
                     'phuong_thuc_thanh_toan' => 'chuyển khoản',
                 ], $cart, $voucherId);
 
-                session()->forget('cart');
+                session()->forget(['cart', 'qr_ban_an_id']);
                 if ($request->ajax()) {
                     return response()->json([
                         'success' => true,
-                        'order_code' => $order->ma_don_hang
+                        'order_code' => $order->ma_don_hang,
+                        'order_id' => $order->id
+                    ]);
+                }
+                return redirect()->route('cart.payment', $order->ma_don_hang);
+            }
+
+            // Mang về: không cần bàn, thanh toán trước qua chuyển khoản.
+            if ($loaiDonUi === 'mang_ve') {
+                $voucherId = null;
+                if ($request->filled('voucher_nguoi_dung_id')) {
+                    $ids = explode(',', $request->voucher_nguoi_dung_id);
+                    $voucherId = (int) $ids[0];
+                }
+
+                $order = $this->createOrder([
+                    'nguoi_dung_id' => auth()->id(),
+                    'loai_don' => 'mang về',
+                    'ban_an_id' => null,
+                    'trang_thai_thanh_toan' => 'chưa thanh toán',
+                    'phuong_thuc_thanh_toan' => 'chuyển khoản',
+                ], $cart, $voucherId);
+
+                session()->forget(['cart', 'qr_ban_an_id']);
+                if ($request->ajax()) {
+                    return response()->json([
+                        'success' => true,
+                        'order_code' => $order->ma_don_hang,
+                        'order_id' => $order->id
                     ]);
                 }
                 return redirect()->route('cart.payment', $order->ma_don_hang);
@@ -366,11 +447,12 @@ class CartController extends Controller
                 'phuong_thuc_thanh_toan' => 'chuyển khoản',
             ], $cart, $voucherId);
 
-            session()->forget('cart');
+            session()->forget(['cart', 'qr_ban_an_id']);
             if ($request->ajax()) {
                 return response()->json([
                     'success' => true,
-                    'order_code' => $order->ma_don_hang
+                    'order_code' => $order->ma_don_hang,
+                    'order_id' => $order->id
                 ]);
             }
             return redirect()->route('cart.payment', $order->ma_don_hang);
@@ -383,7 +465,7 @@ class CartController extends Controller
     // ── Trang success ─────────────────────────────────────────────
     public function success()
     {
-        $orderCode = session('order_code');
+        $orderCode = session('order_code') ?: request()->query('order_code');
         $orderCodes = session('order_codes', []);
 
         $orders = collect();
@@ -620,6 +702,11 @@ class CartController extends Controller
             } elseif ($order->email_khach_hang) {
                 \Illuminate\Support\Facades\Mail::to($order->email_khach_hang)->send(new \App\Mail\CustomerOrderPaidMail($order));
             }
+        }
+
+        // Khách hàng thành viên (chủ đơn) → trang chi tiết đơn; khách vãng lai → trang xác nhận.
+        if ($order->nguoi_dung_id && auth()->check() && auth()->id() === $order->nguoi_dung_id) {
+            return redirect()->route('customer.orders.show', $order->id);
         }
 
         return redirect()->route('cart.success')->with('order_code', $order->ma_don_hang);

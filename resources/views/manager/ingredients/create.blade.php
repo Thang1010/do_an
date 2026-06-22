@@ -207,7 +207,7 @@
         const rows = tbody.querySelectorAll('tr');
 
         if (rows.length <= 1) {
-            alert('Cần giữ lại ít nhất một dòng nguyên liệu.');
+            showNotice('Cần giữ lại ít nhất một dòng nguyên liệu.');
             return;
         }
 

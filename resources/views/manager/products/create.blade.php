@@ -473,7 +473,7 @@ function removeRecipeRow(button) {
 
     const rows = tbody.querySelectorAll('tr');
     if (rows.length <= 1) {
-        alert('Cần giữ lại ít nhất một nguyên liệu trong công thức.');
+        showNotice('Cần giữ lại ít nhất một nguyên liệu trong công thức.');
         return;
     }
 

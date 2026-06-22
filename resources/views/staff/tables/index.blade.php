@@ -23,7 +23,7 @@ Nhân viên / <strong>Bàn</strong>
                 @csrf
                 <input type="hidden" name="attendance_id" value="{{ $currentAttendance->id }}">
                 <button type="submit" class="shift-badge shift-badge--checkout"
-                        onclick="return confirm('Xác nhận chấm công ra?')">
+                        onclick="return confirmSubmit(this.form, 'Xác nhận chấm công ra?')">
                     Chấm công ra
                 </button>
             </form>

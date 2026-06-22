@@ -67,7 +67,7 @@
             <div id="products-container">
                 <div class="products-grid">
                     @forelse($products as $product)
-                        <div class="menu-card cursor-pointer" onclick="window.location='{{ route('menu.show', $product->id) }}'">
+                        <div class="menu-card cursor-pointer" data-href="{{ route('menu.show', $product->id) }}">
                             <!-- Image -->
                             <div class="menu-card-img-wrap">
                                 <img src="{{ $product->image_url }}" alt="{{ $product->ten_san_pham }}" class="menu-card-img"
@@ -160,6 +160,11 @@
 
 @push('scripts')
     <script>
+        // Điều hướng khi bấm vào thẻ sản phẩm (dùng data-href thay vì onclick nội tuyến)
+        document.querySelectorAll('.menu-card[data-href]').forEach(card => {
+            card.addEventListener('click', () => { window.location = card.dataset.href; });
+        });
+
         // Heart toggle via AJAX
         document.querySelectorAll('.menu-card-heart').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -176,7 +181,7 @@
                 })
                     .then(response => {
                         if (response.status === 401) {
-                            alert('Bạn cần đăng nhập để yêu thích sản phẩm.');
+                            showNotice('Bạn cần đăng nhập để yêu thích sản phẩm.');
                             return Promise.reject('Unauthorized');
                         }
                         return response.json();

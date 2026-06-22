@@ -60,6 +60,8 @@ Route::prefix('manager')->name('manager.')->middleware(['auth', 'role:quản lý
 
     // ── Tables ────────────────────────────────────────────────────────
     Route::get('/tables', [TableController::class, 'index'])->name('tables.index');
+    // Đặt TRƯỚC /tables/{id} để không bị nuốt bởi route động.
+    Route::get('/tables/qr-print', [TableController::class, 'qrPrint'])->name('tables.qr-print');
     Route::get('/tables/{id}', [TableController::class, 'show'])->name('tables.show');
 
     Route::post('/tables/{id}/add-item', [TableController::class, 'addItem'])->name('tables.add-item');

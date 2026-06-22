@@ -186,21 +186,48 @@
                                 <span id="grand-total">{{ number_format($total, 0, ',', '.') }}đ</span>
                             </div>
 
+                            @if(!empty($qrTable))
+                                <div class="cart-field-wrap" style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.4);border-radius:10px;padding:12px 14px;margin-top:8px;">
+                                    🍽️ Bạn đang gọi món tại <strong>Bàn {{ $qrTable->so_ban }}</strong>. Bàn được tự động chọn theo mã QR và không thể thay đổi.
+                                </div>
+                            @endif
+
                             @guest
                                 <form id="guest-checkout-form" method="POST" action="{{ route('cart.checkout') }}">
                                     @csrf
-                                    <input type="hidden" name="loai_don_hidden" value="goi_mon">
+                                    <input type="hidden" name="loai_don_hidden" id="guest-loai-don-hidden" value="goi_mon">
                                     <input type="hidden" name="phuong_thuc_thanh_toan_goi_mon" value="chuyển khoản">
 
-                                    <div class="cart-field-wrap">
-                                        <p style="margin-bottom: 16px; color: #d1d5db; font-size: 14px;">Bạn chưa đăng nhập. Vui lòng điền thông tin để gọi món tại bàn (yêu cầu thanh toán trước).</p>
-                                        <label class="cart-field-label">Email *</label>
-                                        <input type="email" name="email_khach_hang" required placeholder="example@gmail.com" class="cart-input">
-                                    </div>
+                                    {{-- Hình thức (ẩn khi vào từ QR — chỉ gọi món tại bàn) --}}
+                                    @if(empty($qrTable))
+                                        <div class="cart-field-wrap">
+                                            <label class="cart-field-label">Hình thức *</label>
+                                            <div class="cart-radio-group">
+                                                <label class="cart-radio-label">
+                                                    <input type="radio" name="loai_don_ui" value="goi_mon" checked>
+                                                    <span>Gọi món tại bàn</span>
+                                                </label>
+                                                <label class="cart-radio-label">
+                                                    <input type="radio" name="loai_don_ui" value="mang_ve">
+                                                    <span>Mang về</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    @endif
 
                                     <div class="cart-field-wrap">
+                                        <label class="cart-field-label">Email *</label>
+                                        <input type="email" name="email_khach_hang" required placeholder="example@gmail.com" class="cart-input">
+                                        <p class="cart-field-hint">Yêu cầu thanh toán trước (chuyển khoản qua mã QR).</p>
+                                    </div>
+
+                                    {{-- Gọi món tại bàn --}}
+                                    <div id="guest-section-goi-mon" class="cart-field-wrap">
                                         <label class="cart-field-label">Bàn bạn đang ngồi *</label>
-                                        @if($availableTables->count() > 0)
+                                        @if(!empty($qrTable))
+                                            <input type="hidden" name="ban_an_id_goi_mon" value="{{ $qrTable->id }}">
+                                            <div class="cart-input" style="opacity:.85;">Bàn {{ $qrTable->so_ban }} (đã khoá theo QR)</div>
+                                        @elseif($availableTables->count() > 0)
                                             <select name="ban_an_id_goi_mon" class="cart-select" required>
                                                 <option value="">— Chọn bàn —</option>
                                                 @foreach($availableTables as $table)
@@ -211,6 +238,16 @@
                                             <p class="cart-field-hint warning">Hết bàn trống, vui lòng gọi nhân viên.</p>
                                         @endif
                                     </div>
+
+                                    {{-- Mang về --}}
+                                    @if(empty($qrTable))
+                                        <div id="guest-section-mang-ve" class="cart-field-wrap hidden">
+                                            <div style="background:rgba(234,88,12,0.12);border:1px solid rgba(234,88,12,0.4);border-radius:10px;padding:12px 14px;color:#fdba74;">
+                                                Đơn <strong>mang về</strong> — không cần chọn bàn. Vui lòng thanh toán trước để xác nhận đơn.
+                                            </div>
+                                        </div>
+                                    @endif
+
                                     <button type="submit" class="cart-submit-btn" id="guest-submit-btn">Gửi yêu cầu gọi món</button>
                                 </form>
                             @endguest
@@ -219,7 +256,7 @@
                             @auth
                                 <form id="auth-checkout-form" method="POST" action="{{ route('cart.checkout') }}">
                                     @csrf
-                                    <input type="hidden" name="loai_don_hidden" id="auth-loai-don-hidden" value="dat_ban">
+                                    <input type="hidden" name="loai_don_hidden" id="auth-loai-don-hidden" value="{{ !empty($qrTable) ? 'goi_mon' : 'dat_ban' }}">
                                     <input type="hidden" name="voucher_nguoi_dung_id" id="selected-voucher-id" value="">
 
                                     @if(empty(auth()->user()->email))
@@ -230,7 +267,8 @@
                                         </div>
                                     @endif
 
-                                    {{-- Radio: Hình thức --}}
+                                    {{-- Radio: Hình thức (ẩn khi vào từ QR — chỉ gọi món tại bàn) --}}
+                                    @if(empty($qrTable))
                                     <div class="cart-field-wrap">
                                         <label class="cart-field-label">Hình thức đặt *</label>
                                         <div class="cart-radio-group">
@@ -241,6 +279,10 @@
                                             <label class="cart-radio-label">
                                                 <input type="radio" name="loai_don_ui" value="goi_mon" id="rd-goi-mon">
                                                 <span>Sử dụng ngay</span>
+                                            </label>
+                                            <label class="cart-radio-label">
+                                                <input type="radio" name="loai_don_ui" value="mang_ve" id="rd-mang-ve">
+                                                <span>Mang về</span>
                                             </label>
                                         </div>
                                     </div>
@@ -263,10 +305,22 @@
                                         @endif
                                     </div>
 
+                                    {{-- Mang về (auth) --}}
+                                    <div id="auth-section-mang-ve" class="cart-field-wrap hidden">
+                                        <div style="background:rgba(234,88,12,0.12);border:1px solid rgba(234,88,12,0.4);border-radius:10px;padding:12px 14px;color:#fdba74;">
+                                            Đơn <strong>mang về</strong> — không cần chọn bàn. Thanh toán trước bằng chuyển khoản (mã QR) để xác nhận đơn.
+                                        </div>
+                                    </div>
+
+                                    @endif
+
                                     {{-- Gọi món tại bàn (auth) --}}
-                                    <div id="auth-section-goi-mon" class="cart-field-wrap hidden">
+                                    <div id="auth-section-goi-mon" class="cart-field-wrap {{ !empty($qrTable) ? '' : 'hidden' }}">
                                         <label class="cart-field-label">Bàn bạn đang ngồi *</label>
-                                        @if($availableTables->count() > 0)
+                                        @if(!empty($qrTable))
+                                            <input type="hidden" name="ban_an_id_goi_mon" value="{{ $qrTable->id }}">
+                                            <div class="cart-input" style="opacity:.85;">Bàn {{ $qrTable->so_ban }} (đã khoá theo QR)</div>
+                                        @elseif($availableTables->count() > 0)
                                             <select name="ban_an_id_goi_mon" class="cart-select">
                                                 <option value="">— Chọn bàn —</option>
                                                 @foreach($availableTables as $table)
@@ -283,7 +337,7 @@
                                         <p class="cart-field-hint">Vui lòng thanh toán trước để xác nhận gọi món.</p>
                                     </div>
 
-                                    <button type="submit" class="cart-submit-btn" id="auth-submit-btn">Xác nhận đặt bàn trước</button>
+                                    <button type="submit" class="cart-submit-btn" id="auth-submit-btn">{{ !empty($qrTable) ? 'Xác nhận gọi món' : 'Xác nhận đặt bàn trước' }}</button>
                                 </form>
                             @endauth
                         </div>
@@ -301,7 +355,15 @@
                             <div style="position: absolute; top: 0; left: 50%; margin-left: -200px; width: 400px; height: 650px; transform: scale(0.75); transform-origin: top center;">
                                 <iframe id="payos-qr-iframe-customer" src="" style="width:100%; height:100%; border:none; border-radius:12px; display:none;" allow="clipboard-write"></iframe>
                             </div>
-                            <p style="font-size:16px;color:#34d399;font-weight:700;display:none;position:absolute;bottom:0;width:100%;text-align:center;background:#1a120c;padding:8px 0;" id="payos-success-text-customer">Đã thanh toán thành công!</p>
+                            <div id="payos-success-text-customer" style="display:none; position:absolute; inset:0; background:#1a120c; flex-direction:column; align-items:center; justify-content:center; gap:16px; border-radius:12px; z-index:20;">
+                                <div style="width:76px; height:76px; border-radius:50%; background:rgba(52,211,153,0.15); display:flex; align-items:center; justify-content:center;">
+                                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M20 6L9 17l-5-5" />
+                                    </svg>
+                                </div>
+                                <p style="font-size:18px; color:#34d399; font-weight:700; margin:0;">Thanh toán thành công!</p>
+                                <p style="font-size:14px; color:#d1d5db; margin:0;">Đang chuyển đến trang xác nhận...</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -328,7 +390,7 @@
 
         </div>
     </main>
-    <div id="cart-js-data" data-total="{{ $total ?? 0 }}" hidden></div>
+    <div id="cart-js-data" data-total="{{ $total ?? 0 }}" data-is-member="{{ (auth()->check() && optional(auth()->user())->isKhachHang()) ? '1' : '0' }}" hidden></div>
 
 @endsection
 
@@ -337,6 +399,10 @@
 <script>
 const CSRF    = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const menuUrl = "{{ route('menu.index') }}";
+// Khách hàng thành viên (đã đăng nhập) → điều hướng về trang chi tiết đơn; khách vãng lai → trang xác nhận.
+const IS_MEMBER = document.getElementById('cart-js-data')?.dataset.isMember === '1';
+const ORDER_DETAIL_BASE = "{{ url('customer/orders') }}";
+const SUCCESS_URL = "{{ route('cart.success') }}";
 let   rawTotal  = parseFloat(document.getElementById('cart-js-data')?.dataset.total || 0);
 let   discountAmount = 0;
 
@@ -523,7 +589,7 @@ function applyVoucher() {
                 ? (max > 0 ? Math.min(rawTotal * value / 100, max) : rawTotal * value / 100)
                 : value;
         } else {
-            alert(`Đơn chưa đạt tối thiểu ${formatVND(min)} để áp dụng voucher ${chk.nextElementSibling.querySelector('div').innerText.split('—')[0].trim()}. Vui lòng bỏ chọn.`);
+            showNotice(`Đơn chưa đạt tối thiểu ${formatVND(min)} để áp dụng voucher ${chk.nextElementSibling.querySelector('div').innerText.split('—')[0].trim()}. Vui lòng bỏ chọn.`);
             chk.checked = false;
         }
         totalDiscount += disc;
@@ -565,7 +631,7 @@ function applyArrivalDefaults() {
         
         input.addEventListener('change', function() {
             if (this.value < minTime || this.value > '23:59') {
-                alert('Vui lòng chọn thời gian sau thời điểm hiện tại và trong ngày hôm nay.');
+                showNotice('Vui lòng chọn thời gian sau thời điểm hiện tại và trong ngày hôm nay.');
                 this.value = minTime;
             }
         });
@@ -573,37 +639,43 @@ function applyArrivalDefaults() {
 }
 
 function toggleOrderType() {
-    const rdDatBan = document.getElementById('rd-dat-ban');
-    const isDatBan = rdDatBan ? rdDatBan.checked : false;
-    ['section-dat-ban','auth-section-dat-ban'].forEach(id =>
-        document.getElementById(id)?.classList.toggle('hidden', !isDatBan));
-    ['section-goi-mon','auth-section-goi-mon'].forEach(id =>
-        document.getElementById(id)?.classList.toggle('hidden', isDatBan));
+    const checked = document.querySelector('input[name="loai_don_ui"]:checked');
+    // Khi vào từ QR không có radio → đọc giá trị từ ô hidden (đã ép goi_mon).
+    const val = checked ? checked.value
+        : (document.getElementById('auth-loai-don-hidden')?.value
+            || document.getElementById('guest-loai-don-hidden')?.value
+            || 'goi_mon');
 
-    document.querySelectorAll('input[name="thoi_gian_den"]').forEach((input) => {
-        input.required = !!isDatBan;
-    });
-    document.querySelectorAll('select[name="ban_an_id_goi_mon"]').forEach((input) => {
-        input.required = !isDatBan;
-    });
-    document.querySelectorAll('select[name="phuong_thuc_thanh_toan_goi_mon"]').forEach((input) => {
-        input.required = !isDatBan;
-    });
+    const sectionMap = {
+        dat_ban: ['auth-section-dat-ban'],
+        goi_mon: ['auth-section-goi-mon', 'guest-section-goi-mon'],
+        mang_ve: ['auth-section-mang-ve', 'guest-section-mang-ve'],
+    };
+    const allSections = [
+        'auth-section-dat-ban', 'auth-section-goi-mon', 'auth-section-mang-ve',
+        'guest-section-goi-mon', 'guest-section-mang-ve',
+    ];
+    allSections.forEach(id => document.getElementById(id)?.classList.add('hidden'));
+    (sectionMap[val] || []).forEach(id => document.getElementById(id)?.classList.remove('hidden'));
 
-    const loaiVal = isDatBan ? 'dat_ban' : 'goi_mon';
-    const gHidden = document.getElementById('guest-loai-don-hidden');
+    // required theo từng hình thức (tránh field ẩn vẫn bị validate)
+    document.querySelectorAll('input[name="thoi_gian_den"]').forEach(i => i.required = (val === 'dat_ban'));
+    document.querySelectorAll('select[name="ban_an_id_goi_mon"]').forEach(i => i.required = (val === 'goi_mon'));
+    document.querySelectorAll('select[name="phuong_thuc_thanh_toan_goi_mon"]').forEach(i => i.required = (val === 'goi_mon'));
+
     const aHidden = document.getElementById('auth-loai-don-hidden');
-    if (gHidden) gHidden.value = loaiVal;
-    if (aHidden) aHidden.value = loaiVal;
+    const gHidden = document.getElementById('guest-loai-don-hidden');
+    if (aHidden) aHidden.value = val;
+    if (gHidden) gHidden.value = val;
 
-    const txt  = rdDatBan ? (isDatBan ? 'Xác nhận đặt hàng trước' : 'Xác nhận sử dụng ngay') : 'Gửi yêu cầu gọi món';
-    const gBtn = document.getElementById('guest-submit-btn');
+    const authTxt = { dat_ban: 'Xác nhận đặt hàng trước', goi_mon: 'Xác nhận sử dụng ngay', mang_ve: 'Xác nhận mang về' };
+    const guestTxt = { goi_mon: 'Gửi yêu cầu gọi món', mang_ve: 'Xác nhận mang về' };
     const aBtn = document.getElementById('auth-submit-btn');
-    if (gBtn) gBtn.textContent = txt;
-    if (aBtn) aBtn.textContent = txt;
+    const gBtn = document.getElementById('guest-submit-btn');
+    if (aBtn) aBtn.textContent = authTxt[val] || 'Đặt hàng';
+    if (gBtn) gBtn.textContent = guestTxt[val] || 'Đặt hàng';
 }
-document.getElementById('rd-dat-ban')?.addEventListener('change', toggleOrderType);
-document.getElementById('rd-goi-mon')?.addEventListener('change', toggleOrderType);
+document.querySelectorAll('input[name="loai_don_ui"]').forEach(r => r.addEventListener('change', toggleOrderType));
 applyArrivalDefaults();
 toggleOrderType();
 
@@ -669,9 +741,9 @@ function handleCheckoutFormSubmit(e) {
     .then(data => {
         if (data.success && data.order_code) {
             closeOrderModal();
-            openPayOSModal(data.order_code);
+            openPayOSModal(data.order_code, data.order_id);
         } else {
-            alert(data.message || 'Lỗi đặt hàng');
+            showNotice(data.message || 'Lỗi đặt hàng');
             submitBtn.disabled = false;
             submitBtn.textContent = originalText;
         }
@@ -683,7 +755,7 @@ function handleCheckoutFormSubmit(e) {
         } else if (err && err.message) {
             msg = err.message;
         }
-        alert(msg);
+        showNotice(msg);
         submitBtn.disabled = false;
         submitBtn.textContent = originalText;
     });
@@ -692,7 +764,7 @@ function handleCheckoutFormSubmit(e) {
 document.getElementById('guest-checkout-form')?.addEventListener('submit', handleCheckoutFormSubmit);
 document.getElementById('auth-checkout-form')?.addEventListener('submit', handleCheckoutFormSubmit);
 
-function openPayOSModal(orderCode) {
+function openPayOSModal(orderCode, orderId) {
     const modal = document.getElementById('payos-checkout-modal');
     if (!modal) return;
     modal.classList.add('open');
@@ -712,9 +784,21 @@ function openPayOSModal(orderCode) {
         source: 'customer',
         iframe: iframe,
         loadingText: loadingText,
-        successText: successText,
-        onPaid: function () { window.location.href = menuUrl; },
-        onFail: function (msg) { alert(msg); closePayOSModal(); }
+        // Không truyền successText cho helper — tự hiện overlay ngay trong onPaid để
+        // không có khoảng trống giữa lúc ẩn iframe và lúc chuyển trang.
+        successDelay: 0,
+        onPaid: function () {
+            successText.style.display = 'flex';
+            setTimeout(function () {
+                // Khách hàng thành viên → trang chi tiết đơn; khách vãng lai → trang xác nhận.
+                if (IS_MEMBER && orderId) {
+                    window.location.href = ORDER_DETAIL_BASE + '/' + orderId;
+                } else {
+                    window.location.href = SUCCESS_URL + '?order_code=' + encodeURIComponent(orderCode);
+                }
+            }, 1000);
+        },
+        onFail: function (msg) { showNotice(msg); closePayOSModal(); }
     });
 }
 

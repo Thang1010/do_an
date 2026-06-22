@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
+use App\Models\BanAn;
 use App\Models\DanhGiaSanPham;
 use App\Models\DanhMuc;
 use App\Models\SanPham;
@@ -29,7 +30,17 @@ class HomeController extends Controller
 
     public function orderTable($table)
     {
-        return view('customer.menu.index', ['tableNumber' => $table]);
+        // QR tĩnh tại bàn: {table} là id bàn. Gắn bàn vào phiên để giỏ hàng tự
+        // điền + khoá (1 bàn = 1 QR). Không áp geofencing — dựa vào thanh toán trước.
+        $banAn = BanAn::find($table);
+        if (! $banAn || $banAn->trang_thai === 'ngưng sử dụng') {
+            return redirect()->route('menu.index')
+                ->with('error', 'Bàn không hợp lệ hoặc đang ngưng sử dụng.');
+        }
+
+        session(['qr_ban_an_id' => $banAn->id]);
+
+        return view('customer.menu.index', ['tableNumber' => $banAn->so_ban]);
     }
 
     public function index()

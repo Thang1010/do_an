@@ -104,7 +104,7 @@
 										đơn hàng</a>
 									<hr class="my-1 border-white/10">
 									<button type="button" onclick="openLogoutModal()"
-										class="w-full text-left px-4 py-2 text-sm text-[#ff8a8a] font-semibold hover:bg-white/10 font-outfit">Đăng
+										class="w-full text-left px-4 py-2 text-sm text-[#F1F0EE] hover:bg-white/10 font-outfit">Đăng
 										xuất</button>
 								</div>
 							</div>
@@ -156,7 +156,7 @@
 								class="text-white/80 font-outfit font-medium text-lg py-2 border-b border-white/10 hover:text-white">Hồ
 								sơ</a>
 							<button type="button" onclick="openLogoutModal()"
-								class="text-red-400 font-outfit font-medium text-lg py-2 w-full text-left">Đăng
+								class="text-white/80 font-outfit font-medium text-lg py-2 w-full text-left hover:text-white">Đăng
 								xuất</button>
 						@else
 							<a href="{{ route('auth.login') }}"
@@ -717,11 +717,11 @@
 			if (!globalProductData) return;
 			const sizeId = globalProductData.selectedSizeId;
 			if (globalProductData.sizes.length > 0 && !sizeId) {
-				alert('Vui lòng chọn kích cỡ!');
+				showNotice('Vui lòng chọn kích cỡ!');
 				return;
 			}
 			if (globalProductData.showTemp && !globalProductData.selectedTemp) {
-				alert('Vui lòng chọn nhiệt độ!');
+				showNotice('Vui lòng chọn nhiệt độ!');
 				return;
 			}
 
@@ -832,6 +832,7 @@
 			}
 		};
 	</script>
+	@include('partials.app-modals')
 	@stack('scripts')
 </body>
 

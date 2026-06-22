@@ -175,7 +175,7 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
 
         <div id="order-payment-actions" data-paid="{{ ($order->trang_thai_thanh_toan ?? '') === 'đã thanh toán' ? '1' : '0' }}">
             <div id="order-cash-action" style="display: none;">
-                <form method="POST" action="{{ route('manager.orders.payment', $order->id) }}" onsubmit="document.getElementById('cash-email-input').value = document.querySelector('input[name=\'email_khach_hang\']').value; return confirm('Xác nhận đã nhận tiền mặt cho đơn này?')">
+                <form method="POST" action="{{ route('manager.orders.payment', $order->id) }}" onsubmit="document.getElementById('cash-email-input').value = document.querySelector('input[name=\'email_khach_hang\']').value; return confirmSubmit(this, 'Xác nhận đã nhận tiền mặt cho đơn này?')">
                     @csrf
                     @method('PATCH')
                     <input type="hidden" name="phuong_thuc_thanh_toan" value="tiền mặt">

@@ -46,7 +46,13 @@ Nhân viên / <strong>Lịch sử đơn hàng</strong>
                         @endphp
                         <tr>
                             <td class="font-600">{{ $order->ma_don_hang ?? '#' . $order->id }}</td>
-                            <td>{{ $order->banAn?->so_ban ?? '—' }}</td>
+                            <td>
+                                @if($order->loai_don === 'mang về')
+                                    <span class="badge" style="background:#ea580c;color:#fff;">Mang về</span>
+                                @else
+                                    {{ $order->banAn?->so_ban ?? '—' }}
+                                @endif
+                            </td>
                             <td>{{ $order->nguoiDung?->hoSoKhachHang?->ho_ten ?? $order->nguoiDung?->email ?? '—' }}</td>
                             <td class="price-text">{{ number_format($order->tong_tien ?? 0, 0, ',', '.') }}đ</td>
                             <td><span class="badge {{ $payClass }}">{{ ucfirst($order->trang_thai_thanh_toan) }}</span></td>

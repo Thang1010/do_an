@@ -58,7 +58,7 @@ Nhân viên / <strong>Khách hàng</strong>
                     </td>
                     <td>
                         <form method="POST" action="{{ route('staff.customers.password-reset', $user->id) }}"
-                              onsubmit="return confirm('Gửi yêu cầu cấp lại mật khẩu cho {{ $user->ho_ten }}?')">
+                              onsubmit="return confirmSubmit(this, 'Gửi yêu cầu cấp lại mật khẩu cho {{ $user->ho_ten }}?')">
                             @csrf
                             <button type="submit" class="btn btn-secondary btn-sm">Yêu cầu cấp lại mật khẩu</button>
                         </form>

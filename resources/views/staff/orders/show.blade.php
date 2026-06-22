@@ -23,7 +23,11 @@
                 <div class="flex-col-10">
                     <div class="flex-center-between">
                         <span class="text-12 text-muted">Bàn</span>
-                        <span class="font-600">{{ $order->banAn?->so_ban ?? '—' }}</span>
+                        @if($order->loai_don === 'mang về')
+                            <span class="badge" style="background:#ea580c;color:#fff;">Mang về</span>
+                        @else
+                            <span class="font-600">{{ $order->banAn?->so_ban ?? '—' }}</span>
+                        @endif
                     </div>
                     <div class="flex-center-between">
                         <span class="text-12 text-muted">Khách hàng</span>

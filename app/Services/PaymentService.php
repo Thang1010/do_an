@@ -102,6 +102,30 @@ class PaymentService
                 \Illuminate\Support\Facades\Mail::to($owner->email)->send(new \App\Mail\OrderPaidMail($order));
             }
         }
+
+        // Đơn mang về (không gắn bàn) vừa thanh toán → báo nhân viên trực để pha chế & đóng gói.
+        if (!$order->ban_an_id && $order->loai_don === 'mang về') {
+            $this->notifyStaffNewTakeaway($order);
+        }
+    }
+
+    /**
+     * Thông báo cho nhân viên / quản lý / chủ cửa hàng đang hoạt động khi có đơn mang về mới.
+     */
+    private function notifyStaffNewTakeaway(DonHang $order): void
+    {
+        try {
+            \App\Models\NguoiDung::query()
+                ->whereIn('vai_tro', ['nhân viên', 'quản lý', 'chủ cửa hàng'])
+                ->where('trang_thai', \App\Enums\UserStatus::HOAT_DONG->value)
+                ->get()
+                ->each(fn($user) => $user->notify(new \App\Notifications\TakeawayOrderPlacedNotification($order)));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Không thể gửi thông báo đơn mang về.', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

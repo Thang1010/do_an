@@ -93,7 +93,7 @@
                         <input type="hidden" name="order_code" value="{{ $order->ma_don_hang }}">
                         <button type="submit" class="cart-submit-btn" style="margin: 0;">Tôi đã chuyển khoản</button>
                     </form>
-                    <form method="POST" action="{{ route('cart.cancel_guest') }}" onsubmit="return confirm('Bạn có chắc muốn hủy đơn này?');">
+                    <form method="POST" action="{{ route('cart.cancel_guest') }}" onsubmit="return confirmSubmit(this, 'Bạn có chắc muốn hủy đơn này?');">
                         @csrf
                         <input type="hidden" name="order_code" value="{{ $order->ma_don_hang }}">
                         <button type="submit" class="cart-submit-btn" style="margin: 0; background: rgba(201, 64, 64, 0.7);">Hủy đơn</button>

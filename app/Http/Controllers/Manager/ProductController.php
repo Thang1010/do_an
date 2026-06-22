@@ -61,9 +61,10 @@ class ProductController extends Controller
                     ->groupBy('nguyen_lieu_id')
                     ->pluck('so_luong', 'nguyen_lieu_id');
 
-                foreach ($ingredientIds as $id) {
-                    $stock = (float) ($stocks[$id] ?? 0);
-                    if ($stock <= 0) {
+                foreach ($cleaned as $recipe) {
+                    $stock = (float) ($stocks[$recipe['nguyen_lieu_id']] ?? 0);
+                    if ($stock < (float) $recipe['so_luong_can']) {
+                        // Tồn kho không đủ để làm 1 phần → tự động ngừng bán
                         $product->update(['trang_thai_ban' => 'ngừng bán']);
                         break;
                     }
@@ -101,12 +102,13 @@ class ProductController extends Controller
                         'he_so_gia' => $heSoGia > 0 ? $heSoGia : 1,
                     ]);
                 } else {
-                    $updateData = [];
-                    if ($maKichCo && !$kc->ma_kich_co) $updateData['ma_kich_co'] = $maKichCo;
-                    if ($moTa && !$kc->mo_ta) $updateData['mo_ta'] = $moTa;
-                    // Only update he_so_gia if it was explicitly provided and valid
-                    if ($heSoGia > 0 && $kc->he_so_gia == 1.0) $updateData['he_so_gia'] = $heSoGia;
-                    if (!empty($updateData)) $kc->update($updateData);
+                    // Trùng mã/tên → cập nhật (sửa) kích cỡ đã có theo giá trị mới, gồm cả hệ số giá.
+                    $kc->update([
+                        'ten_kich_co' => $tenKichCo,
+                        'ma_kich_co'  => $maKichCo ?: $kc->ma_kich_co,
+                        'mo_ta'       => $moTa !== '' ? $moTa : null,
+                        'he_so_gia'   => $heSoGia > 0 ? $heSoGia : 1,
+                    ]);
                 }
                 
                 $syncData[] = $kc->id;
@@ -129,6 +131,79 @@ class ProductController extends Controller
     private function toFormTrangThaiBan(?string $status): string
     {
         return in_array($status, ['dang_ban', 'đang bán'], true) ? 'dang_ban' : 'ngung_ban';
+    }
+
+    /**
+     * Kiểm tra điều kiện để bật bán ("đang bán").
+     * Trả về null nếu đủ điều kiện; ngược lại trả về chuỗi lý do cụ thể.
+     *
+     * - Sản phẩm quản lý "theo số lượng" (không dùng công thức): luôn đủ điều kiện (miễn trừ).
+     * - Sản phẩm quản lý "theo nguyên liệu": phải có công thức và tồn kho mỗi nguyên liệu
+     *   phải ≥ số lượng cần cho 1 phần.
+     */
+    private function sellBlockReason(SanPham $product): ?string
+    {
+        if (rtrim($product->loai_quan_ly_kho ?? '') !== 'theo nguyên liệu') {
+            return null;
+        }
+
+        $recipes = CongThucSanPham::with('nguyenLieu')
+            ->where('san_pham_id', $product->id)
+            ->get();
+
+        if ($recipes->isEmpty()) {
+            return 'Không thể bật bán: sản phẩm chưa có công thức. Vui lòng thêm công thức (nguyên liệu) trước.';
+        }
+
+        $balanceExpression = \App\Enums\TransactionType::stockBalanceExpression('lich_su_kho');
+        $stocks = DB::table('lich_su_kho')
+            ->whereIn('nguyen_lieu_id', $recipes->pluck('nguyen_lieu_id'))
+            ->select('nguyen_lieu_id', DB::raw("COALESCE({$balanceExpression}, 0) as so_luong"))
+            ->groupBy('nguyen_lieu_id')
+            ->pluck('so_luong', 'nguyen_lieu_id');
+
+        $fmt = fn($n) => rtrim(rtrim(number_format((float) $n, 3, '.', ''), '0'), '.');
+
+        $insufficient = [];
+        foreach ($recipes as $recipe) {
+            $need = (float) $recipe->so_luong_can;
+            $have = (float) ($stocks[$recipe->nguyen_lieu_id] ?? 0);
+            if ($have < $need) {
+                $name = $recipe->nguyenLieu?->ten_nguyen_lieu ?? ('#' . $recipe->nguyen_lieu_id);
+                $unit = $recipe->nguyenLieu?->don_vi_tinh ? ' ' . $recipe->nguyenLieu->don_vi_tinh : '';
+                $insufficient[] = "{$name} (cần {$fmt($need)}{$unit}, còn {$fmt($have)}{$unit})";
+            }
+        }
+
+        if (!empty($insufficient)) {
+            return 'Không thể bật bán vì nguyên liệu không đủ để làm: ' . implode('; ', $insufficient) . '.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Nén ảnh (resize 1200px, JPG 80%) rồi lưu lên S3.
+     * Định dạng đã được validate theo khả năng GD của server, nên ở đây chỉ cần xử lý.
+     * Nếu vì lý do nào đó vẫn thất bại (file hỏng…) → ném ValidationException để hiển thị
+     * thông báo thân thiện thay vì lỗi 500.
+     */
+    private function storeProductImage(\Illuminate\Http\UploadedFile $file): string
+    {
+        try {
+            $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
+            $image = $manager->decode($file)->scaleDown(width: 1200);
+            $filename = 'products/' . Str::uuid() . '-' . time() . '.jpg';
+            Storage::disk('s3')->put($filename, (string) $image->encodeUsingFileExtension('jpg', 80));
+            return $filename;
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Xử lý/tải ảnh sản phẩm thất bại.', [
+                'error' => $e->getMessage(),
+            ]);
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'anh_chinh' => 'Không thể xử lý ảnh này. Vui lòng thử lại với ảnh JPG hoặc PNG.',
+            ]);
+        }
     }
 
     public function index(Request $request)
@@ -181,20 +256,9 @@ class ProductController extends Controller
         $data['loai_quan_ly_kho'] = $coCongThuc ? 'theo nguyên liệu' : 'theo số lượng';
         $data['slug'] = Str::slug($request->ten_san_pham) . '-' . time();
 
-        // Upload ảnh chính
+        // Upload ảnh chính (nén nếu được, fallback lưu file gốc — không để lỗi 500)
         if ($request->hasFile('anh_chinh')) {
-            $file = $request->file('anh_chinh');
-            
-            // Nén ảnh: Resize max width 1200px, quality 80%
-            $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
-            $image = $manager->decode($file);
-            $image->scaleDown(width: 1200);
-            
-            // Lưu lên S3
-            $filename = 'products/' . Str::uuid() . '-' . time() . '.' . $file->getClientOriginalExtension();
-            Storage::disk('s3')->put($filename, (string) $image->encodeUsingFileExtension('jpg', 80));
-            
-            $data['hinh_anh'] = $filename;
+            $data['hinh_anh'] = $this->storeProductImage($request->file('anh_chinh'));
         }
 
         $intendedStatus = $data['trang_thai_ban'];
@@ -210,7 +274,8 @@ class ProductController extends Controller
             ->with('success', "Sản phẩm «{$product->ten_san_pham}» đã được thêm thành công.");
 
         if ($intendedStatus === 'đang bán' && $product->trang_thai_ban === 'ngừng bán') {
-            $redirect->with('warning', 'Sản phẩm được chuyển sang "Ngừng bán" vì chưa đủ điều kiện bán (chưa điền công thức hoặc nguyên liệu đã hết).');
+            $reason = $this->sellBlockReason($product->fresh());
+            $redirect->with('warning', $reason ?? 'Sản phẩm được chuyển sang "Ngừng bán" vì chưa đủ điều kiện bán.');
         }
 
         return $redirect;
@@ -248,17 +313,13 @@ class ProductController extends Controller
         $data['loai_quan_ly_kho'] = $coCongThuc ? 'theo nguyên liệu' : 'theo số lượng';
 
         if ($request->hasFile('anh_chinh')) {
+            // Tải ảnh mới trước; chỉ xoá ảnh cũ khi tải thành công.
+            $newImage = $this->storeProductImage($request->file('anh_chinh'));
             if ($product->hinh_anh) {
                 Storage::disk('s3')->delete($product->hinh_anh);
                 Storage::disk('public')->delete($product->hinh_anh); // Fallback for old local files
             }
-            $file = $request->file('anh_chinh');
-            $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
-            $image = $manager->decode($file)->scaleDown(width: 1200);
-            
-            $filename = 'products/' . Str::uuid() . '-' . time() . '.' . $file->getClientOriginalExtension();
-            Storage::disk('s3')->put($filename, (string) $image->encodeUsingFileExtension('jpg', 80));
-            $data['hinh_anh'] = $filename;
+            $data['hinh_anh'] = $newImage;
         }
 
         $intendedStatus = $data['trang_thai_ban'];
@@ -272,8 +333,9 @@ class ProductController extends Controller
         $redirect = redirect()->route('manager.products.index')
             ->with('success', "Sản phẩm «{$product->ten_san_pham}» đã được cập nhật.");
 
-        if ($intendedStatus === 'đang bán' && $product->trang_thai_ban === 'ngừng bán') {
-            $redirect->with('warning', '◆ Sản phẩm đã tự động chuyển sang "Ngừng bán" vì có nguyên liệu hết hàng trong kho.');
+        if ($intendedStatus === 'đang bán' && $product->fresh()->trang_thai_ban === 'ngừng bán') {
+            $reason = $this->sellBlockReason($product->fresh());
+            $redirect->with('warning', $reason ?? 'Sản phẩm đã tự động chuyển sang "Ngừng bán" vì chưa đủ điều kiện bán.');
         }
 
         return $redirect;
@@ -430,25 +492,13 @@ class ProductController extends Controller
         $product = SanPham::findOrFail($id);
         $newStatus = $this->toDbTrangThaiBan($request->trang_thai);
 
-        if ($newStatus === 'đang bán' && $product->loai_quan_ly_kho === 'theo nguyên liệu') {
-            $ingredientIds = CongThucSanPham::where('san_pham_id', $product->id)->pluck('nguyen_lieu_id');
-            if ($ingredientIds->isNotEmpty()) {
-                $balanceExpression = \App\Enums\TransactionType::stockBalanceExpression('lich_su_kho');
-                $stocks = DB::table('lich_su_kho')
-                    ->whereIn('nguyen_lieu_id', $ingredientIds)
-                    ->select('nguyen_lieu_id', DB::raw("COALESCE({$balanceExpression}, 0) as so_luong"))
-                    ->groupBy('nguyen_lieu_id')
-                    ->pluck('so_luong', 'nguyen_lieu_id');
-
-                foreach ($ingredientIds as $idIng) {
-                    $stock = (float) ($stocks[$idIng] ?? 0);
-                    if ($stock <= 0) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Không thể bật bán vì có nguyên liệu đã hết hàng.',
-                        ], 422);
-                    }
-                }
+        if ($newStatus === 'đang bán') {
+            $reason = $this->sellBlockReason($product);
+            if ($reason !== null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $reason,
+                ], 422);
             }
         }
 

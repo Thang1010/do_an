@@ -14,6 +14,33 @@ class StoreProductRequest extends FormRequest
         return true;
     }
 
+    /**
+     * Các định dạng ảnh server (thư viện GD) thật sự xử lý/lưu được.
+     * Định dạng nào GD không hỗ trợ trên server này sẽ không cho phép → tránh lỗi khi lưu.
+     */
+    private function supportedImageExtensions(): array
+    {
+        $gd = function_exists('gd_info') ? gd_info() : [];
+        $exts = ['jpg', 'jpeg', 'png', 'gif']; // GD luôn hỗ trợ
+        if (!empty($gd['WebP Support'])) {
+            $exts[] = 'webp';
+        }
+        if (!empty($gd['AVIF Support'])) {
+            $exts[] = 'avif';
+        }
+        if (!empty($gd['BMP Support'])) {
+            $exts[] = 'bmp';
+        }
+        return $exts;
+    }
+
+    /** Danh sách hiển thị cho người dùng, vd "JPG, PNG, GIF, WEBP". */
+    private function supportedImageLabel(): string
+    {
+        $exts = array_values(array_diff($this->supportedImageExtensions(), ['jpeg']));
+        return implode(', ', array_map('strtoupper', $exts));
+    }
+
     public function rules(): array
     {
         return [
@@ -25,7 +52,7 @@ class StoreProductRequest extends FormRequest
             'co_cong_thuc'              => 'nullable|in:0,1',
             'nhiet_do'                  => 'nullable|array',
             'nhiet_do.*'                => 'in:nóng,lạnh',
-            'anh_chinh'                 => 'nullable|mimes:jpg,jpeg,png,gif,webp,avif,bmp,tiff,svg|max:5120',
+            'anh_chinh'                 => 'nullable|mimes:' . implode(',', $this->supportedImageExtensions()) . '|max:5120',
             'sizes'                     => 'nullable|array',
             'sizes.*.kich_co_id'        => 'required',
 
@@ -45,7 +72,8 @@ class StoreProductRequest extends FormRequest
             'danh_muc_id.required'        => 'Vui lòng chọn danh mục.',
             'gia_goc.required'            => 'Vui lòng nhập giá sản phẩm.',
             'sizes.*.kich_co_id.required' => 'Vui lòng chọn kích cỡ.',
-
+            'anh_chinh.mimes'             => 'Chỉ được đăng ảnh định dạng: ' . $this->supportedImageLabel() . '.',
+            'anh_chinh.max'               => 'Ảnh không được vượt quá 5MB.',
         ];
     }
 
@@ -91,16 +119,12 @@ class StoreProductRequest extends FormRequest
                     $tenMoi = trim((string) ($size['ten_kich_co_moi'] ?? ''));
                     $maMoi  = trim((string) ($size['ma_kich_co_moi'] ?? ''));
 
+                    // Trùng mã/tên không còn bị chặn: sẽ cập nhật (sửa) kích cỡ đã có theo giá trị mới.
                     if ($tenMoi === '') {
                         $validator->errors()->add("sizes.$index.ten_kich_co_moi", 'Vui lòng nhập tên kích cỡ mới.');
-                    } elseif (KichCo::where('ten_kich_co', $tenMoi)->exists()) {
-                        $validator->errors()->add("sizes.$index.ten_kich_co_moi", 'Tên kích cỡ này đã tồn tại, vui lòng chọn trong danh sách.');
                     }
-
                     if ($maMoi === '') {
                         $validator->errors()->add("sizes.$index.ma_kich_co_moi", 'Vui lòng nhập mã kích cỡ mới.');
-                    } elseif (KichCo::where('ma_kich_co', $maMoi)->exists()) {
-                        $validator->errors()->add("sizes.$index.ma_kich_co_moi", 'Mã kích cỡ này đã tồn tại trong danh sách chọn.');
                     }
                 } else {
                     $selectedId = (int) $kichCoId;

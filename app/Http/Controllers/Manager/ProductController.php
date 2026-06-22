@@ -114,8 +114,13 @@ class ProductController extends Controller
                 $syncData[] = $kc->id;
             } else {
                 $kcId = (int) $kichCoId;
-                if ($kcId > 0 && KichCo::find($kcId)) {
-                    $syncData[] = $kcId;
+                $kc = KichCo::find($kcId);
+                if ($kc) {
+                    // Cho phép sửa hệ số giá ngay trên size có sẵn → cập nhật khi giá trị thay đổi.
+                    if ($heSoGia > 0 && abs((float) $kc->he_so_gia - $heSoGia) > 0.0001) {
+                        $kc->update(['he_so_gia' => $heSoGia]);
+                    }
+                    $syncData[] = $kc->id;
                 }
             }
         }
@@ -183,13 +188,15 @@ class ProductController extends Controller
     }
 
     /**
-     * Nén ảnh (resize 1200px, JPG 80%) rồi lưu lên S3.
-     * Định dạng đã được validate theo khả năng GD của server, nên ở đây chỉ cần xử lý.
-     * Nếu vì lý do nào đó vẫn thất bại (file hỏng…) → ném ValidationException để hiển thị
-     * thông báo thân thiện thay vì lỗi 500.
+     * Lưu ảnh sản phẩm lên S3 (S3 lưu được mọi định dạng ảnh).
+     * - Định dạng GD nén được (jpg/png/gif/webp/…): resize 1200px + nén JPG 80% để nhẹ.
+     * - Định dạng GD không xử lý được (svg/tiff/heic/…): lưu nguyên file gốc, Laravel S3
+     *   tự gán Content-Type theo đuôi file để trình duyệt hiển thị đúng.
+     * - Nếu cả hai đều thất bại → ném ValidationException (thông báo thân thiện, không 500).
      */
     private function storeProductImage(\Illuminate\Http\UploadedFile $file): string
     {
+        // 1) Thử nén bằng GD
         try {
             $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
             $image = $manager->decode($file)->scaleDown(width: 1200);
@@ -197,11 +204,27 @@ class ProductController extends Controller
             Storage::disk('s3')->put($filename, (string) $image->encodeUsingFileExtension('jpg', 80));
             return $filename;
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('Xử lý/tải ảnh sản phẩm thất bại.', [
+            \Illuminate\Support\Facades\Log::info('GD không nén được ảnh, lưu nguyên file gốc lên S3.', [
+                'ext' => $file->getClientOriginalExtension(),
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // 2) Lưu nguyên file gốc (putFileAs tự nhận diện & gán Content-Type theo file)
+        try {
+            $ext = strtolower($file->getClientOriginalExtension() ?: 'img');
+            $name = Str::uuid() . '-' . time() . '.' . $ext;
+            $path = Storage::disk('s3')->putFileAs('products', $file, $name);
+            if (!$path) {
+                throw new \RuntimeException('putFileAs trả về false.');
+            }
+            return $path;
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Tải ảnh sản phẩm lên S3 thất bại.', [
                 'error' => $e->getMessage(),
             ]);
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'anh_chinh' => 'Không thể xử lý ảnh này. Vui lòng thử lại với ảnh JPG hoặc PNG.',
+                'anh_chinh' => 'Không thể tải ảnh lên. Vui lòng thử lại.',
             ]);
         }
     }

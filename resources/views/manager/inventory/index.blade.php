@@ -43,8 +43,8 @@
         </p>
     </div>
     <div class="page-actions">
-        <a href="{{ route('manager.inventory.import', array_filter(['muc_dich_su_dung' => $currentPurpose])) }}" class="btn btn-primary">Nhập kho</a>
-        <a href="{{ route('manager.inventory.export', array_filter(['muc_dich_su_dung' => $currentPurpose])) }}" class="btn btn-danger">Xuất kho</a>
+        <button type="button" class="btn btn-primary" onclick="openModal('inventory-batch-import-modal')">Nhập kho</button>
+        <button type="button" class="btn btn-danger" onclick="openModal('inventory-batch-export-modal')">Xuất kho</button>
     </div>
 </div>
 
@@ -523,8 +523,141 @@
     </div>
 </div>
 
+{{-- Modal NHẬP KHO nhiều nguyên liệu --}}
+<div class="modal-backdrop" id="inventory-batch-import-modal">
+    <div class="modal-box" style="max-width: 920px; width: calc(100% - 32px);">
+        <form method="POST" action="{{ route('manager.inventory.import.store') }}">
+            @csrf
+            <input type="hidden" name="return_muc_dich_su_dung" value="{{ $currentPurposeValue }}">
+            <div class="modal-header">
+                <span class="modal-title">Nhập kho nhiều nguyên liệu</span>
+                <button type="button" class="modal-close" onclick="closeModal('inventory-batch-import-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="batch-import-container" data-next="1">
+                    <div class="batch-row" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:12px; flex-wrap:wrap;">
+                        <div class="form-group" style="flex:2 1 190px; margin-bottom:0;">
+                            <label class="form-label">Nguyên liệu <span>*</span></label>
+                            <select name="items[0][nguyen_lieu_id]" class="form-control batch-select" required onchange="syncBatchUnit(this)">
+                                <option value="">-- Chọn nguyên liệu --</option>
+                                @foreach($nguyenLieus as $nl)
+                                    <option value="{{ $nl->id }}" data-unit="{{ $nl->don_vi_tinh }}">{{ $nl->ten_nguyen_lieu }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex:0 1 80px; margin-bottom:0;">
+                            <label class="form-label">Đơn vị</label>
+                            <input type="text" class="form-control batch-unit" readonly tabindex="-1" style="background:#f3f4f6; color:#6b7280; cursor:not-allowed;">
+                        </div>
+                        <div class="form-group" style="flex:1 1 100px; margin-bottom:0;">
+                            <label class="form-label">SL nhập <span>*</span></label>
+                            <input type="number" step="0.01" min="0.01" name="items[0][so_luong]" class="form-control" required>
+                        </div>
+                        <div class="form-group" style="flex:1 1 110px; margin-bottom:0;">
+                            <label class="form-label">Giá nhập</label>
+                            <input type="number" step="1" min="0" name="items[0][don_gia]" class="form-control">
+                        </div>
+                        <div class="form-group" style="flex:2 1 150px; margin-bottom:0;">
+                            <label class="form-label">Ghi chú</label>
+                            <input type="text" name="items[0][ghi_chu]" class="form-control" maxlength="500">
+                        </div>
+                        <div style="margin-bottom:0;">
+                            <button type="button" class="btn btn-danger btn-sm batch-remove" onclick="removeBatchRow(this,'batch-import-container')">&times;</button>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="addBatchRow('batch-import-container')">+ Thêm nguyên liệu</button>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('inventory-batch-import-modal')">Hủy</button>
+                <button type="submit" class="btn btn-primary">Xác nhận nhập kho</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Modal XUẤT KHO nhiều nguyên liệu --}}
+<div class="modal-backdrop" id="inventory-batch-export-modal">
+    <div class="modal-box" style="max-width: 860px; width: calc(100% - 32px);">
+        <form method="POST" action="{{ route('manager.inventory.export.store') }}">
+            @csrf
+            <input type="hidden" name="return_muc_dich_su_dung" value="{{ $currentPurposeValue }}">
+            <div class="modal-header">
+                <span class="modal-title">Xuất kho nhiều nguyên liệu</span>
+                <button type="button" class="modal-close" onclick="closeModal('inventory-batch-export-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="batch-export-container" data-next="1">
+                    <div class="batch-row" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:12px; flex-wrap:wrap;">
+                        <div class="form-group" style="flex:2 1 200px; margin-bottom:0;">
+                            <label class="form-label">Nguyên liệu <span>*</span></label>
+                            <select name="items[0][nguyen_lieu_id]" class="form-control batch-select" required onchange="syncBatchUnit(this)">
+                                <option value="">-- Chọn nguyên liệu --</option>
+                                @foreach($nguyenLieus as $nl)
+                                    <option value="{{ $nl->id }}" data-unit="{{ $nl->don_vi_tinh }}">{{ $nl->ten_nguyen_lieu }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex:0 1 80px; margin-bottom:0;">
+                            <label class="form-label">Đơn vị</label>
+                            <input type="text" class="form-control batch-unit" readonly tabindex="-1" style="background:#f3f4f6; color:#6b7280; cursor:not-allowed;">
+                        </div>
+                        <div class="form-group" style="flex:1 1 110px; margin-bottom:0;">
+                            <label class="form-label">SL xuất <span>*</span></label>
+                            <input type="number" step="0.01" min="0.01" name="items[0][so_luong]" class="form-control" required>
+                        </div>
+                        <div class="form-group" style="flex:2 1 170px; margin-bottom:0;">
+                            <label class="form-label">Lý do xuất</label>
+                            <input type="text" name="items[0][ly_do]" class="form-control" maxlength="500" placeholder="Pha chế, hao hụt, hủy...">
+                        </div>
+                        <div style="margin-bottom:0;">
+                            <button type="button" class="btn btn-danger btn-sm batch-remove" onclick="removeBatchRow(this,'batch-export-container')">&times;</button>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="addBatchRow('batch-export-container')">+ Thêm nguyên liệu</button>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('inventory-batch-export-modal')">Hủy</button>
+                <button type="submit" class="btn btn-danger">Xác nhận xuất kho</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @push('scripts')
 <script>
+    // ── Nhập/Xuất kho nhiều nguyên liệu (modal) ──
+    function syncBatchUnit(sel) {
+        const opt = sel.options[sel.selectedIndex];
+        const row = sel.closest('.batch-row');
+        const unit = row ? row.querySelector('.batch-unit') : null;
+        if (unit) unit.value = opt ? (opt.getAttribute('data-unit') || '') : '';
+    }
+
+    function addBatchRow(containerId) {
+        const container = document.getElementById(containerId);
+        const idx = parseInt(container.dataset.next || '1', 10);
+        const clone = container.querySelector('.batch-row').cloneNode(true);
+        clone.querySelectorAll('[name^="items["]').forEach(el => {
+            el.name = el.name.replace(/items\[\d+\]/, 'items[' + idx + ']');
+            if (el.tagName === 'SELECT') { el.selectedIndex = 0; } else { el.value = ''; }
+        });
+        const unit = clone.querySelector('.batch-unit');
+        if (unit) unit.value = '';
+        container.appendChild(clone);
+        container.dataset.next = idx + 1;
+    }
+
+    function removeBatchRow(btn, containerId) {
+        const container = document.getElementById(containerId);
+        if (container.querySelectorAll('.batch-row').length > 1) {
+            btn.closest('.batch-row').remove();
+        } else {
+            showNotice('Phải có ít nhất 1 nguyên liệu.');
+        }
+    }
+
     function activateInventoryTab(tabKey, btnEl) {
         const tabMap = {
             'stock': 'tab-stock',

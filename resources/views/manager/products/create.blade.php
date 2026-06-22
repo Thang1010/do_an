@@ -170,7 +170,7 @@
                                     <div class="flex-1">
                                         <label class="form-label">Hệ số giá</label>
                                         <input type="number" name="sizes[{{ $i }}][he_so_gia]" class="form-control hs-gia-input"
-                                               step="0.1" min="1" placeholder="1.0" value="{{ $size['he_so_gia'] ?? 1 }}" {{ !$isOther ? 'readonly' : '' }}>
+                                               step="0.1" min="1" placeholder="1.0" value="{{ $size['he_so_gia'] ?? 1 }}">
                                         @error("sizes.$i.he_so_gia")<div class="form-error">{{ $message }}</div>@enderror
                                     </div>
                                     <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.size-row').remove()">Xóa</button>
@@ -385,31 +385,27 @@ function addSizeRow() {
     sizeIndex++;
 }
 
-function handleSizeChange(selectEl) {
+function handleSizeChange(selectEl, isInit = false) {
     const row = selectEl.closest('.size-row');
     const heSoGiaInput = row.querySelector('input[name$="[he_so_gia]"]');
     const otherFields = row.querySelector('.other-size-fields');
     const selectedOption = selectEl.options[selectEl.selectedIndex];
-    
+
     if (selectEl.value === 'khac') {
         otherFields.style.display = 'grid';
         otherFields.classList.add('visible');
-        if(heSoGiaInput) {
-            heSoGiaInput.readOnly = false;
-        }
     } else {
         otherFields.style.display = 'none';
         otherFields.classList.remove('visible');
-        if(heSoGiaInput) {
-            heSoGiaInput.readOnly = true;
-            if(selectedOption && selectedOption.dataset.heSoGia) {
-                heSoGiaInput.value = selectedOption.dataset.heSoGia;
-            }
+        // Khi người dùng chủ động chọn 1 size có sẵn → gợi ý hệ số giá hiện tại (vẫn cho sửa).
+        // Không ghi đè lúc tải trang (isInit) để giữ giá trị đã nhập.
+        if (!isInit && heSoGiaInput && selectedOption && selectedOption.dataset.heSoGia) {
+            heSoGiaInput.value = selectedOption.dataset.heSoGia;
         }
     }
 }
 
-document.querySelectorAll('.size-select').forEach(handleSizeChange);
+document.querySelectorAll('.size-select').forEach(el => handleSizeChange(el, true));
 
 function previewImage(input) {
     if (input.files && input.files[0]) {

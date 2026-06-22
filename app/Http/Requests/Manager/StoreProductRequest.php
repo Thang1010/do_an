@@ -15,29 +15,19 @@ class StoreProductRequest extends FormRequest
     }
 
     /**
-     * Các định dạng ảnh server (thư viện GD) thật sự xử lý/lưu được.
-     * Định dạng nào GD không hỗ trợ trên server này sẽ không cho phép → tránh lỗi khi lưu.
+     * S3 là object storage nên lưu được mọi định dạng ảnh.
+     * Cho phép tất cả các định dạng ảnh phổ biến; định dạng nào GD không nén được
+     * sẽ được lưu nguyên file gốc lên S3 (xử lý ở ProductController::storeProductImage).
      */
     private function supportedImageExtensions(): array
     {
-        $gd = function_exists('gd_info') ? gd_info() : [];
-        $exts = ['jpg', 'jpeg', 'png', 'gif']; // GD luôn hỗ trợ
-        if (!empty($gd['WebP Support'])) {
-            $exts[] = 'webp';
-        }
-        if (!empty($gd['AVIF Support'])) {
-            $exts[] = 'avif';
-        }
-        if (!empty($gd['BMP Support'])) {
-            $exts[] = 'bmp';
-        }
-        return $exts;
+        return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'bmp', 'tiff', 'tif', 'svg', 'heic', 'heif', 'ico'];
     }
 
-    /** Danh sách hiển thị cho người dùng, vd "JPG, PNG, GIF, WEBP". */
+    /** Danh sách hiển thị cho người dùng (gọn, bỏ alias jpeg/tif/heif). */
     private function supportedImageLabel(): string
     {
-        $exts = array_values(array_diff($this->supportedImageExtensions(), ['jpeg']));
+        $exts = array_values(array_diff($this->supportedImageExtensions(), ['jpeg', 'tif', 'heif']));
         return implode(', ', array_map('strtoupper', $exts));
     }
 
@@ -55,7 +45,7 @@ class StoreProductRequest extends FormRequest
             'anh_chinh'                 => 'nullable|mimes:' . implode(',', $this->supportedImageExtensions()) . '|max:5120',
             'sizes'                     => 'nullable|array',
             'sizes.*.kich_co_id'        => 'required',
-
+            'sizes.*.he_so_gia'         => 'nullable|numeric|min:1',
             'sizes.*.ma_kich_co_moi'    => 'nullable|string|max:20',
             'sizes.*.ten_kich_co_moi'   => 'nullable|string|max:50',
             'sizes.*.mo_ta_kich_co_moi' => 'nullable|string|max:500',

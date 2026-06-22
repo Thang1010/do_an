@@ -53,8 +53,8 @@
 					</div>
 
 					<div class="form-group" style="flex: 1.5; margin-bottom: 0;">
-						<label class="form-label">Giá nhập/SP</label>
-						<input type="number" step="0.01" min="0" name="items[0][don_gia]" class="form-control" value="{{ old('items.0.don_gia') }}" placeholder="Ví dụ: 25000">
+						<label class="form-label">Giá nhập/SP <span>*</span></label>
+						<input type="number" step="0.01" min="0" name="items[0][don_gia]" class="form-control" value="{{ old('items.0.don_gia') }}" placeholder="Ví dụ: 25000" required>
 					</div>
 
 					<div class="form-group" style="flex: 2; margin-bottom: 0;">

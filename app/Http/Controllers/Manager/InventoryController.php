@@ -111,13 +111,15 @@ class InventoryController extends Controller
             'items' => 'required|array|min:1',
             'items.*.nguyen_lieu_id' => 'required|exists:nguyen_lieu,id',
             'items.*.so_luong'       => 'required|numeric|min:0.01',
-            'items.*.don_gia'        => 'nullable|numeric|min:0',
+            'items.*.don_gia'        => 'required|numeric|min:0',
             'items.*.ghi_chu'        => 'nullable|string|max:500',
             'return_muc_dich_su_dung' => 'nullable|string|max:120',
         ], [
             'items.*.nguyen_lieu_id.required' => 'Vui lòng chọn nguyên liệu.',
             'items.*.so_luong.required'       => 'Vui lòng nhập số lượng.',
             'items.*.so_luong.min'            => 'Số lượng phải lớn hơn 0.',
+            'items.*.don_gia.required'        => 'Vui lòng nhập giá nhập/SP.',
+            'items.*.don_gia.min'             => 'Giá nhập không được âm.',
         ]);
 
         $shiftId = $this->resolveExpenseShiftId();

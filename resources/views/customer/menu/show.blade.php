@@ -213,6 +213,10 @@
                         </div>
                         <button type="submit" class="review-submit-btn">Gửi đánh giá</button>
                     </form>
+                @elseif($reviewExpired ?? false)
+                    <p style="font-family:'Outfit',sans-serif;font-size:.9rem;color:rgba(255,255,255,.65);">
+                        Đã quá thời hạn đánh giá. Bạn chỉ có thể đánh giá sản phẩm trong ngày mua hàng.
+                    </p>
                 @else
                     <p style="font-family:'Outfit',sans-serif;font-size:.9rem;color:rgba(255,255,255,.65);">
                         Bạn cần mua sản phẩm này thì mới có thể viết đánh giá.

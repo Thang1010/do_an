@@ -18,6 +18,7 @@ return new class extends Migration
             $table->foreignId('don_hang_id')->nullable()->constrained('don_hang')->nullOnDelete();
             $table->unsignedTinyInteger('so_sao');
             $table->string('noi_dung', 300)->nullable();
+            $table->enum('phan_tich_cam_xuc', ['Tích cực', 'Tiêu cực', 'Trung lập', 'Chưa phân tích'])->default('Chưa phân tích');
             $table->timestamps();
 
             $table->index('san_pham_id');

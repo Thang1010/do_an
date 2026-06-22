@@ -35,5 +35,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(DonHang::class, OrderPolicy::class);
         Gate::policy(NguoiDung::class, UserPolicy::class);
         Gate::policy(CaLamViec::class, ShiftPolicy::class);
+
+        // ── Đăng ký Observers ────────────────────────────────────────
+        \App\Models\DanhGiaSanPham::observe(\App\Observers\DanhGiaSanPhamObserver::class);
     }
 }

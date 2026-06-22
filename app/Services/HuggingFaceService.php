@@ -26,7 +26,7 @@ class HuggingFaceService
         }
 
         // Mô hình phân tích cảm xúc tiếng Việt cực tốt
-        $url = 'https://api-inference.huggingface.co/models/wonrax/phobert-base-vietnamese-sentiment';
+        $url = 'https://router.huggingface.co/hf-inference/models/wonrax/phobert-base-vietnamese-sentiment';
 
         try {
             $response = Http::withToken($this->token)

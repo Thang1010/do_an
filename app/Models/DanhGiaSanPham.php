@@ -15,6 +15,7 @@ class DanhGiaSanPham extends Model
         'don_hang_id',
         'so_sao',
         'noi_dung',
+        'phan_tich_cam_xuc',
     ];
 
     public function nguoiDung()

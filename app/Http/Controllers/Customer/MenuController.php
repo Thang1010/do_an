@@ -95,9 +95,14 @@ class MenuController extends Controller
 
         $avgRating = $product->danhGiaSanPham->avg('so_sao') ?? 0;
 
-        // Khách chỉ được đánh giá nếu đã mua (đã thanh toán) sản phẩm này
+        // Khách chỉ được đánh giá nếu đã mua (đã thanh toán) sản phẩm này VÀ còn trong ngày mua.
         $hasBought = auth()->check()
             && $this->latestPaidOrderDetail(auth()->id(), $product->id) !== null;
+
+        // Đã từng mua nhưng đã qua ngày mua → hết hạn đánh giá (để hiển thị thông báo phù hợp).
+        $reviewExpired = auth()->check()
+            && ! $hasBought
+            && $this->hasEverBoughtProduct(auth()->id(), $product->id);
 
         $related = SanPham::where('danh_muc_id', $product->danh_muc_id)
             ->where('id', '!=', $product->id)
@@ -106,7 +111,7 @@ class MenuController extends Controller
             ->limit(4)
             ->get();
 
-        return view('customer.menu.show', compact('product', 'related', 'avgRating', 'hasBought'));
+        return view('customer.menu.show', compact('product', 'related', 'avgRating', 'hasBought', 'reviewExpired'));
     }
 
     public function storeReview(Request $request, int $id)
@@ -122,11 +127,15 @@ class MenuController extends Controller
 
         $product = SanPham::findOrFail($id);
 
-        // Chỉ cho phép đánh giá khi khách đã mua (đã thanh toán) sản phẩm này
+        // Chỉ cho phép đánh giá khi khách đã mua (đã thanh toán) VÀ còn trong ngày mua hàng.
         $chiTiet = $this->latestPaidOrderDetail(auth()->id(), $product->id);
 
         if (!$chiTiet) {
-            return back()->with('error', 'Bạn cần mua sản phẩm này trước khi đánh giá.');
+            $message = $this->hasEverBoughtProduct(auth()->id(), $product->id)
+                ? 'Đã quá thời hạn đánh giá. Bạn chỉ có thể đánh giá sản phẩm trong ngày mua hàng.'
+                : 'Bạn cần mua sản phẩm này trước khi đánh giá.';
+
+            return back()->with('error', $message);
         }
 
         // 1 đánh giá / khách / sản phẩm — mua lại & đánh giá tiếp sẽ ghi đè cái cũ,
@@ -144,16 +153,30 @@ class MenuController extends Controller
     }
 
     /**
-     * Lấy dòng chi tiết đơn hàng (đã thanh toán) gần nhất mà khách hàng đã mua sản phẩm này.
-     * Trả về null nếu khách chưa từng mua/thanh toán sản phẩm.
+     * Lấy dòng chi tiết đơn hàng (đã thanh toán) mà khách đã mua sản phẩm này
+     * VÀ đơn hàng được tạo trong NGÀY HÔM NAY (giới hạn thời gian đánh giá).
+     * Đơn mua ngày nào chỉ được đánh giá trong ngày đó; qua ngày khác trả về null.
      */
     private function latestPaidOrderDetail(int $userId, int $productId): ?ChiTietDonHang
     {
         return ChiTietDonHang::where('san_pham_id', $productId)
             ->where('trang_thai_thanh_toan', 'đã thanh toán')
-            ->whereHas('donHang', fn($q) => $q->where('nguoi_dung_id', $userId))
+            ->whereHas('donHang', fn($q) => $q->where('nguoi_dung_id', $userId)
+                ->whereDate('created_at', today()))
             ->orderByDesc('id')
             ->first();
+    }
+
+    /**
+     * Khách đã từng mua (đã thanh toán) sản phẩm này hay chưa (bất kể ngày nào).
+     * Dùng để phân biệt "chưa mua" với "đã mua nhưng quá hạn đánh giá".
+     */
+    private function hasEverBoughtProduct(int $userId, int $productId): bool
+    {
+        return ChiTietDonHang::where('san_pham_id', $productId)
+            ->where('trang_thai_thanh_toan', 'đã thanh toán')
+            ->whereHas('donHang', fn($q) => $q->where('nguoi_dung_id', $userId))
+            ->exists();
     }
 
     public function toggleFavorite(Request $request, $id)

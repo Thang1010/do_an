@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DanhMuc;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 class CategoryController extends Controller
@@ -62,16 +63,28 @@ class CategoryController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        $tenDanhMuc = trim((string) $request->input('ten_danh_muc'));
+
+        $validator = Validator::make($request->all(), [
             'ten_danh_muc' => 'required|string|max:150|unique:danh_muc,ten_danh_muc',
             'slug' => 'nullable|string|max:180',
             'mo_ta' => 'nullable|string|max:1000',
             'trang_thai' => 'nullable|in:dang_dung,ngung_dung,đang dùng,ngưng dùng',
         ], [
             'ten_danh_muc.required' => 'Vui lòng nhập tên danh mục.',
-            'ten_danh_muc.unique' => 'Tên danh mục đã tồn tại.',
+            'ten_danh_muc.unique' => "Danh mục \"{$tenDanhMuc}\" đã tồn tại.",
             'trang_thai.in' => 'Trạng thái danh mục không hợp lệ.',
         ]);
+
+        // Trả lỗi về error bag riêng để modal "Thêm danh mục" tự mở lại và
+        // hiển thị thông báo trùng tên ngay tại đó cho người dùng sửa.
+        if ($validator->fails()) {
+            return back()
+                ->withErrors($validator, 'createCategory')
+                ->withInput();
+        }
+
+        $validated = $validator->validated();
 
         $slugSource = trim((string) ($validated['slug'] ?? ''));
         if ($slugSource === '') {
@@ -102,16 +115,27 @@ class CategoryController extends Controller
     {
         $category = DanhMuc::findOrFail($id);
 
-        $validated = $request->validate([
+        $tenDanhMuc = trim((string) $request->input('ten_danh_muc'));
+
+        $validator = Validator::make($request->all(), [
             'ten_danh_muc' => "required|string|max:150|unique:danh_muc,ten_danh_muc,{$id}",
             'slug' => 'nullable|string|max:180',
             'mo_ta' => 'nullable|string|max:1000',
             'trang_thai' => 'nullable|in:dang_dung,ngung_dung,đang dùng,ngưng dùng',
         ], [
             'ten_danh_muc.required' => 'Vui lòng nhập tên danh mục.',
-            'ten_danh_muc.unique' => 'Tên danh mục đã tồn tại.',
+            'ten_danh_muc.unique' => "Danh mục \"{$tenDanhMuc}\" đã tồn tại.",
             'trang_thai.in' => 'Trạng thái danh mục không hợp lệ.',
         ]);
+
+        // Error bag riêng theo từng danh mục để lỗi hiển thị đúng modal "Sửa".
+        if ($validator->fails()) {
+            return back()
+                ->withErrors($validator, "editCategory_{$id}")
+                ->withInput();
+        }
+
+        $validated = $validator->validated();
 
         $slugSource = trim((string) ($validated['slug'] ?? ''));
         if ($slugSource === '') {

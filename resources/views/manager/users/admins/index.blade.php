@@ -73,19 +73,27 @@
                     <td>
                         <div class="action-row">
                             @if($canConfirmThisUser)
-                            <form method="POST" action="{{ route('account-approvals.confirm', $user->id) }}" onsubmit="return confirmSubmit(this, 'Xác nhận kích hoạt tài khoản {{ $user->ho_ten }}?')">
-                                @csrf
-                                <button type="submit" class="btn btn-primary btn-sm">Xác nhận</button>
-                            </form>
-                            @endif
-                            <a href="{{ route('manager.users.show', $user->id) }}" class="btn btn-secondary btn-sm">Chi tiết</a>
-                            @if($user->vai_tro !== 'chủ cửa hàng')
-                                <a href="{{ route('manager.users.edit', ['id' => $user->id, 'from' => 'admins']) }}" class="btn btn-warning btn-sm">Sửa</a>
-                                <form method="POST" action="{{ route('manager.users.destroy', $user->id) }}" onsubmit="return confirmDelete(this, 'Bạn có chắc muốn xóa tài khoản {{ addslashes($user->ho_ten) }}?')">
-                                    @csrf @method('DELETE')
+                                {{-- Tài khoản chờ duyệt: chỉ cho Xác nhận / Từ chối --}}
+                                <form method="POST" action="{{ route('account-approvals.confirm', $user->id) }}" onsubmit="return confirmSubmit(this, 'Xác nhận kích hoạt tài khoản {{ addslashes($user->ho_ten) }}?')">
+                                    @csrf
                                     <input type="hidden" name="from" value="admins">
-                                    <button type="submit" class="btn btn-danger btn-sm">Xóa</button>
+                                    <button type="submit" class="btn btn-primary btn-sm">Xác nhận</button>
                                 </form>
+                                <form method="POST" action="{{ route('account-approvals.reject', $user->id) }}" onsubmit="return confirmDelete(this, 'Từ chối và xóa yêu cầu đăng ký của {{ addslashes($user->ho_ten) }}?')">
+                                    @csrf
+                                    <input type="hidden" name="from" value="admins">
+                                    <button type="submit" class="btn btn-danger btn-sm">Từ chối</button>
+                                </form>
+                            @else
+                                <a href="{{ route('manager.users.show', $user->id) }}" class="btn btn-secondary btn-sm">Chi tiết</a>
+                                @if($user->vai_tro !== 'chủ cửa hàng')
+                                    <a href="{{ route('manager.users.edit', ['id' => $user->id, 'from' => 'admins']) }}" class="btn btn-warning btn-sm">Sửa</a>
+                                    <form method="POST" action="{{ route('manager.users.destroy', $user->id) }}" onsubmit="return confirmDelete(this, 'Bạn có chắc muốn xóa tài khoản {{ addslashes($user->ho_ten) }}?')">
+                                        @csrf @method('DELETE')
+                                        <input type="hidden" name="from" value="admins">
+                                        <button type="submit" class="btn btn-danger btn-sm">Xóa</button>
+                                    </form>
+                                @endif
                             @endif
                         </div>
                     </td>

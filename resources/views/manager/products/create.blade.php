@@ -22,6 +22,11 @@
     @if(isset($product)) @method('PUT') @endif
 
     <div class="layout-form-page">
+        @php
+            $coCongThuc = old('co_cong_thuc') !== null
+                ? old('co_cong_thuc') === '1'
+                : (isset($product) ? ($product->loai_quan_ly_kho === 'theo nguyên liệu') : true);
+        @endphp
 
         {{-- Left: Main Info --}}
         <div class="flex-col-18">
@@ -92,6 +97,20 @@
                             @error('nhiet_do')<div class="form-error">{{ $message }}</div>@enderror
                         </div>
                     </div>
+
+                    <div class="form-group mt-3" style="margin-top: 15px;">
+                        <label class="form-label">Loại sản phẩm <span>*</span></label>
+                        <div style="display: flex; gap: 24px; margin-top: 8px;">
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="radio" name="co_cong_thuc" value="1" {{ $coCongThuc ? 'checked' : '' }} onchange="toggleRecipeSection()">
+                                Đồ pha chế (Có size & công thức)
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="radio" name="co_cong_thuc" value="0" {{ !$coCongThuc ? 'checked' : '' }} onchange="toggleRecipeSection()">
+                                Đồ bán lẻ (Đóng chai, bánh ngọt)
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -119,7 +138,7 @@
             </div>
 
             {{-- Sizes --}}
-            <div class="card">
+            <div class="card" id="sizes-card" style="display: {{ $coCongThuc ? 'block' : 'none' }}">
                 <div class="card-header">
                     <span class="card-title">Kích cỡ (Size)</span>
                 </div>
@@ -206,25 +225,14 @@
             </div>
 
             {{-- Recipes --}}
-            @php
-                $coCongThuc = old('co_cong_thuc') !== null
-                    ? old('co_cong_thuc') === '1'
-                    : (isset($product) ? ($product->loai_quan_ly_kho === 'theo nguyên liệu') : true);
-            @endphp
-            <div class="card">
-                <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <div class="card" id="recipes-card" style="display: {{ $coCongThuc ? 'block' : 'none' }}">
+                <div class="card-header">
                     <span class="card-title">Công thức nguyên liệu</span>
-                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:500;">
-                        <input type="hidden" name="co_cong_thuc" value="0">
-                        <input type="checkbox" id="co-cong-thuc-toggle" name="co_cong_thuc" value="1"
-                               {{ $coCongThuc ? 'checked' : '' }} onchange="toggleRecipeSection()">
-                        <span>Món này có công thức</span>
-                    </label>
                 </div>
                 <div class="card-body">
-                    <div id="no-recipe-note" class="form-hint" style="display:none; padding:6px 0;">
-                        Món không dùng công thức — quản lý theo số lượng, không trừ kho nguyên liệu.
-                    </div>
+                    @error('recipes')
+                        <div class="form-error" style="margin-bottom:10px;">{{ $message }}</div>
+                    @enderror
                     <div id="recipe-section">
                     @php
                         $recipes = old('recipes');
@@ -492,15 +500,22 @@ function removeRecipeRow(button) {
 document.querySelectorAll('.recipe-ingredient').forEach(syncRecipeUnit);
 
 function toggleRecipeSection() {
-    const toggle = document.getElementById('co-cong-thuc-toggle');
-    const section = document.getElementById('recipe-section');
-    const note = document.getElementById('no-recipe-note');
-    if (!toggle || !section) return;
-    const on = toggle.checked;
-    section.style.display = on ? '' : 'none';
-    if (note) note.style.display = on ? 'none' : 'block';
-    // Vô hiệu hóa input công thức khi không có công thức để không gửi lên server
-    section.querySelectorAll('select, input').forEach((el) => { el.disabled = !on; });
+    const radio = document.querySelector('input[name="co_cong_thuc"]:checked');
+    if (!radio) return;
+    const on = radio.value === '1';
+    
+    const sizesCard = document.getElementById('sizes-card');
+    const recipesCard = document.getElementById('recipes-card');
+    
+    if (sizesCard) {
+        sizesCard.style.display = on ? 'block' : 'none';
+        sizesCard.querySelectorAll('select, input, button').forEach((el) => { el.disabled = !on; });
+    }
+    
+    if (recipesCard) {
+        recipesCard.style.display = on ? 'block' : 'none';
+        recipesCard.querySelectorAll('select, input, button').forEach((el) => { el.disabled = !on; });
+    }
 }
 
 toggleRecipeSection();

@@ -137,6 +137,18 @@ body {
 .nav-submenu .nav-item:hover { color: rgba(255,255,255,0.8); }
 .nav-submenu .nav-item.active { color: var(--text-white); font-weight: 500; }
 
+/* Badge số yêu cầu chờ duyệt trên menu người dùng */
+.nav-pending-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px; padding: 0 5px;
+    border-radius: 9px; background: #d92d20; color: #fff;
+    font-size: 11px; font-weight: 700; line-height: 1;
+    margin-left: auto;
+}
+/* Menu cha (flex + có mũi tên ›): chừa khoảng cách để badge không đè lên mũi tên */
+.nav-group-toggle .nav-pending-badge { margin-right: 8px; }
+.nav-submenu .nav-item .nav-pending-badge { float: right; }
+
 /* Sidebar footer */
 .sidebar-footer {
     padding: 16px 20px;
@@ -501,6 +513,10 @@ table {
     width: 100%; border-collapse: collapse;
     font-size: 13px;
 }
+/* Cho chuỗi dài (email...) tự xuống dòng để cột thu hẹp, bảng vừa khung không cuộn
+   ngang. Cụm nút thao tác giữ nguyên 1 hàng (không wrap, không phá vị trí nút). */
+.table-wrap td { overflow-wrap: anywhere; }
+.table-wrap td .action-row { flex-wrap: nowrap; }
 thead tr {
     background: var(--bg-page);
     border-bottom: 2px solid var(--border);

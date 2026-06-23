@@ -31,7 +31,7 @@ class ExpenseController extends Controller
         $allGroupIds = collect();
 
         if ($requestedShiftId) {
-            $selectedShift = $groupsMatch = $shiftGroups->firstWhere('id', (int) $requestedShiftId);
+            $selectedShift = $shiftGroups->firstWhere('id', (int) $requestedShiftId);
             $selectedShiftId = $selectedShift?->id;
             
             if ($selectedShiftId) {

@@ -168,10 +168,15 @@ class ChatbotController extends Controller
         $menuContext = $this->buildMenuContext();
         $favoriteText = $this->formatFavoriteText($favoriteItems);
 
+        $cart = (array) $request->session()->get('cart', []);
+        [$cartContext, $cartKeys] = $this->buildCartContext($cart);
+
         $weatherContext = $this->getWeatherContext();
 
-        $systemPrompt = "Bạn là trợ lý tư vấn của quán cafe XM Coffee. Trả lời tiếng Việt, ngắn gọn, thân thiện.\n";
-        $systemPrompt .= "TỪ CHỐI TẤT CẢ CÁC CÂU HỎI NGOÀI LỀ (toán học, văn học, lập trình, triết học...). Lịch sự báo rằng bạn chỉ hỗ trợ tư vấn đồ uống và menu của quán.\n";
+        $systemPrompt = "Bạn là trợ lý tư vấn của quán cafe XM Coffee. Trả lời ngắn gọn, thân thiện.\n";
+        $systemPrompt .= "NGÔN NGỮ: Bạn CHỈ hỗ trợ TIẾNG VIỆT và TIẾNG ANH. Hãy trả lời bằng ĐÚNG ngôn ngữ mà khách đang dùng (khách viết/nói tiếng Việt thì trả lời tiếng Việt; tiếng Anh thì trả lời tiếng Anh). Nếu khách dùng ngôn ngữ KHÁC (không phải Việt/Anh), hãy lịch sự trả lời bằng tiếng Anh rằng bạn chỉ hỗ trợ tiếng Việt và tiếng Anh (\"Sorry, I only support Vietnamese and English.\").\n";
+        $systemPrompt .= "Bạn hỗ trợ: tư vấn đồ uống/menu VÀ quản lý GIỎ HÀNG của khách (ghi chú và nhiệt độ nóng/lạnh cho từng món đã có trong giỏ).\n";
+        $systemPrompt .= "TỪ CHỐI CÁC CÂU HỎI NGOÀI LỀ (toán học, văn học, lập trình, triết học...). Lịch sự báo rằng bạn chỉ hỗ trợ tư vấn đồ uống, menu và giỏ hàng của quán.\n";
         $systemPrompt .= "KHÔNG ĐƯỢC TIẾT LỘ CÔNG THỨC của các món ăn/đồ uống dưới bất kỳ hình thức nào. Công thức chỉ để bạn ngầm hiểu nguyên liệu.\n";
 
         if ($menuContext === '') {
@@ -181,10 +186,21 @@ class ChatbotController extends Controller
                 ."Nếu khách hỏi món không có, hãy từ chối lịch sự và gợi ý món gần giống CÓ TRONG THỰC ĐƠN.\n"
                 ."Dựa vào danh sách nguyên liệu: nếu khách có bệnh lý (tiểu đường, dạ dày, dị ứng...), hãy phân tích ngầm nguyên liệu nên tránh (đường, sữa, cafein...) và gợi ý món phù hợp nhất TRONG MENU.\n"
                 ."Nếu gợi ý món có thể điều chỉnh (ví dụ: bớt đường, không đá), hãy kèm thêm một lệnh ghi chú ẩn ở cuối câu trả lời theo cú pháp: `[GHI CHÚ: Tên món chính xác = Nội dung ghi chú]`. Ví dụ: `[GHI CHÚ: Cà phê đen = Ít đường, không đá]`.\n";
+
+            $systemPrompt .= "QUAN TRỌNG VỀ NHIỆT ĐỘ: Mỗi món có phần 'Phục vụ' cho biết món đó dùng được NÓNG, LẠNH hay cả hai. Hãy ĐỌC KỸ và CHỈ tư vấn nhiệt độ mà món đó thực sự hỗ trợ; KHÔNG khuyên uống nóng nếu món chỉ có lạnh và ngược lại.\n"
+                ."Nếu khách có dấu hiệu cần đồ ấm/nóng (đau bụng, đau dạ dày, lạnh bụng, cảm lạnh, ho, đau họng...), hãy ƯU TIÊN gợi ý các món CÓ THỂ PHỤC VỤ NÓNG và khuyên khách dùng NÓNG, hạn chế đá/đồ lạnh — vừa đáp ứng nhu cầu, vừa giữ chất lượng ngon nhất. Ngược lại khi khách muốn giải nhiệt/trời nóng thì ưu tiên món phục vụ LẠNH.\n"
+                ."Khi gợi ý một món kèm nhiệt độ cụ thể, hãy nói rõ (ví dụ: 'nên dùng nóng').\n";
         }
 
         if ($weatherContext !== '') {
             $systemPrompt .= "\n".$weatherContext."\n";
+        }
+
+        if ($cartContext !== '') {
+            $systemPrompt .= "\nGIỎ HÀNG HIỆN TẠI của khách (".count($cart)." món, đánh số như sau):\n"
+                .$cartContext."\n"
+                ."Khi khách yêu cầu ghi chú hoặc đặt nóng/lạnh cho món trong giỏ, hãy xác nhận NGẮN GỌN và CHÍNH XÁC theo đúng số lượng món và yêu cầu (hệ thống sẽ TỰ ĐỘNG áp dụng thay đổi vào giỏ). "
+                ."TUYỆT ĐỐI không bịa thêm hoặc bớt số lượng món; chỉ dựa trên danh sách ở trên. KHÔNG in ra bất kỳ mã lệnh nào.\n";
         }
 
         $systemPrompt .= "\nMenu hiện có:\n".$menuContext;
@@ -227,23 +243,45 @@ class ChatbotController extends Controller
             return ''; // Xóa khỏi tin nhắn hiển thị cho người dùng
         }, $reply);
 
+        // Chỉnh sửa GIỎ HÀNG: dùng 1 lần gọi OpenAI ở chế độ JSON để trích chính xác
+        // các thay đổi nhiệt độ/ghi chú rồi áp trực tiếp (đáng tin hơn lệnh ẩn trong text).
+        $cartUpdated = false;
+        if (! empty($cart) && $this->looksLikeCartEdit($messageText)) {
+            $cartUpdated = $this->applyCartEditsViaAi($apiKey, $request, $cart, $cartKeys, $cartContext, $messageText);
+        }
+        $cartCount = array_sum(array_column($cart, 'qty'));
+
         $reply = trim($reply);
         $context['chatbot_notes'] = $chatbotNotes;
 
         $this->storeChatMessage($session, 'chatbot', $reply);
 
-        $shouldSuggest = $this->shouldSuggestProducts($messageText);
-        $products = $context['candidates'] ?? [];
-        if ($shouldSuggest || empty($products)) {
-            $candidates = $this->pickSuggestions($this->buildMenuItems(), $favoriteItems);
-            $products = $this->formatCandidateProducts($candidates);
+        // Bảng "Món gợi ý": mỗi lần bot tư vấn sẽ thay mới danh sách.
+        $menuItems = $this->buildMenuItems();
+
+        // Ưu tiên hiển thị đúng các món mà bot vừa nhắc trong câu trả lời (khớp với tư vấn).
+        $mentioned = $this->extractMentionedProducts($reply, $menuItems);
+        if (!empty($mentioned)) {
+            $products = $this->formatCandidateProducts($mentioned);
             $context['candidates'] = $products;
+        } else {
+            $shouldSuggest = $this->shouldSuggestProducts($messageText);
+            $products = $context['candidates'] ?? [];
+            if ($shouldSuggest || empty($products)) {
+                // Lọc gợi ý theo nhiệt độ phù hợp nếu khách có nhu cầu (vd đau bụng → ưu tiên món nóng).
+                $preferredTemp = $this->detectPreferredTemperature($messageText);
+                $candidates = $this->pickSuggestions($menuItems, $favoriteItems, $preferredTemp);
+                $products = $this->formatCandidateProducts($candidates);
+                $context['candidates'] = $products;
+            }
         }
 
         return response()->json([
             'reply' => $reply,
             'context' => $context,
             'products' => $products,
+            'cart_updated' => $cartUpdated,
+            'cart_count' => $cartCount,
         ]);
     }
 
@@ -426,8 +464,28 @@ class ChatbotController extends Controller
         return $result;
     }
 
-    private function pickSuggestions($menuItems, array $favoriteItems = []): array
+    private function pickSuggestions($menuItems, array $favoriteItems = [], ?string $preferredTemp = null): array
     {
+        // Khi khách có nhu cầu nhiệt độ rõ (vd đau bụng → nóng): chỉ gợi ý món hỗ trợ nhiệt độ đó
+        // (món không có thuộc tính nhiệt độ như bánh/đồ ăn vẫn được giữ).
+        if ($preferredTemp !== null) {
+            $needle = mb_strtolower($preferredTemp, 'UTF-8');
+            $supports = function ($item) use ($needle) {
+                $temp = mb_strtolower((string) ($item['nhiet_do'] ?? ''), 'UTF-8');
+                return $temp === '' || Str::contains($temp, $needle);
+            };
+
+            $favs = array_values(array_filter($favoriteItems, $supports));
+            $pool = collect($menuItems)->filter($supports)->values()->all();
+
+            $picked = array_merge($this->takeItems($favs, 2), $this->takeItems($pool, 6));
+
+            if (!empty($picked)) {
+                return array_slice($this->uniqueItems($picked), 0, 6);
+            }
+            // Nếu không có món nào phù hợp nhiệt độ → rơi xuống logic gợi ý chung bên dưới.
+        }
+
         $drinkSlugs = ['do-nong', 'do-lanh', 'do-uong', 'ca-phe', 'tra', 'tra-sua', 'nuoc-ep', 'sinh-to', 'soda', 'da-xay'];
         $dessertSlugs = ['do-an-vat', 'an-vat', 'banh', 'trang-mieng', 'do-ngot'];
         $coldKeywords = ['đá', 'da', 'lạnh', 'lanh', 'sinh tố', 'sinh to', 'soda', 'nước ép', 'nuoc ep', 'trà sữa', 'tra sua', 'matcha', 'smoothie', 'juice'];
@@ -627,6 +685,29 @@ class ChatbotController extends Controller
         return $products;
     }
 
+    /**
+     * Liệt kê các món trong giỏ hàng (đánh số) cho bot đọc, kèm map số_thứ_tự => key.
+     * @return array{0:string,1:array<int,string>}
+     */
+    private function buildCartContext(array $cart): array
+    {
+        $lines = [];
+        $keys = [];
+        $i = 1;
+        foreach ($cart as $key => $item) {
+            $name = $item['name'] ?? 'Món';
+            $qty = $item['qty'] ?? 1;
+            $size = ! empty($item['size_name']) ? ' - size ' . $item['size_name'] : '';
+            $temp = ! empty($item['nhiet_do']) ? ' - nhiệt độ hiện tại: ' . $item['nhiet_do'] : ' - chưa chọn nhiệt độ';
+            $note = ! empty($item['note']) ? ' - ghi chú hiện tại: ' . $item['note'] : '';
+            $lines[] = "{$i}. {$name} (x{$qty}){$size}{$temp}{$note}";
+            $keys[$i] = $key;
+            $i++;
+        }
+
+        return [implode("\n", $lines), $keys];
+    }
+
     private function buildMenuContext(): string
     {
         $items = SanPham::with(['danhMuc', 'congThucSanPham.nguyenLieu'])
@@ -645,7 +726,12 @@ class ChatbotController extends Controller
             $ingredients = $item->congThucSanPham->map(fn ($ct) => $ct->nguyenLieu?->ten_nguyen_lieu)->filter()->implode(', ');
             $ingredientText = $ingredients ? " (Nguyên liệu: {$ingredients})" : '';
 
-            $tempText = $item->nhiet_do ? " - Nhiệt độ: {$item->nhiet_do}" : '';
+            // Nêu rõ món có thể phục vụ NÓNG / LẠNH để bot tư vấn nhiệt độ cho chuẩn.
+            $tempText = '';
+            $temps = array_values(array_filter(array_map('trim', explode(',', (string) $item->nhiet_do))));
+            if (!empty($temps)) {
+                $tempText = ' - Phục vụ: ' . implode(' / ', $temps);
+            }
 
             $lines[] = "- {$item->ten_san_pham} ({$category}) - {$priceText}{$tempText}{$ingredientText}";
         }
@@ -674,6 +760,62 @@ class ChatbotController extends Controller
         }
 
         return $normalized;
+    }
+
+    /**
+     * Trích các món (đang bán) được nhắc tên trong câu trả lời của bot,
+     * để hiển thị đúng các món đó ở bảng "Món gợi ý". Trả về tối đa 6 món.
+     */
+    private function extractMentionedProducts(string $reply, $menuItems): array
+    {
+        $replyLower = mb_strtolower($reply, 'UTF-8');
+        if (trim($replyLower) === '') {
+            return [];
+        }
+
+        $matched = [];
+        foreach ($menuItems as $item) {
+            $name = mb_strtolower((string) ($item['name'] ?? ''), 'UTF-8');
+            $id = $item['id'] ?? null;
+            if ($name !== '' && $id !== null && mb_strpos($replyLower, $name) !== false) {
+                $matched[$id] = $item;
+            }
+        }
+
+        return array_slice(array_values($matched), 0, 6);
+    }
+
+    /**
+     * Suy ra nhiệt độ phục vụ phù hợp từ nội dung khách nhắn:
+     * - 'nóng' khi có dấu hiệu cần đồ ấm (đau bụng, dạ dày, cảm lạnh, ho...).
+     * - 'lạnh' khi muốn giải nhiệt/trời nóng.
+     * - null nếu không rõ.
+     */
+    private function detectPreferredTemperature(string $message): ?string
+    {
+        $text = mb_strtolower($message, 'UTF-8');
+
+        $hotSignals = [
+            'đau bụng', 'dau bung', 'đau dạ dày', 'dau da day', 'dạ dày', 'da day',
+            'lạnh bụng', 'lanh bung', 'cảm lạnh', 'cam lanh', 'bị cảm', 'bi cam',
+            'bị ho', 'bi ho', 'đau họng', 'dau hong', 'viêm họng', 'viem hong',
+            'giữ ấm', 'giu am', 'uống nóng', 'uong nong', 'đồ nóng', 'do nong',
+            'ấm bụng', 'am bung', 'trời lạnh', 'troi lanh',
+        ];
+        $coldSignals = [
+            'giải nhiệt', 'giai nhiet', 'nóng bức', 'nong buc', 'trời nóng', 'troi nong',
+            'mát lạnh', 'mat lanh', 'uống lạnh', 'uong lanh', 'đồ lạnh', 'do lanh',
+            'giải khát', 'giai khat', 'mát mẻ', 'mat me',
+        ];
+
+        if ($this->containsAny($text, $hotSignals)) {
+            return 'nóng';
+        }
+        if ($this->containsAny($text, $coldSignals)) {
+            return 'lạnh';
+        }
+
+        return null;
     }
 
     private function shouldSuggestProducts(string $message): bool
@@ -717,6 +859,208 @@ class ChatbotController extends Controller
             'noi_dung' => $trimmed,
             'created_at' => now(),
         ]);
+    }
+
+    /**
+     * Câu khách có vẻ muốn chỉnh ghi chú / nhiệt độ cho món trong giỏ không?
+     * Dùng để quyết định có gọi thêm 1 lần OpenAI (JSON) để trích thay đổi hay không.
+     */
+    private function looksLikeCartEdit(string $message): bool
+    {
+        $text = mb_strtolower($message, 'UTF-8');
+        $keywords = [
+            'nóng', 'nong', 'lạnh', 'lanh', 'hot', 'cold', 'iced', 'ice', 'đá', ' da ',
+            'ghi chú', 'ghi chu', 'note', 'ít ', 'it ', 'không ', 'khong ', 'no ', 'less', 'more', 'extra',
+            'thêm', 'them', 'sữa', 'sua', 'milk', 'đường', 'duong', 'sugar', 'ngọt', 'ngot',
+            'giỏ', 'gio hang', 'giỏ hàng', 'sản phẩm', 'san pham', 'món',
+        ];
+        foreach ($keywords as $kw) {
+            if (mb_strpos($text, $kw) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Trích các thay đổi nhiệt độ/ghi chú cho từng món trong giỏ bằng OpenAI (JSON mode),
+     * rồi áp trực tiếp vào session cart. Trả về true nếu có thay đổi.
+     */
+    private function applyCartEditsViaAi(string $apiKey, Request $request, array &$cart, array $cartKeys, string $cartContext, string $messageText): bool
+    {
+        $system = "Bạn là bộ phân tích yêu cầu chỉnh sửa GIỎ HÀNG của một quán cafe.\n"
+            ."Giỏ hàng của khách (mỗi dòng là một NHÓM món, có SỐ THỨ TỰ và SỐ LƯỢNG):\n".$cartContext."\n\n"
+            ."Khách có thể muốn: đặt NHIỆT ĐỘ (chỉ 'nóng' hoặc 'lạnh') hoặc GHI CHÚ cho một nhóm; "
+            ."hoặc TÁCH một nhóm thành nhiều phần khác nhau (vd nhóm 1 có 4 ly → 2 ly nóng, 2 ly lạnh).\n"
+            ."Với mỗi nhóm cần thay đổi, trả về một phần tử trong \"edits\" gồm \"index\" và \"assignments\" mô tả cách chia SỐ LƯỢNG của nhóm đó.\n"
+            ."Mỗi assignment: {\"qty\":<số lượng>,\"nhiet_do\":\"nóng\"|\"lạnh\"|null,\"ghi_chu\":<chuỗi>|null}. "
+            ."Tổng \"qty\" của các assignment trong một nhóm KHÔNG được vượt quá số lượng hiện có của nhóm; phần còn lại (nếu có) giữ nguyên. "
+            ."Để null nếu trường đó không thay đổi.\n"
+            ."Nếu khách nói chung chung (vd '2 nóng 2 lạnh') thì phân bổ lần lượt theo thứ tự nhóm/số lượng trong giỏ.\n"
+            ."CHỈ trả về JSON đúng cấu trúc, không kèm chữ nào khác:\n"
+            ."{\"edits\":[{\"index\":<số>,\"assignments\":[{\"qty\":<số>,\"nhiet_do\":\"nóng\"|\"lạnh\"|null,\"ghi_chu\":<chuỗi>|null}]}]}\n"
+            ."Chỉ dùng index có trong danh sách. Nếu không có thay đổi nào, trả về {\"edits\":[]}.";
+
+        $json = $this->callOpenAiJson($apiKey, [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => $messageText],
+        ]);
+        if (! $json) {
+            return false;
+        }
+
+        $data = json_decode($json, true);
+        $edits = is_array($data) ? ($data['edits'] ?? null) : null;
+        if (! is_array($edits)) {
+            return false;
+        }
+
+        $changed = false;
+        foreach ($edits as $edit) {
+            if (! is_array($edit)) {
+                continue;
+            }
+            $idx = (int) ($edit['index'] ?? 0);
+            $key = $cartKeys[$idx] ?? null;
+            if (! $key || ! isset($cart[$key])) {
+                continue;
+            }
+
+            $assignments = $edit['assignments'] ?? null;
+            if (! is_array($assignments) || empty($assignments)) {
+                continue;
+            }
+
+            $line = $cart[$key];
+            $remaining = max(1, (int) ($line['qty'] ?? 1));
+
+            // Phân chia số lượng của nhóm theo các assignment.
+            $groups = [];
+            foreach ($assignments as $a) {
+                if ($remaining <= 0 || ! is_array($a)) {
+                    continue;
+                }
+                $qty = (int) ($a['qty'] ?? 0);
+                if ($qty <= 0) {
+                    continue;
+                }
+                $qty = min($qty, $remaining);
+
+                $temp = $line['nhiet_do'] ?? '';
+                $rawTemp = isset($a['nhiet_do']) ? mb_strtolower(trim((string) $a['nhiet_do']), 'UTF-8') : '';
+                if ($rawTemp !== '' && $rawTemp !== 'null') {
+                    if (str_contains($rawTemp, 'nóng') || str_contains($rawTemp, 'nong') || str_contains($rawTemp, 'hot') || str_contains($rawTemp, 'warm') || str_contains($rawTemp, 'ấm')) {
+                        $temp = 'nóng';
+                    } elseif (str_contains($rawTemp, 'lạnh') || str_contains($rawTemp, 'lanh') || str_contains($rawTemp, 'cold') || str_contains($rawTemp, 'iced') || str_contains($rawTemp, 'đá')) {
+                        $temp = 'lạnh';
+                    }
+                }
+
+                $note = $line['note'] ?? '';
+                if (array_key_exists('ghi_chu', $a)) {
+                    $rawNote = trim((string) ($a['ghi_chu'] ?? ''));
+                    if ($rawNote !== '' && strtolower($rawNote) !== 'null') {
+                        $note = $rawNote;
+                    }
+                }
+
+                $groups[] = ['qty' => $qty, 'nhiet_do' => $temp, 'note' => $note];
+                $remaining -= $qty;
+            }
+
+            if (empty($groups)) {
+                continue;
+            }
+
+            // Phần số lượng chưa được phân bổ thì giữ nguyên thuộc tính cũ.
+            if ($remaining > 0) {
+                $groups[] = ['qty' => $remaining, 'nhiet_do' => $line['nhiet_do'] ?? '', 'note' => $line['note'] ?? ''];
+            }
+
+            // Xoá nhóm gốc rồi phân phối lại (tự cộng dồn nếu trùng nhóm khác).
+            unset($cart[$key]);
+            foreach ($groups as $g) {
+                $this->mergeIntoCart($cart, [
+                    'product_id' => $line['product_id'] ?? null,
+                    'size_id' => $line['size_id'] ?? null,
+                    'size_name' => $line['size_name'] ?? null,
+                    'name' => $line['name'] ?? 'Món',
+                    'image' => $line['image'] ?? null,
+                    'price' => $line['price'] ?? 0,
+                    'qty' => $g['qty'],
+                    'nhiet_do' => $g['nhiet_do'],
+                    'note' => $g['note'],
+                ]);
+            }
+            $changed = true;
+        }
+
+        if ($changed) {
+            $request->session()->put('cart', $cart);
+        }
+
+        return $changed;
+    }
+
+    /**
+     * Thêm một dòng vào giỏ: nếu đã có dòng GIỐNG HỆT (sản phẩm + size + nhiệt độ + ghi chú)
+     * thì cộng dồn số lượng, ngược lại tạo dòng mới với key ngẫu nhiên.
+     */
+    private function mergeIntoCart(array &$cart, array $template): void
+    {
+        foreach ($cart as $k => $it) {
+            if (($it['product_id'] ?? null) === ($template['product_id'] ?? null)
+                && ($it['size_id'] ?? null) === ($template['size_id'] ?? null)
+                && ($it['nhiet_do'] ?? '') === ($template['nhiet_do'] ?? '')
+                && ($it['note'] ?? '') === ($template['note'] ?? '')) {
+                $cart[$k]['qty'] = ($cart[$k]['qty'] ?? 0) + ($template['qty'] ?? 1);
+
+                return;
+            }
+        }
+
+        $pid = $template['product_id'] ?? 0;
+        $sid = $template['size_id'] ?? 0;
+        do {
+            $key = $pid.'_'.($sid ?? 0).'_'.Str::random(6);
+        } while (isset($cart[$key]));
+
+        $cart[$key] = $template;
+    }
+
+    /**
+     * Gọi OpenAI và bắt buộc trả về JSON object.
+     */
+    private function callOpenAiJson(string $apiKey, array $messages): ?string
+    {
+        $model = env('OPENAI_MODEL', 'gpt-4o-mini');
+
+        try {
+            $response = Http::withToken($apiKey)
+                ->timeout(20)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                    'model' => $model,
+                    'temperature' => 0,
+                    'max_tokens' => 500,
+                    'response_format' => ['type' => 'json_object'],
+                    'messages' => $messages,
+                ]);
+
+            if (! $response->successful()) {
+                Log::error('OpenAI JSON Error: '.$response->body());
+
+                return null;
+            }
+
+            $reply = $response->json('choices.0.message.content');
+
+            return $reply ? trim((string) $reply) : null;
+        } catch (\Throwable $exception) {
+            Log::error('OpenAI JSON Exception: '.$exception->getMessage());
+
+            return null;
+        }
     }
 
     private function callOpenAi(string $apiKey, array $messages, int $maxTokens = 400, float $temperature = 0.7): ?string

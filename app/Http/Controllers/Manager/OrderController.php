@@ -140,7 +140,7 @@ class OrderController extends Controller
             ->where('trang_thai_ban', 'đang bán')
             ->with(['kichCo'])
             ->orderBy('ten_san_pham')
-            ->get(['id', 'ten_san_pham', 'gia_goc', 'gia_khuyen_mai']);
+            ->get(['id', 'danh_muc_id', 'ten_san_pham', 'gia_goc', 'gia_khuyen_mai', 'nhiet_do']);
 
         $productSizeMap = [];
         foreach ($availableProducts as $product) {
@@ -153,9 +153,15 @@ class OrderController extends Controller
             }
 
             $productSizeMap[$product->id] = [
+                'danh_muc_id' => $product->danh_muc_id,
                 'sizes' => $sizes,
+                'temps' => array_values(array_filter(array_map('trim', explode(',', (string) $product->nhiet_do)))),
             ];
         }
+
+        $categories = \App\Models\DanhMuc::where('trang_thai', 'đang dùng')
+            ->orderBy('ten_danh_muc')
+            ->get(['id', 'ten_danh_muc']);
 
         $totalOrders = $countAll;
 
@@ -167,6 +173,7 @@ class OrderController extends Controller
             'banAns',
             'availableProducts',
             'productSizeMap',
+            'categories',
             'countAll',
             'countUnpaid',
             'countPaid'
@@ -328,7 +335,7 @@ class OrderController extends Controller
             ->where('trang_thai_ban', 'đang bán')
             ->with(['kichCo'])
             ->orderBy('ten_san_pham')
-            ->get(['id', 'ten_san_pham', 'gia_goc', 'gia_khuyen_mai']);
+            ->get(['id', 'danh_muc_id', 'ten_san_pham', 'gia_goc', 'gia_khuyen_mai', 'nhiet_do']);
 
         $productSizeMap = [];
         foreach ($availableProducts as $product) {
@@ -341,15 +348,22 @@ class OrderController extends Controller
             }
 
             $productSizeMap[$product->id] = [
+                'danh_muc_id' => $product->danh_muc_id,
                 'sizes' => $sizes,
+                'temps' => array_values(array_filter(array_map('trim', explode(',', (string) $product->nhiet_do)))),
             ];
         }
+
+        $categories = \App\Models\DanhMuc::where('trang_thai', 'đang dùng')
+            ->orderBy('ten_danh_muc')
+            ->get(['id', 'ten_danh_muc']);
 
         return view('manager.orders.edit', compact(
             'order',
             'banAns',
             'availableProducts',
-            'productSizeMap'
+            'productSizeMap',
+            'categories'
         ));
     }
 
@@ -511,10 +525,24 @@ class OrderController extends Controller
                 'trang_thai_thanh_toan' => $paymentStatus,
             ]);
 
-            $order->update([
+            $emailKhachHang = $request->input('email_khach_hang') ?? $order->email_khach_hang;
+
+            $updateData = [
                 'nhan_vien_id' => $user?->id,
-                'email_khach_hang' => $request->input('email_khach_hang') ?? $order->email_khach_hang,
-            ]);
+                'email_khach_hang' => $emailKhachHang,
+            ];
+
+            // Đơn order tại quầy chưa gắn tài khoản: nếu email khớp một tài khoản
+            // khách hàng đã đăng ký thì tự liên kết để khách vẫn có quyền đánh giá
+            // khi đăng nhập lại (dùng lại logic đánh giá theo nguoi_dung_id).
+            if (!$order->nguoi_dung_id) {
+                $khachHang = NguoiDung::khachHangByEmail($emailKhachHang);
+                if ($khachHang) {
+                    $updateData['nguoi_dung_id'] = $khachHang->id;
+                }
+            }
+
+            $order->update($updateData);
 
             $this->paymentService->syncThanhToanRecord($order->fresh(), $paymentMethod, $paymentStatus);
 

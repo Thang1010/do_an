@@ -97,23 +97,46 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
                             <button type="button" class="btn btn-danger btn-sm btn-remove-order-item" style="display: none;">Xóa món</button>
                         </div>
 
-                        <div class="grid" style="grid-template-columns: 1.5fr 1.2fr 0.8fr; gap: 10px;">
-                            <div class="form-group" style="margin: 0;">
-                                <label class="form-label">Sản phẩm</label>
-                                <select class="form-control js-product-select" data-field="san_pham_id" required>
-                                    <option value="">Chọn sản phẩm</option>
-                                    @foreach($availableProducts ?? [] as $product)
-                                        <option value="{{ $product->id }}" {{ (string) ($row['san_pham_id'] ?? '') === (string) $product->id ? 'selected' : '' }}>
-                                            {{ $product->ten_san_pham }}
-                                        </option>
+                        <div class="form-group" style="margin: 0 0 10px;">
+                            <label class="form-label">Danh mục (lọc sản phẩm)</label>
+                            <div class="clearable-select">
+                                <select class="form-control js-category-select">
+                                    <option value="">Tất cả danh mục</option>
+                                    @foreach($categories ?? [] as $category)
+                                        <option value="{{ $category->id }}">{{ $category->ten_danh_muc }}</option>
                                     @endforeach
                                 </select>
+                                <button type="button" class="clearable-clear" tabindex="-1" aria-label="Bỏ chọn danh mục">&times;</button>
+                            </div>
+                        </div>
+
+                        <div class="grid" style="grid-template-columns: 1.4fr 1fr 1fr 0.7fr; gap: 10px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label class="form-label">Sản phẩm</label>
+                                <div class="clearable-select">
+                                    <select class="form-control js-product-select" data-field="san_pham_id" required>
+                                        <option value="">Chọn sản phẩm</option>
+                                        @foreach($availableProducts ?? [] as $product)
+                                            <option value="{{ $product->id }}" data-danh-muc="{{ $product->danh_muc_id }}" {{ (string) ($row['san_pham_id'] ?? '') === (string) $product->id ? 'selected' : '' }}>
+                                                {{ $product->ten_san_pham }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    <button type="button" class="clearable-clear" tabindex="-1" aria-label="Bỏ chọn sản phẩm">&times;</button>
+                                </div>
                             </div>
 
                             <div class="form-group" style="margin: 0;">
                                 <label class="form-label">Kích cỡ</label>
                                 <select class="form-control js-size-select" data-field="kich_co_id" data-selected="{{ $row['kich_co_id'] ?? '' }}">
                                     <option value="">Không chọn kích cỡ</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" style="margin: 0;">
+                                <label class="form-label">Nhiệt độ</label>
+                                <select class="form-control js-temp-select">
+                                    <option value="">Không chọn nhiệt độ</option>
                                 </select>
                             </div>
 
@@ -384,4 +407,6 @@ function generatePayOSQrManagerOrder(orderCode) {
 }
 
 </script>
+
+@include('partials.order-items-enhancer')
 @endpush

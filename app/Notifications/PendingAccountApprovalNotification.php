@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Models\CuaHang;
 use App\Models\NguoiDung;
 use Illuminate\Bus\Queueable;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 class PendingAccountApprovalNotification extends Notification
@@ -22,7 +23,27 @@ class PendingAccountApprovalNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return [\App\Channels\CustomDatabaseChannel::class];
+        return [\App\Channels\CustomDatabaseChannel::class, 'mail'];
+    }
+
+    /**
+     * Email gửi tới người duyệt (chủ cửa hàng / quản lý) khi có tài khoản chờ duyệt.
+     */
+    public function toMail(object $notifiable): MailMessage
+    {
+        $storeName = $this->store?->ten_cua_hang ?? 'XM Coffee';
+
+        return (new MailMessage())
+            ->subject('Yêu cầu duyệt tài khoản mới — ' . $storeName)
+            ->greeting('Xin chào,')
+            ->line(sprintf(
+                '%s (%s) vừa đăng ký với vai trò "%s" và đang chờ bạn xác nhận.',
+                $this->pendingUser->ho_ten,
+                $this->pendingUser->email ?? '—',
+                $this->pendingUser->vai_tro
+            ))
+            ->action('Xem yêu cầu chờ duyệt', route('manager.users.pending-approvals'))
+            ->line('Vui lòng đăng nhập để xác nhận hoặc từ chối tài khoản này.');
     }
 
     /**

@@ -138,6 +138,28 @@
 			text-align: center;
 			padding: 24px 8px;
 		}
+
+		/* Nút Voice Chatbot */
+		.chat-voice-btn {
+			background: none;
+			border: none;
+			color: rgba(255, 255, 255, 0.6);
+			cursor: pointer;
+			padding: 8px;
+			margin-right: 4px;
+			border-radius: 50%;
+			transition: all 0.2s;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.chat-voice-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+		.chat-voice-btn.recording { color: #ff4a4a; animation: pulse-mic 1.5s infinite; }
+		@keyframes pulse-mic {
+			0% { transform: scale(1); }
+			50% { transform: scale(1.15); color: #ff0000; }
+			100% { transform: scale(1); }
+		}
 	</style>
 @endpush
 
@@ -190,6 +212,11 @@
 				</div>
 
 				<form id="chat-form" class="chat-input-bar" autocomplete="off">
+					<button type="button" id="chatbot-voice-btn" class="chat-voice-btn" aria-label="Ghi âm giọng nói">
+						<svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+						</svg>
+					</button>
 					<input id="chat-input" type="text" placeholder="Nhập tin nhắn..." maxlength="2000" />
 					<button type="submit">Gửi</button>
 				</form>
@@ -416,8 +443,17 @@
 				event.preventDefault();
 				var text = (input.value || '').trim();
 				if (!text) return;
-				appendMessage(text, 'user');
+				
+				// Helper gửi tin nhắn
+				sendMessageToBot(text);
+			});
+
+			function sendMessageToBot(text, systemInjection = '') {
+				appendMessage(text, 'user', false); // Chỉ hiển thị UI, khoan lưu vào mảng
 				input.value = '';
+
+				// Thêm vào mảng History với System Injection (nếu có) để AI đọc được nhưng khách không thấy
+				chatHistory.push({ role: 'user', content: text + (systemInjection ? "\n" + systemInjection : "") });
 
 				var typing = appendMessage('Đang soạn trả lời...', 'bot', false);
 				typing.classList.add('typing');
@@ -455,12 +491,99 @@
 						if (payload.data && payload.data.products) {
 							setSuggestions(payload.data.products);
 						}
+
+						// Bot vừa chỉnh sửa giỏ hàng (ghi chú/nhiệt độ) → cập nhật badge giỏ.
+						if (payload.data && payload.data.cart_updated && window.updateCartBadge) {
+							window.updateCartBadge(payload.data.cart_count || 0);
+						}
 					})
 					.catch(function () {
 						messages.removeChild(typing);
 						appendMessage('Không thể kết nối đến máy chủ. Vui lòng thử lại.', 'bot');
 					});
-			});
+			}
+
+			// ===== VOICE ORDER TRONG CHATBOT =====
+			var voiceBtn = document.getElementById('chatbot-voice-btn');
+			var mediaRecorder;
+			var audioChunks = [];
+			var isRecording = false;
+
+			if (voiceBtn) {
+				voiceBtn.addEventListener('click', async function() {
+					if (isRecording) {
+						// Tắt ghi âm
+						mediaRecorder.stop();
+						voiceBtn.classList.remove('recording');
+						isRecording = false;
+						input.value = 'Đang phân tích giọng nói...';
+						input.disabled = true;
+						return;
+					}
+
+					try {
+						const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+						mediaRecorder = new MediaRecorder(stream);
+						audioChunks = [];
+
+						mediaRecorder.addEventListener('dataavailable', event => {
+							audioChunks.push(event.data);
+						});
+
+						mediaRecorder.addEventListener('stop', () => {
+							const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+							sendVoiceToChat(audioBlob);
+							stream.getTracks().forEach(track => track.stop());
+						});
+
+						mediaRecorder.start();
+						isRecording = true;
+						voiceBtn.classList.add('recording');
+						input.value = 'Đang ghi âm (Bấm lại Micro để Dừng)...';
+						input.disabled = true;
+					} catch(err) {
+						alert('Vui lòng cấp quyền Micro để sử dụng tính năng Voice.');
+					}
+				});
+			}
+
+			function sendVoiceToChat(audioBlob) {
+				var formData = new FormData();
+				formData.append('audio', audioBlob, 'chat_audio.webm');
+
+				fetch('{{ route("cart.voice_order") }}', {
+					method: 'POST',
+					headers: { 'X-CSRF-TOKEN': csrfToken },
+					body: formData
+				})
+				.then(res => res.json())
+				.then(data => {
+					input.value = '';
+					input.disabled = false;
+
+					if (data.text) {
+						var sysInj = "";
+						if (data.success) {
+							// Cập nhật giỏ hàng trên UI
+							if (data.cart_count && window.updateCartBadge) {
+								updateCartBadge(data.cart_count);
+							}
+							// Bơm hướng dẫn ngầm cho OpenAI
+							sysInj = "[HỆ THỐNG: Hệ thống đã TỰ ĐỘNG THÊM món khách yêu cầu vào giỏ hàng. BOT HÃY phản hồi xác nhận ĐÃ THÊM VÀO GIỎ và hỏi khách có muốn dặn dò gì thêm về món đó không (ít đá, ít đường...)? Trả lời theo ĐÚNG ngôn ngữ của khách (Việt hoặc Anh). | Reply in the customer's language.]";
+						} else {
+							sysInj = "[HỆ THỐNG: Không tìm thấy món khách đọc trong Menu, BOT hãy xin lỗi và gợi ý menu hiện tại. Trả lời theo ĐÚNG ngôn ngữ của khách (Việt hoặc Anh). | Reply in the customer's language.]";
+						}
+						sendMessageToBot(data.text, sysInj);
+					} else {
+						appendMessage("Xin lỗi, AI không nghe rõ bạn nói gì. Vui lòng thử lại.", 'bot');
+					}
+				})
+				.catch(err => {
+					input.value = '';
+					input.disabled = false;
+					appendMessage("Lỗi xử lý giọng nói.", 'bot');
+				});
+			}
 
 			suggestions.addEventListener('click', function (event) {
 				var button = event.target.closest('.chat-buy-btn');

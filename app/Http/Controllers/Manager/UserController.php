@@ -237,6 +237,40 @@ class UserController extends Controller
         return redirect()->route('manager.users.pending-approvals')->with('success', "Đã xác nhận tài khoản {$targetUser->email} ({$targetUser->vai_tro}).");
     }
 
+    /** Từ chối tài khoản đăng ký mới (xóa yêu cầu chờ duyệt) */
+    public function rejectAccount(Request $request, int $id)
+    {
+        $targetUser = NguoiDung::findOrFail($id);
+
+        $this->ensureUserInCurrentStore($targetUser);
+
+        if (!$this->canConfirmRole($targetUser->vai_tro)) {
+            return back()->with('error', 'Bạn không có quyền từ chối tài khoản với vai trò này.');
+        }
+
+        if ($targetUser->trang_thai !== 'ngưng hoạt động') {
+            return back()->with('error', 'Chỉ có thể từ chối tài khoản đang ở trạng thái chờ xác nhận.');
+        }
+
+        $email = $targetUser->email;
+        $vaiTro = $targetUser->vai_tro;
+        $from = $this->normalizeListOrigin($request->input('from'));
+
+        try {
+            DB::transaction(function () use ($targetUser): void {
+                $targetUser->delete();
+            });
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Không thể từ chối tài khoản do còn dữ liệu liên quan.');
+        }
+
+        $redirectRoute = $from
+            ? $this->resolveListRouteByOrigin($from, $vaiTro)
+            : 'manager.users.pending-approvals';
+
+        return redirect()->route($redirectRoute)->with('success', "Đã từ chối và xóa yêu cầu đăng ký của {$email} ({$vaiTro}).");
+    }
+
     /** Danh sách tài khoản chờ xác nhận */
     public function pendingApprovals(Request $request)
     {

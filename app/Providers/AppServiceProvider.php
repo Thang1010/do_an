@@ -38,5 +38,6 @@ class AppServiceProvider extends ServiceProvider
 
         // ── Đăng ký Observers ────────────────────────────────────────
         \App\Models\DanhGiaSanPham::observe(\App\Observers\DanhGiaSanPhamObserver::class);
+        \App\Models\LichSuKho::observe(\App\Observers\LichSuKhoObserver::class);
     }
 }

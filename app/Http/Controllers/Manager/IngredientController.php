@@ -25,6 +25,7 @@ class IngredientController extends Controller
         $purpose = trim((string) $request->input('muc_dich_su_dung', ''));
 
         $ingredients = NguyenLieu::query()
+            ->dangSuDung()
             ->when($search !== '', function (Builder $query) use ($search) {
                 $query->where('ten_nguyen_lieu', 'like', "%{$search}%");
             })
@@ -61,6 +62,10 @@ class IngredientController extends Controller
             'ingredients.*.don_vi_tinh' => ['nullable', Rule::in($this->unitOptions())],
             'ingredients.*.muc_dich_su_dung' => 'nullable|string|max:120',
             'ingredients.*.muc_dich_su_dung_khac' => 'nullable|string|max:120',
+        ], [
+            'ingredients.*.ten_nguyen_lieu.unique' => 'Tên nguyên liệu này đã tồn tại trong hệ thống.',
+            'ingredients.*.ten_nguyen_lieu.required' => 'Vui lòng nhập tên nguyên liệu.',
+            'ingredients.*.ten_nguyen_lieu.distinct' => 'Tên nguyên liệu trong danh sách bị trùng lặp.',
         ]);
 
         $items = $this->normalizeIngredients((array) $request->input('ingredients', []));

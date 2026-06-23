@@ -7,6 +7,55 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/menu.css') }}">
+    <style>
+        /* Voice Order FAB */
+        .voice-order-fab {
+            position: fixed;
+            bottom: 100px;
+            right: 30px; 
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #ff8c00, #ff2a00);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 64, 0, 0.4);
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            border: none;
+            outline: none;
+        }
+        .voice-order-fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(255, 64, 0, 0.6);
+        }
+        .voice-order-fab.recording {
+            animation: pulse-recording 1.5s infinite;
+            background: linear-gradient(135deg, #ff0000, #990000);
+        }
+        @keyframes pulse-recording {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 20px rgba(255, 0, 0, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+        }
+        .voice-status-tooltip {
+            position: fixed;
+            bottom: 170px;
+            right: 30px;
+            background: rgba(0,0,0,0.85);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1000;
+            display: none;
+            backdrop-filter: blur(10px);
+            white-space: nowrap;
+        }
+    </style>
 @endpush
 
 @section('content')
@@ -156,6 +205,16 @@
         </section>
 
     </div><!-- end menu-main -->
+
+    <!-- Nút Voice Order -->
+    <button id="voice-order-btn" class="voice-order-fab" aria-label="Đặt hàng bằng giọng nói">
+        <!-- SVG Micro -->
+        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+        </svg>
+    </button>
+    <div id="voice-status-tooltip" class="voice-status-tooltip">Đang ghi âm...</div>
+
 @endsection
 
 @push('scripts')
@@ -269,5 +328,94 @@
                 }
             });
         });
+
+        // ── VOICE ORDER LOGIC ───────────────────────────────────────
+        let mediaRecorder;
+        let audioChunks = [];
+        const voiceBtn = document.getElementById('voice-order-btn');
+        const voiceStatus = document.getElementById('voice-status-tooltip');
+        let isRecording = false;
+
+        if (voiceBtn) {
+            voiceBtn.addEventListener('click', async () => {
+                if (isRecording) {
+                    // Dừng ghi âm
+                    mediaRecorder.stop();
+                    voiceBtn.classList.remove('recording');
+                    voiceStatus.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> AI đang phân tích giọng nói...';
+                    isRecording = false;
+                    return;
+                }
+
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.addEventListener('dataavailable', event => {
+                        audioChunks.push(event.data);
+                    });
+
+                    mediaRecorder.addEventListener('stop', () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        sendVoiceOrder(audioBlob);
+                        
+                        // Tắt luồng micro
+                        stream.getTracks().forEach(track => track.stop());
+                    });
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    voiceBtn.classList.add('recording');
+                    voiceStatus.style.display = 'block';
+                    voiceStatus.innerHTML = '🔴 Đang nghe... (Bấm lần nữa để Dừng)';
+
+                } catch (err) {
+                    alert('Trình duyệt đã từ chối quyền Micro! Vui lòng cho phép sử dụng Micro trên thanh địa chỉ.');
+                    console.error('Mic error:', err);
+                }
+            });
+        }
+
+        function sendVoiceOrder(audioBlob) {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'order.webm');
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+            fetch('{{ route("cart.voice_order") }}', {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken },
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Hiển thị alert thay vì showNotice vì có HTML (tên món)
+                    Swal.fire({
+                        title: 'Giỏ hàng đã được thêm!',
+                        html: data.message,
+                        icon: 'success',
+                        confirmButtonText: 'Tuyệt vời',
+                        confirmButtonColor: '#5a3520'
+                    });
+                    if (data.cart_count) {
+                        updateCartBadge(data.cart_count);
+                    }
+                } else {
+                    Swal.fire({
+                        title: 'Không hiểu yêu cầu',
+                        html: data.message,
+                        icon: 'error',
+                        confirmButtonText: 'Thử lại'
+                    });
+                }
+                voiceStatus.style.display = 'none';
+            })
+            .catch(err => {
+                alert('Có lỗi mạng xảy ra khi gửi dữ liệu!');
+                console.error(err);
+                voiceStatus.style.display = 'none';
+            });
+        }
     </script>
 @endpush

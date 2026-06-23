@@ -79,6 +79,7 @@
                     @endif
                 @endif
             @endif
+            <button type="button" class="btn btn-secondary" onclick="openModal('table-qr-modal')">Xem / In QR</button>
             <a href="{{ route('manager.tables.index') }}" class="btn btn-secondary">Quay lại</a>
         </div>
     </div>
@@ -87,7 +88,7 @@
         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
             <span class="card-title">Thông tin sản phẩm</span>
             <div style="display: flex; gap: 8px;">
-                @if(in_array($table->trang_thai, ['đang phục vụ', 'đã đặt']) && (!$latestOrder || $tableHasUnpaid))
+                @if(in_array($table->trang_thai, ['đang phục vụ', 'đã đặt', 'trống']) && (!$latestOrder || $tableHasUnpaid))
                     <button type="button" class="btn btn-primary btn-sm" onclick="openModal('add-item-modal')">Thêm món</button>
                 @endif
                 @if($tableHasUnpaid)
@@ -356,7 +357,7 @@
     </div>
 
     {{-- Add Item Modal --}}
-    @if(in_array($table->trang_thai, ['đang phục vụ', 'đã đặt']) && (!$latestOrder || $tableHasUnpaid))
+    @if(in_array($table->trang_thai, ['đang phục vụ', 'đã đặt', 'trống']) && (!$latestOrder || $tableHasUnpaid))
         <div class="modal-backdrop" id="add-item-modal" data-auto-open="{{ ($errors->any() && old('items')) ? '1' : '0' }}">
             <div class="modal-box" style="max-width: 900px; width: calc(100% - 32px);">
                 <div class="modal-header">
@@ -381,23 +382,46 @@
                                         style="display: none;">Xóa món</button>
                                 </div>
 
-                                <div class="grid" style="grid-template-columns: 1.5fr 1.2fr 0.8fr; gap: 10px;">
-                                    <div class="form-group" style="margin: 0;">
-                                        <label class="form-label">Sản phẩm</label>
-                                        <select class="form-control js-product-select" data-field="san_pham_id" required>
-                                            <option value="">Chọn sản phẩm</option>
-                                            @foreach($availableProducts ?? [] as $product)
-                                                <option value="{{ $product->id }}" {{ (string) old('items.0.san_pham_id') === (string) $product->id ? 'selected' : '' }}>
-                                                    {{ $product->ten_san_pham }}
-                                                </option>
+                                <div class="form-group" style="margin: 0 0 10px;">
+                                    <label class="form-label">Danh mục (lọc sản phẩm)</label>
+                                    <div class="clearable-select">
+                                        <select class="form-control js-category-select">
+                                            <option value="">Tất cả danh mục</option>
+                                            @foreach($categories ?? [] as $category)
+                                                <option value="{{ $category->id }}">{{ $category->ten_danh_muc }}</option>
                                             @endforeach
                                         </select>
+                                        <button type="button" class="clearable-clear" tabindex="-1" aria-label="Bỏ chọn danh mục">&times;</button>
+                                    </div>
+                                </div>
+
+                                <div class="grid" style="grid-template-columns: 1.4fr 1fr 1fr 0.7fr; gap: 10px;">
+                                    <div class="form-group" style="margin: 0;">
+                                        <label class="form-label">Sản phẩm</label>
+                                        <div class="clearable-select">
+                                            <select class="form-control js-product-select" data-field="san_pham_id" required>
+                                                <option value="">Chọn sản phẩm</option>
+                                                @foreach($availableProducts ?? [] as $product)
+                                                    <option value="{{ $product->id }}" data-danh-muc="{{ $product->danh_muc_id }}" {{ (string) old('items.0.san_pham_id') === (string) $product->id ? 'selected' : '' }}>
+                                                        {{ $product->ten_san_pham }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <button type="button" class="clearable-clear" tabindex="-1" aria-label="Bỏ chọn sản phẩm">&times;</button>
+                                        </div>
                                     </div>
 
                                     <div class="form-group" style="margin: 0;">
                                         <label class="form-label">Kích cỡ</label>
                                         <select class="form-control js-size-select" data-field="kich_co_id">
                                             <option value="">Không chọn kích cỡ</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group" style="margin: 0;">
+                                        <label class="form-label">Nhiệt độ</label>
+                                        <select class="form-control js-temp-select">
+                                            <option value="">Không chọn nhiệt độ</option>
                                         </select>
                                     </div>
 
@@ -504,7 +528,107 @@
         </div>
     @endif
 
+    {{-- QR gọi món cho riêng bàn này --}}
+    <div class="modal-backdrop" id="table-qr-modal">
+        <div class="modal-box" id="table-qr-box" style="max-width: 420px; width: calc(100% - 32px);">
+            <div class="modal-header">
+                <span class="modal-title">QR gọi món — Bàn {{ $table->so_ban }}</span>
+                <button class="modal-close" onclick="closeModal('table-qr-modal')">&#x2715;</button>
+            </div>
+            <div class="modal-body" id="table-qr-area">
+                <div class="qr-single-card">
+                    <div class="qr-single-hint">Quét để gọi món</div>
+                    <div class="qr-single-table">Bàn {{ $table->so_ban }}</div>
+                    <img src="{{ $tableQrCode }}" alt="QR Bàn {{ $table->so_ban }}">
+                    <div class="qr-single-guide">Dùng camera điện thoại quét mã để xem menu &amp; gọi món tại bàn này.</div>
+                </div>
+                <div class="form-group" style="margin-top:16px; margin-bottom:0;" data-qr-link-row>
+                    <label class="form-label">Link gọi món</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="table-qr-link" class="form-control" value="{{ $tableQrUrl }}" readonly>
+                        <button type="button" class="btn btn-secondary" onclick="copyTableQrLink(this)">Copy</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('table-qr-modal')">Đóng</button>
+                <button class="btn btn-primary" onclick="window.print()">In</button>
+            </div>
+        </div>
+    </div>
+
 @endsection
+
+@push('styles')
+<style>
+    .qr-single-card { text-align: center; color: #f1f0ee; }
+    .qr-single-hint { font-size: 13px; color: rgba(241,240,238,0.6); font-weight: 600; }
+    .qr-single-table { font-size: 24px; font-weight: 700; margin: 4px 0 12px; }
+    .qr-single-card img {
+        width: 240px; height: 240px; max-width: 100%;
+        background: #fff; padding: 10px; border-radius: 12px;
+        display: block; margin-left: auto; margin-right: auto;
+    }
+    .qr-single-guide { font-size: 12px; color: rgba(241,240,238,0.6); margin-top: 12px; line-height: 1.5; }
+
+    @media print {
+        body * { visibility: hidden !important; }
+        #table-qr-modal, #table-qr-modal * { visibility: visible !important; }
+        #table-qr-modal {
+            position: absolute !important;
+            inset: 0 !important;
+            display: block !important;
+            background: #fff !important;
+            padding: 0 !important;
+            overflow: visible !important;
+        }
+        #table-qr-box {
+            max-width: none !important;
+            width: 100% !important;
+            box-shadow: none !important;
+            border: 0 !important;
+            background: #fff !important;
+            backdrop-filter: none !important;
+        }
+        #table-qr-modal .modal-header,
+        #table-qr-modal .modal-footer,
+        #table-qr-modal [data-qr-link-row] { display: none !important; }
+        #table-qr-area {
+            max-height: none !important;
+            overflow: visible !important;
+            background: #fff !important;
+        }
+        .qr-single-card,
+        .qr-single-hint,
+        .qr-single-table,
+        .qr-single-guide { color: #30261c !important; }
+        .qr-single-card img { padding: 0 !important; }
+    }
+</style>
+@endpush
+
+@push('scripts')
+<script>
+    window.copyTableQrLink = function (btn) {
+        var input = document.getElementById('table-qr-link');
+        if (!input) return;
+        input.select();
+        input.setSelectionRange(0, 99999);
+        var done = function () {
+            var old = btn.textContent;
+            btn.textContent = 'Đã copy';
+            setTimeout(function () { btn.textContent = old; }, 1500);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(input.value).then(done).catch(function () {
+                document.execCommand('copy'); done();
+            });
+        } else {
+            document.execCommand('copy'); done();
+        }
+    };
+</script>
+@endpush
 
 @push('scripts')
 @include('partials.payos-payment')
@@ -751,5 +875,7 @@
             });
         }
     </script>
+
+@include('partials.order-items-enhancer')
 
 @endpush

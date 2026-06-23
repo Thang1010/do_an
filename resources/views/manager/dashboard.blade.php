@@ -153,7 +153,7 @@
         </div>
     </div>
 
-    {{-- Nguyên liệu sắp hết --}}
+    {{-- Cảnh báo tồn kho --}}
     <div class="card">
         <div class="card-header">
             <span class="card-title">Cảnh báo tồn kho</span>
@@ -161,11 +161,24 @@
         </div>
         <div class="card-body py-12">
             @forelse($dsNguyenLieuSapHet as $nl)
+            @php
+                $maxTieuHao = (float) ($nl->max_tieu_hao ?? 0);
+                $divisor = $maxTieuHao > 0 ? $maxTieuHao : 1;
+                $soCup = (int) floor(((float) $nl->so_luong) / $divisor);
+                $isHet = $soCup <= 0;
+            @endphp
             <div class="stock-item {{ !$loop->last ? 'border-bottom' : '' }}">
                 <div class="flex-1">
-                    <div class="stock-item-name">{{ $nl->ten_nguyen_lieu }}</div>
+                    <div class="stock-item-name">
+                        {{ $nl->ten_nguyen_lieu }}
+                        @if($isHet)
+                            <span class="badge" style="background-color: #dc3545; color: white; padding: 2px 6px; font-size: 10px; margin-left: 5px;">Hết hàng</span>
+                        @else
+                            <span class="badge" style="background-color: #ffc107; color: #212529; padding: 2px 6px; font-size: 10px; margin-left: 5px;">Sắp hết</span>
+                        @endif
+                    </div>
                     <div class="stock-item-detail">
-                        Còn: <span class="low-stock">{{ $nl->so_luong }} {{ $nl->don_vi_tinh }}</span>
+                        Còn: <span class="{{ $isHet ? 'text-danger font-600' : 'text-warning font-600' }}">{{ number_format($nl->so_luong, 2, ',', '.') }} {{ $nl->don_vi_tinh }}</span>
                     </div>
                 </div>
                 <a href="{{ route('manager.inventory.import') }}" class="btn btn-warning btn-sm">Nhập thêm</a>

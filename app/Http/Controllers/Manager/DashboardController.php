@@ -32,14 +32,17 @@ class DashboardController extends Controller
             ->where('vai_tro', 'khách hàng')
             ->count();
 
-        // Nguyên liệu sắp hết (tồn kho <= 0)
+        // Nguyên liệu sắp hết / hết hàng (tồn kho làm được <= 3 cốc)
         $balanceExpr = TransactionType::stockBalanceExpression('lich_su_kho');
         $dsNguyenLieuSapHet = NguyenLieu::query()
+            ->dangSuDung()
             ->leftJoin('lich_su_kho', 'lich_su_kho.nguyen_lieu_id', '=', 'nguyen_lieu.id')
             ->select('nguyen_lieu.id', 'nguyen_lieu.ten_nguyen_lieu', 'nguyen_lieu.don_vi_tinh')
             ->selectRaw("COALESCE({$balanceExpr}, 0) as so_luong")
+            ->selectRaw('(SELECT MAX(ctsp.so_luong_can) FROM cong_thuc_san_pham ctsp WHERE ctsp.nguyen_lieu_id = nguyen_lieu.id) as max_tieu_hao')
             ->groupBy('nguyen_lieu.id', 'nguyen_lieu.ten_nguyen_lieu', 'nguyen_lieu.don_vi_tinh')
-            ->having('so_luong', '<=', 0)
+            ->havingRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) <= 3')
+            ->orderByRaw('CASE WHEN FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) <= 0 THEN 0 ELSE 1 END')
             ->orderBy('nguyen_lieu.ten_nguyen_lieu')
             ->get();
         $nguyenLieuSapHet = $dsNguyenLieuSapHet->count();

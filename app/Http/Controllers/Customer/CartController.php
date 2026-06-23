@@ -184,6 +184,164 @@ class CartController extends Controller
         ]);
     }
 
+    // ── AJAX: Đặt hàng bằng Giọng nói (Voice Order) ───────────────
+    public function voiceOrder(Request $request)
+    {
+        $request->validate([
+            'audio' => 'required|file|mimes:webm,wav,mp4,mp3,ogg|max:5120',
+        ]);
+
+        $audioFile = $request->file('audio');
+        $audioContent = file_get_contents($audioFile->getRealPath());
+
+        $hfService = new \App\Services\HuggingFaceService();
+        $result = $hfService->speechToText($audioContent);
+
+        if (!$result || !isset($result['text'])) {
+            return response()->json(['success' => false, 'message' => 'AI không thể nhận dạng giọng nói, vui lòng thử lại!']);
+        }
+
+        $fullText = mb_strtolower($result['text'], 'UTF-8');
+        $text = $fullText; // bản dùng để dò tên món (sẽ bị thay thế dần)
+        $products = SanPham::all();
+        $addedItems = [];
+        $cart = $this->getCart();
+
+        // Hỗ trợ cả tiếng Việt và tiếng Anh.
+        $numbers = [
+            'một' => 1, 'hai' => 2, 'ba' => 3, 'bốn' => 4, 'năm' => 5, 'sáu' => 6, 'bảy' => 7, 'tám' => 8, 'chín' => 9, 'mười' => 10,
+            'one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10,
+            '1' => 1, '2' => 2, '3' => 3, '4' => 4, '5' => 5, '6' => 6, '7' => 7, '8' => 8, '9' => 9, '10' => 10
+        ];
+
+        // Nhiệt độ: mặc định LẠNH, chỉ chuyển NÓNG khi khách nói rõ (Việt/Anh).
+        $hotKeywords = ['nóng', 'nong', 'hot', 'ấm', 'am', 'warm'];
+        $requestedNhietDo = 'lạnh';
+        foreach ($hotKeywords as $kw) {
+            if (mb_strpos($fullText, $kw) !== false) {
+                $requestedNhietDo = 'nóng';
+                break;
+            }
+        }
+
+        // Ghi chú: trích các yêu cầu của khách (Việt/Anh): ít/nhiều/không đường, đá, sữa...
+        $noteKeywords = [
+            'không đường', 'ít đường', 'nhiều đường', 'ít ngọt', 'nhiều ngọt',
+            'không đá', 'ít đá', 'nhiều đá', 'đá riêng',
+            'không sữa', 'ít sữa', 'nhiều sữa', 'thêm sữa',
+            'thêm trân châu', 'thêm kem', 'thêm shot', 'mang đi', 'mang về',
+            'no sugar', 'less sugar', 'more sugar', 'extra sugar',
+            'no ice', 'less ice', 'more ice', 'extra ice',
+            'no milk', 'less milk', 'more milk', 'extra milk',
+            'extra shot', 'take away', 'takeaway', 'to go',
+        ];
+        $foundNotes = [];
+        foreach ($noteKeywords as $nk) {
+            if (mb_strpos($fullText, $nk) !== false) {
+                $foundNotes[] = $nk;
+            }
+        }
+        $requestedNote = $foundNotes ? ('Khách yêu cầu: ' . implode(', ', $foundNotes)) : '';
+
+        foreach ($products as $product) {
+            $productName = mb_strtolower($product->ten_san_pham, 'UTF-8');
+
+            if (mb_strpos($text, $productName) !== false) {
+                // Thử tìm số lượng đứng trước tên món ăn
+                $qty = 1;
+                $pos = mb_strpos($text, $productName);
+                $prefix = mb_substr($text, max(0, $pos - 20), 20);
+
+                foreach ($numbers as $word => $num) {
+                    if (mb_strpos($prefix, $word) !== false) {
+                        $qty = $num;
+                        break;
+                    }
+                }
+
+                $productId = $product->id;
+                $basePrice = (float) ($product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc);
+
+                // Size: khách nói rõ thì lấy theo, không thì lấy size có hệ số giá nhỏ nhất.
+                $kichCoList = $product->kichCo()->get(); // đã sắp xếp theo he_so_gia tăng dần
+                $chosenSize = null;
+                foreach ($kichCoList as $kc) {
+                    $kcName = mb_strtolower($kc->ten_kich_co, 'UTF-8');
+                    if ($kcName !== '' && mb_strpos($fullText, $kcName) !== false) {
+                        $chosenSize = $kc;
+                        break;
+                    }
+                }
+                if (! $chosenSize && $kichCoList->isNotEmpty()) {
+                    $chosenSize = $kichCoList->first();
+                }
+
+                $sizeId = $chosenSize?->id;
+                $sizeName = $chosenSize?->ten_kich_co;
+                $price = $basePrice * (float) ($chosenSize?->he_so_gia ?? 1);
+
+                // Nhiệt độ: tôn trọng các nhiệt độ mà sản phẩm hỗ trợ.
+                $productTemps = array_values(array_filter(array_map('trim', explode(',', (string) $product->nhiet_do))));
+                $nhietDo = $requestedNhietDo;
+                if (! empty($productTemps) && ! in_array($nhietDo, $productTemps, true)) {
+                    $nhietDo = in_array('lạnh', $productTemps, true) ? 'lạnh' : $productTemps[0];
+                }
+
+                // Lưu vào giỏ hàng: CỘNG DỒN nếu đã có món giống hệt
+                // (cùng sản phẩm + size + nhiệt độ + ghi chú), ngược lại tạo dòng mới.
+                $mergeKey = null;
+                foreach ($cart as $k => $it) {
+                    if (($it['product_id'] ?? null) === $productId
+                        && ($it['size_id'] ?? null) === $sizeId
+                        && ($it['nhiet_do'] ?? '') === $nhietDo
+                        && ($it['note'] ?? '') === $requestedNote) {
+                        $mergeKey = $k;
+                        break;
+                    }
+                }
+
+                if ($mergeKey !== null) {
+                    $cart[$mergeKey]['qty'] += $qty;
+                } else {
+                    $key = $this->cartItemKey($productId, $sizeId) . '_voice_' . Str::random(4);
+                    $cart[$key] = [
+                        'product_id' => $productId,
+                        'size_id' => $sizeId,
+                        'size_name' => $sizeName,
+                        'name' => $product->ten_san_pham,
+                        'image' => $product->image_url,
+                        'price' => $price,
+                        'qty' => $qty,
+                        'nhiet_do' => $nhietDo,
+                        'note' => $requestedNote,
+                    ];
+                }
+
+                $addedItems[] = "{$qty} {$product->ten_san_pham}";
+
+                // Tránh trùng lặp nếu tên món có nhiều từ giống nhau (vd: Cà phê đen, Cà phê)
+                $text = str_replace($productName, '***', $text);
+            }
+        }
+
+        if (count($addedItems) > 0) {
+            $this->saveCart($cart);
+            $cartCount = array_sum(array_column($cart, 'qty'));
+            return response()->json([
+                'success' => true, 
+                'text' => trim($result['text']),
+                'message' => 'AI nghe được: "' . trim($result['text']) . '"<br>Đã thêm: <b>' . implode(', ', $addedItems) . '</b>',
+                'cart_count' => $cartCount
+            ]);
+        }
+
+        return response()->json([
+            'success' => false, 
+            'text' => trim($result['text']),
+            'message' => 'AI nghe được: "' . trim($result['text']) . '"<br>Nhưng không tìm thấy món nào trong menu khớp với yêu cầu!'
+        ]);
+    }
+
     // ── AJAX: Cập nhật số lượng ───────────────────────────────────
     public function update(Request $request)
     {

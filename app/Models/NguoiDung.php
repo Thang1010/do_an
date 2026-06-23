@@ -61,6 +61,22 @@ class NguoiDung extends Authenticatable
     }
     public function isActive(): bool    { return $this->trang_thai === UserStatus::HOAT_DONG->value; }
 
+    /**
+     * Tìm tài khoản KHÁCH HÀNG đã đăng ký theo email (đăng ký thường hoặc Google).
+     * Dùng khi nhân viên nhập email lúc thanh toán để liên kết đơn order tại quầy
+     * với đúng tài khoản, giúp khách vẫn có quyền đánh giá khi đăng nhập lại.
+     */
+    public static function khachHangByEmail(?string $email): ?self
+    {
+        if (!$email) {
+            return null;
+        }
+
+        return static::where('email', $email)
+            ->where('vai_tro', UserRole::KHACH_HANG->value)
+            ->first();
+    }
+
     public function notifications()
     {
         return $this->morphMany(ThongBao::class, 'doi_tuong', 'doi_tuong_loai', 'doi_tuong_id')->latest();

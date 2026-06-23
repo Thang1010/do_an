@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\DonHang;
 use App\Models\LichSuKho;
+use App\Models\NguyenLieu;
 use App\Traits\CalculatesStock;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -23,33 +24,23 @@ class OrderInventoryService
      */
     public function exportIngredientsForOrder(DonHang $order): void
     {
-        $ingredientUsage = DB::table('chi_tiet_don_hang')
-            ->join('cong_thuc_san_pham', 'cong_thuc_san_pham.san_pham_id', '=', 'chi_tiet_don_hang.san_pham_id')
-            ->join('nguyen_lieu', 'nguyen_lieu.id', '=', 'cong_thuc_san_pham.nguyen_lieu_id')
-            ->where('chi_tiet_don_hang.don_hang_id', $order->id)
-            ->select(
-                'cong_thuc_san_pham.nguyen_lieu_id',
-                'nguyen_lieu.ten_nguyen_lieu',
-                DB::raw('SUM(cong_thuc_san_pham.so_luong_can * chi_tiet_don_hang.so_luong) as tong_so_luong')
-            )
-            ->groupBy('cong_thuc_san_pham.nguyen_lieu_id', 'nguyen_lieu.ten_nguyen_lieu')
-            ->get();
+        $usage = $this->ingredientUsageForOrder($order->id);
 
-        if ($ingredientUsage->isEmpty()) {
+        if (empty($usage)) {
             return;
         }
 
-        $stocks = $this->currentStocksForIngredients($ingredientUsage->pluck('nguyen_lieu_id')->all());
+        $stocks = $this->currentStocksForIngredients(array_keys($usage));
         $shortages = [];
 
-        foreach ($ingredientUsage as $item) {
-            $required = (float) $item->tong_so_luong;
-            $available = (float) ($stocks[(int) $item->nguyen_lieu_id] ?? 0);
+        foreach ($usage as $ingredientId => $data) {
+            $required = (float) $data['qty'];
+            $available = (float) ($stocks[$ingredientId] ?? 0);
 
             if ($required > $available + 0.00001) {
                 $shortages[] = sprintf(
                     '%s (cần %.2f, còn %.2f)',
-                    $item->ten_nguyen_lieu,
+                    $data['name'],
                     $required,
                     $available
                 );
@@ -62,15 +53,15 @@ class OrderInventoryService
             ]);
         }
 
-        foreach ($ingredientUsage as $item) {
-            $required = (float) $item->tong_so_luong;
+        foreach ($usage as $ingredientId => $data) {
+            $required = (float) $data['qty'];
 
             if ($required <= 0) {
                 continue;
             }
 
             LichSuKho::create([
-                'nguyen_lieu_id' => (int) $item->nguyen_lieu_id,
+                'nguyen_lieu_id' => (int) $ingredientId,
                 'loai_giao_dich' => 'xuất kho',
                 'don_hang_id' => $order->id,
                 'so_luong' => $required,
@@ -83,6 +74,11 @@ class OrderInventoryService
 
     /**
      * Tính lượng nguyên liệu sử dụng cho đơn hàng.
+     *
+     * Bao gồm cả:
+     * - Nguyên liệu theo CÔNG THỨC của sản phẩm (so_luong_can * số lượng).
+     * - "Nguyên liệu tự thân" của sản phẩm KHÔNG công thức (mỗi sản phẩm = 1 đơn vị
+     *   nguyên liệu trong kho) — chỉ tính khi nguyên liệu đó đang sử dụng.
      */
     public function ingredientUsageForOrder(int $orderId): array
     {
@@ -102,6 +98,29 @@ class OrderInventoryService
         foreach ($usage as $item) {
             $result[(int) $item->nguyen_lieu_id] = [
                 'qty' => (float) $item->tong_so_luong,
+                'name' => $item->ten_nguyen_lieu,
+            ];
+        }
+
+        // Sản phẩm KHÔNG công thức: trừ kho chính nguyên liệu tự thân của nó.
+        $selfUsage = DB::table('chi_tiet_don_hang')
+            ->join('nguyen_lieu', 'nguyen_lieu.san_pham_id', '=', 'chi_tiet_don_hang.san_pham_id')
+            ->where('chi_tiet_don_hang.don_hang_id', $orderId)
+            ->where('nguyen_lieu.trang_thai', NguyenLieu::TRANG_THAI_DANG_DUNG)
+            ->select(
+                'nguyen_lieu.id as nguyen_lieu_id',
+                'nguyen_lieu.ten_nguyen_lieu',
+                DB::raw('SUM(chi_tiet_don_hang.so_luong) as tong_so_luong')
+            )
+            ->groupBy('nguyen_lieu.id', 'nguyen_lieu.ten_nguyen_lieu')
+            ->get();
+
+        foreach ($selfUsage as $item) {
+            $id = (int) $item->nguyen_lieu_id;
+            $qty = (float) $item->tong_so_luong;
+            // Cộng dồn phòng trường hợp hi hữu vừa có công thức vừa có self-ingredient.
+            $result[$id] = [
+                'qty' => ($result[$id]['qty'] ?? 0) + $qty,
                 'name' => $item->ten_nguyen_lieu,
             ];
         }

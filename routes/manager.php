@@ -198,6 +198,10 @@ Route::post('/account-approvals/{id}/confirm', [UserController::class, 'confirmA
     ->name('account-approvals.confirm')
     ->middleware(['auth', 'role:chủ cửa hàng,quản lý']);
 
+Route::post('/account-approvals/{id}/reject', [UserController::class, 'rejectAccount'])
+    ->name('account-approvals.reject')
+    ->middleware(['auth', 'role:chủ cửa hàng,quản lý']);
+
 Route::get('/shift-checkin/{id}', [ShiftController::class, 'scanCheckIn'])
     ->name('shifts.checkin.scan')
     ->middleware(['auth', 'role:nhân viên,quản lý,chủ cửa hàng']);

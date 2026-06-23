@@ -73,6 +73,46 @@ class ProductController extends Controller
         }
     }
 
+    /**
+     * Đồng bộ "nguyên liệu tự thân" cho sản phẩm KHÔNG công thức.
+     *
+     * - Không công thức: sản phẩm CHÍNH LÀ một nguyên liệu trong kho để theo dõi
+     *   số lượng (tạo mới hoặc kích hoạt lại nếu trước đó đã ẩn).
+     * - Có công thức: sản phẩm dùng các nguyên liệu khác → ẩn (ngừng sử dụng)
+     *   nguyên liệu tự thân để khỏi lừa tồn kho, nhưng KHÔNG xóa cứng nhằm giữ
+     *   dữ liệu nhập/xuất (kế toán) cũ.
+     */
+    private function syncSelfIngredient(SanPham $product, bool $hasRecipe): void
+    {
+        $selfIngredient = NguyenLieu::where('san_pham_id', $product->id)->first();
+
+        if ($hasRecipe) {
+            if ($selfIngredient && $selfIngredient->trang_thai !== NguyenLieu::TRANG_THAI_NGUNG_DUNG) {
+                $selfIngredient->update(['trang_thai' => NguyenLieu::TRANG_THAI_NGUNG_DUNG]);
+            }
+            return;
+        }
+
+        $name = mb_substr(trim((string) $product->ten_san_pham), 0, 40);
+
+        if ($selfIngredient) {
+            $selfIngredient->update([
+                'ten_nguyen_lieu' => $name,
+                'trang_thai' => NguyenLieu::TRANG_THAI_DANG_DUNG,
+            ]);
+            return;
+        }
+
+        NguyenLieu::create([
+            'san_pham_id' => $product->id,
+            'ten_nguyen_lieu' => $name,
+            'don_vi_tinh' => 'chai',
+            'muc_dich_su_dung' => 'Sản phẩm bán lẻ',
+            'trang_thai' => NguyenLieu::TRANG_THAI_DANG_DUNG,
+            'created_at' => now(),
+        ]);
+    }
+
     private function syncProductSizes(SanPham $product, array $sizes): void
     {
         $syncData = [];
@@ -256,7 +296,7 @@ class ProductController extends Controller
             ->orderBy('ten_danh_muc')
             ->get();
         $kichCos = KichCo::orderBy('he_so_gia')->orderBy('ten_kich_co')->get();
-        $nguyenLieus = NguyenLieu::orderBy('ten_nguyen_lieu')->get();
+        $nguyenLieus = NguyenLieu::query()->dangSuDung()->orderBy('ten_nguyen_lieu')->get();
 
         return view('manager.products.create', compact('danhMucs', 'kichCos', 'nguyenLieus'));
     }
@@ -288,8 +328,9 @@ class ProductController extends Controller
 
         $product = DB::transaction(function () use ($data, $validated, $coCongThuc) {
             $product = SanPham::create($data);
-            $this->syncProductSizes($product, $validated['sizes'] ?? []);
+            $this->syncProductSizes($product, $coCongThuc ? ($validated['sizes'] ?? []) : []);
             $this->syncProductRecipes($product, $coCongThuc ? ($validated['recipes'] ?? []) : []);
+            $this->syncSelfIngredient($product, $coCongThuc);
             return $product;
         });
 
@@ -312,7 +353,7 @@ class ProductController extends Controller
             ->orderBy('ten_danh_muc')
             ->get();
         $kichCos = KichCo::orderBy('he_so_gia')->orderBy('ten_kich_co')->get();
-        $nguyenLieus = NguyenLieu::orderBy('ten_nguyen_lieu')->get();
+        $nguyenLieus = NguyenLieu::query()->dangSuDung()->orderBy('ten_nguyen_lieu')->get();
 
         return view('manager.products.create', compact('product', 'danhMucs', 'kichCos', 'nguyenLieus'));
     }
@@ -349,8 +390,9 @@ class ProductController extends Controller
 
         DB::transaction(function () use ($product, $data, $validated, $coCongThuc) {
             $product->update($data);
-            $this->syncProductSizes($product, $validated['sizes'] ?? []);
+            $this->syncProductSizes($product, $coCongThuc ? ($validated['sizes'] ?? []) : []);
             $this->syncProductRecipes($product, $coCongThuc ? ($validated['recipes'] ?? []) : []);
+            $this->syncSelfIngredient($product, $coCongThuc);
         });
 
         $redirect = redirect()->route('manager.products.index')
@@ -387,6 +429,7 @@ class ProductController extends Controller
         $headers = [
             'STT',
             'Tên sản phẩm',
+            'Ghi chú / Mô tả',
             'Size',
         ];
 
@@ -425,6 +468,7 @@ class ProductController extends Controller
                 $row = [
                     $firstRow ? $index : '',
                     $firstRow ? $product->ten_san_pham : '',
+                    $firstRow ? (string) ($product->mo_ta ?? '') : '',
                     $sizeLabel,
                 ];
 
@@ -471,6 +515,7 @@ class ProductController extends Controller
             $endRowNumber = $startRowNumber + $range['count'] - 1;
             $sheet->mergeCells("A{$startRowNumber}:A{$endRowNumber}");
             $sheet->mergeCells("B{$startRowNumber}:B{$endRowNumber}");
+            $sheet->mergeCells("C{$startRowNumber}:C{$endRowNumber}");
         }
 
         $highestColumnIndex = Coordinate::columnIndexFromString($sheet->getHighestColumn());
@@ -503,6 +548,10 @@ class ProductController extends Controller
             Storage::disk('s3')->delete($product->hinh_anh);
             Storage::disk('public')->delete($product->hinh_anh);
         }
+
+        // Ẩn nguyên liệu tự thân (nếu có) để khỏi hiển thị trong kho, vẫn giữ dữ liệu cũ.
+        NguyenLieu::where('san_pham_id', $product->id)
+            ->update(['trang_thai' => NguyenLieu::TRANG_THAI_NGUNG_DUNG]);
 
         $product->delete();
 

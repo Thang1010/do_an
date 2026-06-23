@@ -120,21 +120,33 @@
 			<button class="modal-close" onclick="closeModal('create-category-modal')">&#x2715;</button>
 		</div>
 		<div class="modal-body">
+			@php $createErrors = $errors->getBag('createCategory'); @endphp
 			<form id="create-category-form" method="POST" action="{{ route('manager.categories.store') }}">
 				@csrf
 				<div class="form-group">
 					<label class="form-label">Tên danh mục <span>*</span></label>
-					<input type="text" name="ten_danh_muc" class="form-control" maxlength="150" required>
+					<input
+						type="text"
+						name="ten_danh_muc"
+						class="form-control {{ $createErrors->has('ten_danh_muc') ? 'is-invalid' : '' }}"
+						maxlength="150"
+						value="{{ $createErrors->isNotEmpty() ? old('ten_danh_muc') : '' }}"
+						required
+					>
+					@if($createErrors->has('ten_danh_muc'))
+						<div class="text-13 text-danger mt-1">{{ $createErrors->first('ten_danh_muc') }}</div>
+					@endif
 				</div>
 				<div class="form-group">
 					<label class="form-label">Mô tả</label>
-					<textarea name="mo_ta" class="form-control" rows="3" placeholder="Mô tả ngắn về danh mục..."></textarea>
+					<textarea name="mo_ta" class="form-control" rows="3" placeholder="Mô tả ngắn về danh mục...">{{ $createErrors->isNotEmpty() ? old('mo_ta') : '' }}</textarea>
 				</div>
 				<div class="form-group">
 					<label class="form-label">Trạng thái</label>
+					@php $createTrangThai = $createErrors->isNotEmpty() ? old('trang_thai') : 'dang_dung'; @endphp
 					<select name="trang_thai" class="form-control">
-						<option value="dang_dung">Đang dùng</option>
-						<option value="ngung_dung">Ngưng dùng</option>
+						<option value="dang_dung" {{ $createTrangThai === 'dang_dung' ? 'selected' : '' }}>Đang dùng</option>
+						<option value="ngung_dung" {{ $createTrangThai === 'ngung_dung' ? 'selected' : '' }}>Ngưng dùng</option>
 					</select>
 				</div>
 			</form>
@@ -155,6 +167,7 @@
 			<button class="modal-close" onclick="closeModal('edit-category-modal-{{ $category->id }}')">&#x2715;</button>
 		</div>
 		<div class="modal-body">
+			@php $editErrors = $errors->getBag('editCategory_' . $category->id); @endphp
 			<form id="edit-category-form-{{ $category->id }}" method="POST" action="{{ route('manager.categories.update', $category->id) }}">
 				@csrf
 				@method('PUT')
@@ -163,11 +176,14 @@
 					<input
 						type="text"
 						name="ten_danh_muc"
-						class="form-control"
+						class="form-control {{ $editErrors->has('ten_danh_muc') ? 'is-invalid' : '' }}"
 						maxlength="150"
-						value="{{ $category->ten_danh_muc }}"
+						value="{{ $editErrors->isNotEmpty() ? old('ten_danh_muc', $category->ten_danh_muc) : $category->ten_danh_muc }}"
 						required
 					>
+					@if($editErrors->has('ten_danh_muc'))
+						<div class="text-13 text-danger mt-1">{{ $editErrors->first('ten_danh_muc') }}</div>
+					@endif
 				</div>
 				<div class="form-group">
 					<label class="form-label">Mô tả</label>
@@ -189,5 +205,27 @@
 	</div>
 </div>
 @endforeach
+
+@php
+	$openEditCategoryId = null;
+	foreach ($categories ?? [] as $category) {
+		if ($errors->getBag('editCategory_' . $category->id)->isNotEmpty()) {
+			$openEditCategoryId = $category->id;
+			break;
+		}
+	}
+@endphp
+
+@if($errors->getBag('createCategory')->isNotEmpty() || $openEditCategoryId)
+<script>
+	document.addEventListener('DOMContentLoaded', function () {
+		@if($errors->getBag('createCategory')->isNotEmpty())
+			openModal('create-category-modal');
+		@elseif($openEditCategoryId)
+			openModal('edit-category-modal-{{ $openEditCategoryId }}');
+		@endif
+	});
+</script>
+@endif
 
 @endsection

@@ -32,6 +32,7 @@ Route::post('/menu/{id}/review', [MenuController::class, 'storeReview'])->name('
 // Giỏ hàng
 Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
 Route::post('/cart/add', [CartController::class, 'add'])->name('cart.add');
+Route::post('/cart/voice-order', [CartController::class, 'voiceOrder'])->name('cart.voice_order');
 Route::post('/cart/update', [CartController::class, 'update'])->name('cart.update');
 Route::post('/cart/note', [CartController::class, 'updateNote'])->name('cart.note');
 Route::post('/cart/remove', [CartController::class, 'remove'])->name('cart.remove');

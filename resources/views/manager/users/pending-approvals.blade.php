@@ -78,10 +78,16 @@
                         <td>{{ $user->vai_tro }}</td>
                         <td class="text-12 text-muted">{{ optional($user->created_at)->format('d/m/Y H:i') }}</td>
                         <td>
-                            <form method="POST" action="{{ route('account-approvals.confirm', $user->id) }}" onsubmit="return confirmSubmit(this, 'Xác nhận tài khoản {{ addslashes($user->ho_ten) }}?')">
-                                @csrf
-                                <button type="submit" class="btn btn-primary btn-sm">Xác nhận</button>
-                            </form>
+                            <div class="action-row">
+                                <form method="POST" action="{{ route('account-approvals.confirm', $user->id) }}" onsubmit="return confirmSubmit(this, 'Xác nhận tài khoản {{ addslashes($user->ho_ten) }}?')">
+                                    @csrf
+                                    <button type="submit" class="btn btn-primary btn-sm">Xác nhận</button>
+                                </form>
+                                <form method="POST" action="{{ route('account-approvals.reject', $user->id) }}" onsubmit="return confirmDelete(this, 'Từ chối và xóa yêu cầu đăng ký của {{ addslashes($user->ho_ten) }}?')">
+                                    @csrf
+                                    <button type="submit" class="btn btn-danger btn-sm">Từ chối</button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                     @empty

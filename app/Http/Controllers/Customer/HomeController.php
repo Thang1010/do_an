@@ -62,11 +62,13 @@ class HomeController extends Controller
                 return asset('storage/' . $items->first()->hinh_anh);
             });
 
-        $from = Carbon::now()->subDays(6)->startOfDay();
+        $from = Carbon::now()->subDays(7)->startOfDay();
 
         $bestSellers = $this->bestSellers([], $from, 10);
 
-        // Lấy đánh giá từ top 10 đồ uống bán chạy
+        // Lấy đánh giá từ top 10 đồ uống bán chạy: chỉ hiển thị đánh giá tích cực,
+        // mỗi sản phẩm 1 đánh giá có số sao cao nhất. Sản phẩm không có đánh giá
+        // tích cực sẽ không xuất hiện ở trang chủ.
         $testimonialsProductIds = $bestSellers->take(10)->pluck('id')
             ->unique()
             ->values();
@@ -74,16 +76,25 @@ class HomeController extends Controller
         if ($testimonialsProductIds->isNotEmpty()) {
             $testimonials = DanhGiaSanPham::with(['nguoiDung', 'sanPham'])
                 ->whereIn('san_pham_id', $testimonialsProductIds)
+                ->where('phan_tich_cam_xuc', 'Tích cực')
+                ->orderByDesc('so_sao')
                 ->latest()
                 ->get()
                 ->groupBy('san_pham_id')
-                ->flatMap(fn($reviews) => $reviews->take(3))
+                ->map(fn($reviews) => $reviews->first())
                 ->values();
         } else {
+            // Dự phòng: không có sản phẩm bán chạy → vẫn ưu tiên đánh giá tích cực
+            // (mỗi sản phẩm 1 đánh giá sao cao nhất) để giữ ấn tượng tốt.
             $testimonials = DanhGiaSanPham::with(['nguoiDung', 'sanPham'])
+                ->where('phan_tich_cam_xuc', 'Tích cực')
+                ->orderByDesc('so_sao')
                 ->latest()
-                ->limit(9)
-                ->get();
+                ->get()
+                ->groupBy('san_pham_id')
+                ->map(fn($reviews) => $reviews->first())
+                ->take(9)
+                ->values();
         }
 
         return view('customer.dashboard', compact(

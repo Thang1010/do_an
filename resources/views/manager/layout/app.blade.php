@@ -101,13 +101,36 @@
                 Quản lý chức vụ
             </a>
 
+            @php
+                $canManageAdmins = $isStoreOwner;
+
+                // Đếm số tài khoản đang chờ duyệt (theo quyền xác nhận của người đăng nhập)
+                // để hiển thị badge cho biết "chỗ nào" đang có yêu cầu.
+                $pendingStaffCount = 0;
+                $pendingAdminCount = 0;
+                if (auth()->check() && in_array(auth()->user()->vai_tro, ['chủ cửa hàng', 'quản lý'], true)) {
+                    $actorStoreId = auth()->user()->cua_hang_id ?? auth()->user()->hoSoQuanLy?->cua_hang_id;
+                    $pendingBase = \App\Models\NguoiDung::where('trang_thai', 'ngưng hoạt động');
+                    if ($actorStoreId) {
+                        $pendingBase->where(function ($q) use ($actorStoreId) {
+                            $q->where('cua_hang_id', $actorStoreId)->orWhereNull('cua_hang_id');
+                        });
+                    }
+                    $pendingStaffCount = (clone $pendingBase)->where('vai_tro', 'nhân viên')->count();
+                    if (auth()->user()->vai_tro === 'chủ cửa hàng') {
+                        $pendingAdminCount = (clone $pendingBase)->whereIn('vai_tro', ['quản lý', 'chủ cửa hàng'])->count();
+                    }
+                }
+                $pendingApprovalTotal = $pendingStaffCount + $pendingAdminCount;
+            @endphp
+
             <div class="nav-item nav-group-toggle {{ request()->routeIs('manager.users*') ? 'active open' : '' }}"
                 onclick="toggleMenu('menu-users', this)">
                 Quản lý người dùng
+                @if($pendingApprovalTotal > 0)
+                    <span class="nav-pending-badge">{{ min($pendingApprovalTotal, 99) }}</span>
+                @endif
             </div>
-            @php
-                $canManageAdmins = $isStoreOwner;
-            @endphp
             <div class="nav-submenu {{ request()->routeIs('manager.users*') ? 'open' : '' }}" id="menu-users">
                 <a href="{{ route('manager.users.customers') }}"
                     class="nav-item {{ request()->routeIs('manager.users.customers') ? 'active' : '' }}">
@@ -116,11 +139,17 @@
                 <a href="{{ route('manager.users.staffs') }}"
                     class="nav-item {{ request()->routeIs('manager.users.staff') || request()->routeIs('manager.users.staffs') ? 'active' : '' }}">
                     Nhân viên
+                    @if($pendingStaffCount > 0)
+                        <span class="nav-pending-badge">{{ min($pendingStaffCount, 99) }}</span>
+                    @endif
                 </a>
                 @if($canManageAdmins)
                     <a href="{{ route('manager.users.admins') }}"
                         class="nav-item {{ request()->routeIs('manager.users.admins') ? 'active' : '' }}">
                         Quản lý
+                        @if($pendingAdminCount > 0)
+                            <span class="nav-pending-badge">{{ min($pendingAdminCount, 99) }}</span>
+                        @endif
                     </a>
                 @endif
             </div>

@@ -7,6 +7,7 @@ use App\Enums\TableStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CuaHang;
 use App\Models\DonHang;
+use App\Models\NguoiDung;
 use App\Models\ThanhToan;
 use App\Services\PaymentService;
 use App\Traits\NormalizesPayment;
@@ -104,11 +105,25 @@ class OrderController extends Controller
         }
 
         DB::transaction(function () use ($order, $paymentMethod, $paymentStatus, $request) {
-            $order->update([
+            $emailKhachHang = $request->email_khach_hang ?? $order->email_khach_hang;
+
+            $updateData = [
                 'nhan_vien_id' => Auth::id(),
-                'email_khach_hang' => $request->email_khach_hang ?? $order->email_khach_hang,
-            ]);
-            
+                'email_khach_hang' => $emailKhachHang,
+            ];
+
+            // Đơn order tại quầy chưa gắn tài khoản: nếu email khớp một tài khoản
+            // khách hàng đã đăng ký thì tự liên kết để khách vẫn có quyền đánh giá
+            // khi đăng nhập lại (dùng lại logic đánh giá theo nguoi_dung_id).
+            if (!$order->nguoi_dung_id) {
+                $khachHang = NguoiDung::khachHangByEmail($emailKhachHang);
+                if ($khachHang) {
+                    $updateData['nguoi_dung_id'] = $khachHang->id;
+                }
+            }
+
+            $order->update($updateData);
+
             $order->updatePaymentStatus($paymentStatus, $paymentMethod);
 
             $this->paymentService->syncThanhToanSimple($order, $paymentMethod, $paymentStatus);

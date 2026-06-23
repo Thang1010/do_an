@@ -42,16 +42,26 @@ class InventoryController extends Controller
         $purposeTabs = $this->purposeTabs();
         $purposeLabel = $this->resolvePurposeLabel($currentPurpose);
 
-        $balanceExpression = $this->stockBalanceExpression('lich_su_kho');
         $inventory = $this->buildInventoryQuery($request)
-            ->orderByRaw("CASE WHEN COALESCE({$balanceExpression}, 0) <= 0 THEN 0 ELSE 1 END")
+            ->orderByRaw("CASE 
+                WHEN {$this->cupsExpression()} <= 0 THEN 0 
+                WHEN {$this->cupsExpression()} <= 3 THEN 1 
+                ELSE 2 
+            END")
             ->orderBy('nguyen_lieu.ten_nguyen_lieu')
             ->paginate(20)
             ->withQueryString();
 
+        // "Sắp hết" = với tồn kho hiện tại chỉ làm được <= 3 cốc/sản phẩm (và > 0).
         $lowCount = DB::query()
             ->fromSub($this->applyPurposeFilter($this->baseInventoryQuery(), $currentPurpose), 'inventory_balance')
-            ->where('so_luong', '<=', 0)
+            ->whereRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) <= 3')
+            ->whereRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) > 0')
+            ->count();
+        
+        $hetCount = DB::query()
+            ->fromSub($this->applyPurposeFilter($this->baseInventoryQuery(), $currentPurpose), 'inventory_balance')
+            ->whereRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) <= 0')
             ->count();
 
         $importLog = $this->buildHistoryQuery($request, 'import')
@@ -64,7 +74,7 @@ class InventoryController extends Controller
             ->paginate(15, ['*'], 'export_page')
             ->withQueryString();
 
-        $nguyenLieus = NguyenLieu::orderBy('ten_nguyen_lieu')->get();
+        $nguyenLieus = NguyenLieu::query()->dangSuDung()->orderBy('ten_nguyen_lieu')->get();
 
         $managerNames = LichSuKho::query()
             ->join('nguoi_dung', 'nguoi_dung.id', '=', 'lich_su_kho.nguoi_tao_id')
@@ -76,6 +86,7 @@ class InventoryController extends Controller
         return view('manager.inventory.index', compact(
             'inventory',
             'lowCount',
+            'hetCount',
             'importLog',
             'exportLog',
             'nguyenLieus',
@@ -385,10 +396,13 @@ class InventoryController extends Controller
         }
 
         if ($request->filled('trang_thai')) {
-            if ($request->trang_thai === 'low') {
-                $query->having('so_luong', '<=', 0);
+            $expr = 'FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1))';
+            if ($request->trang_thai === 'het') {
+                $query->havingRaw("{$expr} <= 0");
+            } elseif ($request->trang_thai === 'sap_het') {
+                $query->havingRaw("{$expr} > 0 AND {$expr} <= 3");
             } elseif ($request->trang_thai === 'ok') {
-                $query->having('so_luong', '>', 0);
+                $query->havingRaw("{$expr} > 3");
             }
         }
 
@@ -400,6 +414,7 @@ class InventoryController extends Controller
         $balanceExpression = $this->stockBalanceExpression();
 
         return NguyenLieu::query()
+            ->dangSuDung()
             ->leftJoin('lich_su_kho', 'lich_su_kho.nguyen_lieu_id', '=', 'nguyen_lieu.id')
             ->select(
                 'nguyen_lieu.id',
@@ -409,6 +424,10 @@ class InventoryController extends Controller
                 'nguyen_lieu.created_at'
             )
             ->selectRaw("COALESCE({$balanceExpression}, 0) as so_luong")
+            // Mức tiêu hao lớn nhất của 1 sản phẩm dùng nguyên liệu này (để tính "làm
+            // được bao nhiêu cốc"). NULL nếu không sản phẩm nào dùng (vd nguyên liệu
+            // tự thân của sản phẩm bán lẻ) → coi như 1 đơn vị / sản phẩm.
+            ->selectRaw('(SELECT MAX(ctsp.so_luong_can) FROM cong_thuc_san_pham ctsp WHERE ctsp.nguyen_lieu_id = nguyen_lieu.id) as max_tieu_hao')
             ->groupBy(
                 'nguyen_lieu.id',
                 'nguyen_lieu.ten_nguyen_lieu',
@@ -416,6 +435,12 @@ class InventoryController extends Controller
                 'nguyen_lieu.muc_dich_su_dung',
                 'nguyen_lieu.created_at'
             );
+    }
+
+    /** Biểu thức SQL: số cốc/sản phẩm có thể làm với tồn kho hiện tại. */
+    private function cupsExpression(): string
+    {
+        return 'FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1))';
     }
 
     private function buildHistoryQuery(Request $request, string $type): Builder

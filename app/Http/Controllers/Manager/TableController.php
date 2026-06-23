@@ -40,6 +40,20 @@ class TableController extends Controller
         return TableStatus::normalize($status)->value;
     }
 
+    /**
+     * Tạo ảnh QR (data URI SVG) trỏ tới trang gọi món của một bàn.
+     * Dùng url(route(..., false)) để QR mang đúng host đang truy cập (domain thật)
+     * thay vì APP_URL (có thể là IP LAN).
+     */
+    private function tableQrDataUri(int $tableId): string
+    {
+        $url = url(route('order.table', ['table' => $tableId], false));
+
+        return 'data:image/svg+xml;base64,' . base64_encode(
+            QrCode::format('svg')->size(220)->margin(1)->generate($url)
+        );
+    }
+
     public function index(Request $request)
     {
         $query = BanAn::query()
@@ -65,7 +79,17 @@ class TableController extends Controller
 
         $tables = $query->orderBy('so_ban')->paginate(20)->withQueryString();
 
-        return view('manager.tables.index', compact('tables'));
+        // QR gọi món cho toàn bộ bàn (không phân trang) để in ngay trong modal.
+        $qrTables = BanAn::where('trang_thai', '!=', 'ngưng sử dụng')
+            ->orderBy('so_ban')
+            ->get(['id', 'so_ban']);
+
+        $qrcodes = [];
+        foreach ($qrTables as $qrTable) {
+            $qrcodes[$qrTable->id] = $this->tableQrDataUri($qrTable->id);
+        }
+
+        return view('manager.tables.index', compact('tables', 'qrTables', 'qrcodes'));
     }
 
     /**
@@ -81,10 +105,7 @@ class TableController extends Controller
 
         $qrcodes = [];
         foreach ($tables as $table) {
-            $url = url(route('order.table', ['table' => $table->id], false));
-            $qrcodes[$table->id] = 'data:image/svg+xml;base64,' . base64_encode(
-                QrCode::format('svg')->size(220)->margin(1)->generate($url)
-            );
+            $qrcodes[$table->id] = $this->tableQrDataUri($table->id);
         }
 
         return view('manager.tables.qr-print', compact('tables', 'qrcodes'));
@@ -146,7 +167,11 @@ class TableController extends Controller
         $availableProducts = \App\Models\SanPham::query()
             ->where('trang_thai_ban', 'đang bán')
             ->orderBy('ten_san_pham')
-            ->get(['id', 'ten_san_pham', 'gia_goc', 'gia_khuyen_mai']);
+            ->get(['id', 'danh_muc_id', 'ten_san_pham', 'gia_goc', 'gia_khuyen_mai', 'nhiet_do']);
+
+        $categories = \App\Models\DanhMuc::where('trang_thai', 'đang dùng')
+            ->orderBy('ten_danh_muc')
+            ->get(['id', 'ten_danh_muc']);
 
         $allSizes = \App\Models\KichCo::orderBy('he_so_gia')->orderBy('ten_kich_co')->get();
         $productSizeMap = [];
@@ -160,9 +185,14 @@ class TableController extends Controller
             }
 
             $productSizeMap[$product->id] = [
+                'danh_muc_id' => $product->danh_muc_id,
                 'sizes' => $sizes,
+                'temps' => array_values(array_filter(array_map('trim', explode(',', (string) $product->nhiet_do)))),
             ];
         }
+
+        $tableQrCode = $this->tableQrDataUri($table->id);
+        $tableQrUrl = url(route('order.table', ['table' => $table->id], false));
 
         return view('manager.tables.show', compact(
             'table',
@@ -175,6 +205,9 @@ class TableController extends Controller
             'tableHasUnpaid',
             'availableProducts',
             'productSizeMap',
+            'categories',
+            'tableQrCode',
+            'tableQrUrl',
         ));
     }
 
@@ -297,6 +330,11 @@ class TableController extends Controller
     public function update(Request $request, int $id)
     {
         $table = BanAn::findOrFail($id);
+
+        // Bàn đang có khách ngồi: chặn sửa thông tin để tránh nhầm lẫn khi đang phục vụ.
+        if ($table->trang_thai === 'đang phục vụ') {
+            return back()->with('error', "Khách đang sử dụng bàn {$table->so_ban} nên không thể sửa thông tin bàn.");
+        }
 
         $validated = $request->validate([
             'so_ban' => "required|string|max:20|unique:ban_an,so_ban,{$id}",

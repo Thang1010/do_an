@@ -29,6 +29,11 @@
     .inventory-compact table td { padding: 8px 10px; }
     .inventory-compact .card-header { padding: 10px 14px; }
     .inventory-compact .card-body { padding: 12px 14px; }
+    .alert-row.alert-danger-strong {
+        background-color: #f8d7da;
+        border-color: #f5c6cb;
+        color: #721c24;
+    }
 </style>
 @endpush
 <div class="inventory-compact">
@@ -49,11 +54,19 @@
 </div>
 
 
-@if($lowCount > 0)
-<div class="alert alert-warning alert-row">
-    <span>Có <strong>{{ $lowCount }}</strong> nguyên liệu đã hết — cần nhập kho ngay!</span>
+@if($hetCount > 0 || $lowCount > 0)
+<div class="alert alert-warning alert-row {{ $hetCount > 0 ? 'alert-danger-strong' : '' }}">
+    <span>
+        @if($hetCount > 0)
+            Có <strong>{{ $hetCount }}</strong> nguyên liệu <strong>đã hết hàng</strong> (tồn kho = 0).
+        @endif
+        @if($lowCount > 0)
+            Có <strong>{{ $lowCount }}</strong> nguyên liệu <strong>sắp hết</strong> (chỉ còn đủ làm ≤ 3 cốc/sản phẩm).
+        @endif
+        — cần nhập kho ngay!
+    </span>
     <button onclick="document.getElementById('low-stock-section').scrollIntoView({behavior:'smooth'})"
-            class="btn btn-warning btn-sm">Xem ngay</button>
+            class="btn {{ $hetCount > 0 ? 'btn-danger' : 'btn-warning' }} btn-sm">Xem ngay</button>
 </div>
 @endif
 
@@ -74,7 +87,8 @@
                    value="{{ request('search') }}" placeholder="Tìm nguyên liệu...">
             <select name="trang_thai" class="form-control">
                 <option value="">Tất cả trạng thái</option>
-                <option value="low" {{ request('trang_thai') === 'low' ? 'selected' : '' }}>Hết hàng</option>
+                <option value="het" {{ request('trang_thai') === 'het' ? 'selected' : '' }}>Hết hàng</option>
+                <option value="sap_het" {{ request('trang_thai') === 'sap_het' ? 'selected' : '' }}>Sắp hết</option>
                 <option value="ok" {{ request('trang_thai') === 'ok' ? 'selected' : '' }}>Đủ hàng</option>
             </select>
             <button type="submit" class="btn btn-secondary">Lọc</button>
@@ -102,14 +116,23 @@
                 </thead>
                 <tbody>
                     @forelse($inventory as $item)
+                    @php
+                        $maxTieuHao = (float) ($item->max_tieu_hao ?? 0);
+                        $divisor = $maxTieuHao > 0 ? $maxTieuHao : 1;
+                        $soCup = (int) floor(((float) $item->so_luong) / $divisor);
+                        $hetHang = $soCup <= 0;
+                        $sapHet = !$hetHang && $soCup <= 3;
+                    @endphp
                     <tr>
                         <td><strong>{{ $item->ten_nguyen_lieu }}</strong></td>
                         <td>{{ $item->don_vi_tinh }}</td>
                         <td>{{ $item->muc_dich_su_dung ?: '—' }}</td>
-                        <td class="{{ $item->so_luong <= 0 ? 'low-stock' : '' }} font-600">{{ number_format((float) $item->so_luong, 2, ',', '.') }} {{ $item->don_vi_tinh }}</td>
+                        <td class="{{ $hetHang ? 'low-stock' : ($sapHet ? 'text-warning' : '') }} font-600">{{ number_format((float) $item->so_luong, 2, ',', '.') }} {{ $item->don_vi_tinh }}</td>
                         <td>
-                            @if($item->so_luong <= 0)
-                                <span class="badge badge-inactive">Hết hàng</span>
+                            @if($hetHang)
+                                <span class="badge" style="background-color: #dc3545; color: white;">Hết hàng</span>
+                            @elseif($sapHet)
+                                <span class="badge" style="background-color: #ffc107; color: #212529;">Sắp hết</span>
                             @else
                                 <span class="badge badge-active">Đủ hàng</span>
                             @endif

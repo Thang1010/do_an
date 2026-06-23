@@ -37,26 +37,22 @@ class SalaryController extends Controller
 
         $totalRevenue = $this->totalRevenue($periodStart, $periodEnd);
 
-        try {
-            $salaryData = $users->through(function (NguoiDung $user) use ($periodStart, $periodEnd, $totalRevenue) {
-                return $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $totalRevenue);
-            });
-        } catch (\Throwable $e) {
-            dd('Error in logic: ' . $e->getMessage(), $e->getFile(), $e->getLine());
-        }
+        $roleMap = $users->pluck('vai_tro', 'id')->toArray();
+        $minutesMap = $this->calculateMinutesMap($roleMap, $periodStart, $periodEnd);
 
-        try {
-            return view('manager.salary.index', [
-                'users' => $salaryData,
-                'filterRole' => $filterRole,
-                'thang' => $thang,
-                'nam' => $nam,
-                'periodStart' => $periodStart,
-                'periodEnd' => $periodEnd,
-            ])->render();
-        } catch (\Throwable $e) {
-            dd('View Error: ' . $e->getMessage(), $e->getFile(), $e->getLine());
-        }
+        $salaryData = $users->through(function (NguoiDung $user) use ($periodStart, $periodEnd, $totalRevenue, $minutesMap) {
+            $mins = $minutesMap[$user->id] ?? 0;
+            return $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $totalRevenue, $mins);
+        });
+
+        return view('manager.salary.index', [
+            'users' => $salaryData,
+            'filterRole' => $filterRole,
+            'thang' => $thang,
+            'nam' => $nam,
+            'periodStart' => $periodStart,
+            'periodEnd' => $periodEnd,
+        ]);
     }
 
     /**
@@ -70,21 +66,34 @@ class SalaryController extends Controller
 
         [$periodStart, $periodEnd] = $this->salaryPeriod($thang, $nam);
         $totalRevenue = $this->totalRevenue($periodStart, $periodEnd);
-        $salaryRow = $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $totalRevenue);
+        $mins = $this->calculateMinutesMap([$user->id => $user->vai_tro], $periodStart, $periodEnd)[$user->id] ?? 0;
+        $salaryRow = $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $totalRevenue, $mins);
 
-        $attendances = ChamCong::query()
-            ->where('nguoi_dung_id', $user->id)
-            ->with('caLamViec')
-            ->whereHas('caLamViec', function (Builder $q) use ($periodStart, $periodEnd) {
-                $q->whereBetween('ngay_lam', [$periodStart->toDateString(), $periodEnd->toDateString()]);
-            })
-            ->get()
-            ->sortBy(fn(ChamCong $a) => optional($a->caLamViec)->ngay_lam);
+        $attendances = collect();
+        $managerShifts = collect();
+
+        if ($user->vai_tro === 'quản lý') {
+            $managerShifts = \App\Models\CaLamViec::query()
+                ->where('nguoi_dung_id', $user->id)
+                ->whereBetween('ngay_lam', [$periodStart->toDateString(), $periodEnd->toDateString()])
+                ->orderBy('ngay_lam')
+                ->get();
+        } else {
+            $attendances = ChamCong::query()
+                ->where('nguoi_dung_id', $user->id)
+                ->with('caLamViec')
+                ->whereHas('caLamViec', function (Builder $q) use ($periodStart, $periodEnd) {
+                    $q->whereBetween('ngay_lam', [$periodStart->toDateString(), $periodEnd->toDateString()]);
+                })
+                ->get()
+                ->sortBy(fn(ChamCong $a) => optional($a->caLamViec)->ngay_lam);
+        }
 
         return view('manager.salary.show', [
             'user' => $user,
             'salaryRow' => $salaryRow,
             'attendances' => $attendances,
+            'managerShifts' => $managerShifts,
             'thang' => $thang,
             'nam' => $nam,
             'periodStart' => $periodStart,
@@ -110,7 +119,10 @@ class SalaryController extends Controller
             ->orderBy('email')
             ->get();
 
-        $rows = $users->map(fn(NguoiDung $user) => $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $totalRevenue));
+        $roleMap = $users->pluck('vai_tro', 'id')->toArray();
+        $minutesMap = $this->calculateMinutesMap($roleMap, $periodStart, $periodEnd);
+
+        $rows = $users->map(fn(NguoiDung $user) => $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $totalRevenue, $minutesMap[$user->id] ?? 0));
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
@@ -178,53 +190,70 @@ class SalaryController extends Controller
             ->sum('so_tien');
     }
 
-    private function totalMinutesWorked(int $userId, Carbon $start, Carbon $end): float
+    /**
+     * Tính tổng số phút làm việc bằng SQL Aggregation cho một tập danh sách Users.
+     * Giải quyết N+1 Query.
+     *
+     * @param array<int, string> $userRoles Map [user_id => vai_tro] đã có sẵn từ caller.
+     */
+    private function calculateMinutesMap(array $userRoles, Carbon $start, Carbon $end): array
     {
-        $user = NguoiDung::find($userId);
-        $isManager = $user && $user->vai_tro === 'quản lý';
+        if (empty($userRoles)) return [];
 
-        if ($isManager) {
-            $shifts = \App\Models\CaLamViec::query()
-                ->where('nguoi_dung_id', $userId)
+        $userIds = array_keys($userRoles);
+
+        // 1. Quản lý (dựa trên ca làm việc)
+        $managerIds = collect($userRoles)->filter(fn($r) => $r === 'quản lý')->keys()->toArray();
+        $managerMinutes = [];
+        if (!empty($managerIds)) {
+            $managerMinutes = \App\Models\CaLamViec::query()
+                ->whereIn('nguoi_dung_id', $managerIds)
                 ->whereBetween('ngay_lam', [$start->toDateString(), $end->toDateString()])
-                ->get();
-
-            return $shifts->sum(function ($shift) {
-                $shiftDate = $shift->ngay_lam instanceof \Carbon\CarbonInterface
-                    ? $shift->ngay_lam->format('Y-m-d')
-                    : \Carbon\Carbon::parse($shift->ngay_lam)->format('Y-m-d');
-                $shiftStart = Carbon::parse($shiftDate . ' ' . $shift->gio_bat_dau);
-                $shiftEnd = Carbon::parse($shiftDate . ' ' . $shift->gio_ket_thuc);
-                if ($shiftEnd->lessThanOrEqualTo($shiftStart)) {
-                    $shiftEnd->addDay();
-                }
-                return $shiftStart->diffInMinutes($shiftEnd);
-            });
+                ->select('nguoi_dung_id')
+                ->selectRaw('SUM(MOD(TIME_TO_SEC(TIMEDIFF(gio_ket_thuc, gio_bat_dau)) + 86400, 86400) / 60) as tong_phut')
+                ->groupBy('nguoi_dung_id')
+                ->pluck('tong_phut', 'nguoi_dung_id')
+                ->toArray();
         }
 
-        $records = ChamCong::query()
-            ->where('nguoi_dung_id', $userId)
-            ->whereNotNull('cham_cong_vao')
-            ->whereNotNull('cham_cong_ra')
-            ->whereHas('caLamViec', function (Builder $q) use ($start, $end) {
-                $q->whereBetween('ngay_lam', [$start->toDateString(), $end->toDateString()]);
-            })
-            ->get();
+        // 2. Nhân viên (dựa trên chấm công)
+        $staffIds = collect($userRoles)->filter(fn($r) => $r !== 'quản lý')->keys()->toArray();
+        $staffMinutes = [];
+        if (!empty($staffIds)) {
+            $staffMinutes = ChamCong::query()
+                ->whereIn('nguoi_dung_id', $staffIds)
+                ->whereNotNull('cham_cong_vao')
+                ->whereNotNull('cham_cong_ra')
+                ->whereHas('caLamViec', function (Builder $q) use ($start, $end) {
+                    $q->whereBetween('ngay_lam', [$start->toDateString(), $end->toDateString()]);
+                })
+                ->select('nguoi_dung_id')
+                // Dùng IF để tránh tính số âm nếu giờ ra < giờ vào do lỗi dữ liệu
+                ->selectRaw('SUM(IF(cham_cong_ra > cham_cong_vao, TIMESTAMPDIFF(MINUTE, cham_cong_vao, cham_cong_ra), 0)) as tong_phut')
+                ->groupBy('nguoi_dung_id')
+                ->pluck('tong_phut', 'nguoi_dung_id')
+                ->toArray();
+        }
 
-        $totalMinutes = $records->sum(function (ChamCong $record) {
-            $checkIn = Carbon::parse($record->cham_cong_vao);
-            $checkOut = Carbon::parse($record->cham_cong_ra);
+        // 3. Gắn kết quả tương ứng với vai trò
+        $map = [];
+        foreach ($userIds as $id) {
+            $role = $userRoles[$id] ?? 'nhân viên';
+            if ($role === 'quản lý') {
+                $map[$id] = (float)($managerMinutes[$id] ?? 0);
+            } else {
+                $map[$id] = (float)($staffMinutes[$id] ?? 0);
+            }
+        }
 
-            return $checkOut->greaterThan($checkIn) ? $checkIn->diffInMinutes($checkOut) : 0;
-        });
-
-        return $totalMinutes;
+        return $map;
     }
 
     private function formatMinutesToHours(float $minutes): string
     {
-        $h = floor($minutes / 60);
-        $m = $minutes % 60;
+        $total = (int) round($minutes);
+        $h = intdiv($total, 60);
+        $m = $total % 60;
         if ($h > 0 && $m > 0) {
             return "{$h} giờ {$m} phút";
         }
@@ -246,7 +275,7 @@ class SalaryController extends Controller
     /**
      * Build 1 hàng dữ liệu lương cho user.
      */
-    private function buildUserSalaryRow(NguoiDung $user, Carbon $periodStart, Carbon $periodEnd, float $totalRevenue): array
+    private function buildUserSalaryRow(NguoiDung $user, Carbon $periodStart, Carbon $periodEnd, float $totalRevenue, float $totalMinutes): array
     {
         $isNhanVien = $user->isNhanVien();
         $profile = $isNhanVien ? $user->hoSoNhanVien : $user->hoSoQuanLy;
@@ -256,7 +285,6 @@ class SalaryController extends Controller
         $luongTheoGio = $profile?->chucVu?->luong_theo_gio ?? 0;
         $chucVu = $profile?->chucVu?->ten_chuc_vu ?? '—';
 
-        $totalMinutes = $this->totalMinutesWorked($user->id, $periodStart, $periodEnd);
         $totalSalary = $this->calculateSalary($user, $loaiHinh, $luongCoBan, $luongTheoGio, $totalMinutes, $totalRevenue);
 
         return [

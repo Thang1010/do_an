@@ -115,6 +115,14 @@ class OrderController extends Controller
 
         $orders = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
 
+        // Polling: chỉ trả bảng đơn (bỏ qua toàn bộ dữ liệu cho modal tạo đơn) để tự cập nhật.
+        // Dùng header X-Partial để URL sạch, không rò vào link phân trang.
+        if ($request->header('X-Partial')) {
+            return response()->json([
+                'html' => view('manager.orders.partials.list', compact('orders'))->render(),
+            ]);
+        }
+
         // Đếm tổng - use chi_tiet_don_hang for payment status
         $countAll = DonHang::count();
         $countUnpaid = DonHang::whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))->count();

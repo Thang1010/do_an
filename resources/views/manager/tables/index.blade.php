@@ -32,102 +32,8 @@
     </form>
 </div>
 
-<div class="card">
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th class="col-stt">STT</th>
-                    <th>Số bàn</th>
-                    <th>Trạng thái</th>
-                    <th>Trạng thái thanh toán</th>
-                    <th class="col-action-xl">Thao tác</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($tables ?? [] as $i => $table)
-                @php
-                    $stt = method_exists($tables, 'firstItem') && $tables->firstItem()
-                        ? ($tables->firstItem() + $i)
-                        : ($i + 1);
-
-                    $statusClass = match ($table->trang_thai) {
-                        'đang phục vụ' => 'badge-brew',
-                        'đã đặt' => 'badge-pending',
-                        'ngưng sử dụng' => 'badge-inactive',
-                        default => 'badge-active',
-                    };
-
-                    $paymentClass = 'badge-default';
-                    $paymentLabel = 'Không có';
-                    $showPaymentBadge = false;
-
-                    if (in_array($table->trang_thai, ['đang phục vụ', 'đã đặt'], true)) {
-                        $showPaymentBadge = true;
-
-                        if (($table->so_don_chua_thanh_toan ?? 0) > 0) {
-                            $paymentClass = 'badge-pending';
-                            $paymentLabel = 'Chưa thanh toán';
-                        } elseif (($table->so_don_da_thanh_toan ?? 0) > 0) {
-                            $paymentClass = 'badge-done';
-                            $paymentLabel = 'Đã thanh toán';
-                        } else {
-                            $paymentClass = 'badge-pending';
-                            $paymentLabel = 'Chưa thanh toán';
-                        }
-                    }
-                @endphp
-                <tr>
-                    <td>{{ $stt }}</td>
-                    <td><span class="font-600">{{ $table->so_ban }}</span></td>
-                    <td>
-                        <span class="badge {{ $statusClass }}">{{ ucfirst($table->trang_thai) }}</span>
-                    </td>
-                    <td>
-                        @if($showPaymentBadge)
-                            <span class="badge {{ $paymentClass }}">{{ $paymentLabel }}</span>
-                        @else
-                            <span class="text-muted">{{ $paymentLabel }}</span>
-                        @endif
-                    </td>
-                    <td>
-                        <div class="action-row">
-                            <a href="{{ route('manager.tables.show', $table->id) }}" class="btn btn-primary btn-sm">Chi tiết</a>
-                            @if($table->trang_thai === 'đang phục vụ')
-                                <button type="button" class="btn btn-secondary btn-sm" onclick="openServingTableModal('{{ addslashes($table->so_ban) }}')">Sửa</button>
-                            @else
-                                <button class="btn btn-secondary btn-sm" onclick="openModal('edit-table-modal-{{ $table->id }}')">Sửa</button>
-                            @endif
-                            <form method="POST" action="{{ route('manager.tables.destroy', $table->id) }}"
-                                  onsubmit="return confirmDelete(this, 'Xóa bàn {{ $table->so_ban }}?')">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn btn-danger btn-sm">Xóa</button>
-                            </form>
-                        </div>
-                    </td>
-                </tr>
-                @empty
-                <tr>
-                    <td colspan="5" class="empty-state">
-                        Chưa có bàn ăn nào. <button class="btn btn-link link-primary" onclick="openModal('create-table-modal')">Thêm ngay</button>
-                    </td>
-                </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-
-    @if(isset($tables) && method_exists($tables, 'hasPages') && $tables->hasPages())
-    <div class="card-footer">
-        <div class="pagination-footer">
-            <span class="pagination-info">
-                Hiển thị {{ $tables->firstItem() }}-{{ $tables->lastItem() }} / {{ $tables->total() }} bàn ăn
-            </span>
-            {{ $tables->links() }}
-        </div>
-    </div>
-    @endif
+<div id="tables-grid-wrap">
+    @include('manager.tables.partials.grid')
 </div>
 
 <div class="modal-backdrop" id="create-table-modal">
@@ -309,5 +215,32 @@
         if (nameEl && soBan) { nameEl.textContent = 'bàn ' + soBan; }
         if (typeof openModal === 'function') { openModal('serving-table-modal'); }
     };
+
+    // ── Polling sơ đồ bàn: tự cập nhật trạng thái/thanh toán, không cần F5 ──
+    (function () {
+        var INTERVAL = 12000; // 12 giây
+        var inFlight = false;
+        var wrap = document.getElementById('tables-grid-wrap');
+        if (!wrap) return;
+
+        function refresh() {
+            if (inFlight || document.hidden) return;
+            // Bỏ qua khi đang mở modal hoặc đang gõ trong ô input/select
+            if (document.querySelector('.modal-backdrop.open, .modal-backdrop[style*="flex"]')) return;
+            var activeEl = document.activeElement;
+            if (activeEl && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeEl.tagName)) return;
+
+            inFlight = true;
+            fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-Partial': '1' } })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (data && typeof data.html === 'string') wrap.innerHTML = data.html;
+                })
+                .catch(function () { /* im lặng */ })
+                .finally(function () { inFlight = false; });
+        }
+
+        setInterval(refresh, INTERVAL);
+    })();
 </script>
 @endpush

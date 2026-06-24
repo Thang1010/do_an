@@ -5,12 +5,42 @@
 	Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàng</a> / <strong>Chi tiết đơn</strong>
 @endsection
 
+@push('styles')
+<style>
+	.order-type-pill {
+		display: inline-block;
+		color: #fff;
+		font-size: 13px;
+		font-weight: 700;
+		padding: 4px 14px;
+		border-radius: 999px;
+		letter-spacing: .2px;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, .12);
+	}
+	.order-type-takeaway { background: #ea580c; }
+	.order-type-preorder { background: #7c3aed; }
+	.order-type-qr       { background: #0891b2; }
+	.order-type-instant  { background: #16a34a; }
+	.order-type-default  { background: #6b7280; }
+</style>
+@endpush
+
 @section('content')
 
 	@php
 		$voucher = $order->voucherNguoiDung?->voucher;
 		$customerName = $order->nguoiDung?->hoSoKhachHang?->ho_ten ?? $order->nguoiDung?->email ?? 'Khách vãng lai';
 		$customerPhone = $order->nguoiDung?->hoSoKhachHang?->so_dien_thoai ?? $order->nguoiDung?->hoSoNhanVien?->so_dien_thoai ?? '—';
+		$loaiDon = \Illuminate\Support\Str::ucfirst($order->loai_don ?? '—');
+		$loaiDonClass = match ($order->loai_don) {
+			'mang về' => 'order-type-takeaway',          // cam — đơn mang về
+			'đặt hàng trước' => 'order-type-preorder',   // tím — đặt trước
+			'gọi tại bàn bằng qr' => 'order-type-qr',    // xanh ngọc — gọi tại bàn QR
+			'sử dụng ngay' => 'order-type-instant',      // xanh lá — dùng ngay
+			default => 'order-type-default',
+		};
+		$isTakeaway = ($order->loai_don === 'mang về');
+		$daGiao = $order->da_giao_luc;
 		$paymentStatus = $order->trang_thai_thanh_toan ?? '—';
 		$paymentStatusClass = match ($paymentStatus) {
 			'đã thanh toán' => 'badge-success',
@@ -52,8 +82,12 @@
 					<div class="font-600">{{ $customerPhone }}</div>
 				</div>
 				<div>
+					<div class="text-12 text-muted">Loại đơn</div>
+					<div class="font-600"><span class="order-type-pill {{ $loaiDonClass }}">{{ $loaiDon }}</span></div>
+				</div>
+				<div>
 					<div class="text-12 text-muted">Bàn</div>
-					<div class="font-600">{{ $order->banAn->so_ban ?? 'Không có' }}</div>
+					<div class="font-600">{{ $order->banAn->so_ban ?? ($order->loai_don === 'mang về' ? 'Mang về (không có bàn)' : 'Không có') }}</div>
 				</div>
 				<div>
 					<div class="text-12 text-muted">Thời gian hẹn đến</div>
@@ -64,6 +98,18 @@
 					<div class="text-12 text-muted">Phương thức thanh toán</div>
 					<div class="font-600">{{ $order->phuong_thuc_thanh_toan ?? '—' }}</div>
 				</div>
+				@if($isTakeaway)
+				<div>
+					<div class="text-12 text-muted">Trạng thái giao</div>
+					<div class="font-600">
+						@if($daGiao)
+							<span class="badge badge-done">Đã giao • {{ $daGiao->format('H:i d/m/Y') }}</span>
+						@else
+							<span class="badge badge-pending">Chưa giao</span>
+						@endif
+					</div>
+				</div>
+				@endif
 			</div>
 		</div>
 	</div>

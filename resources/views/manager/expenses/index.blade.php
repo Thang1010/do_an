@@ -55,79 +55,35 @@
 
 
 
-<div class="card mb-20">
-    <div class="card-header">
-        <span class="card-title">Danh sách chi tiêu</span>
-    </div>
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Thời gian</th>
-                    <th>Tên nguyên liệu</th>
-                    <th>Mục đích</th>
-                    <th>Số lượng</th>
-                    <th>Giá nhập / sản phẩm</th>
-                    <th>Thành tiền</th>
-                    <th>Thanh toán</th>
-                    <th>Người ghi nhận</th>
-                    <th>Ghi chú</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($expenses as $expense)
-                    @php
-                        $history = $expense->lichSuKho;
-                        $quantity = $history?->so_luong;
-                        $unitPrice = $history?->gia_nhap;
-                        $totalCost = ($quantity !== null && $unitPrice !== null)
-                            ? ((float) $quantity * (float) $unitPrice)
-                            : null;
-                    @endphp
-                    <tr>
-                        <td class="text-12 text-muted">{{ optional($expense->created_at)->format('d/m/Y H:i') ?? '—' }}</td>
-                        <td><strong>{{ optional($expense->nguyenLieu)->ten_nguyen_lieu ?? '—' }}</strong></td>
-                        <td>{{ optional($expense->nguyenLieu)->muc_dich_su_dung ?? '—' }}</td>
-                        <td>{{ $quantity !== null ? number_format((float) $quantity, 2, ',', '.') : '—' }} {{ optional($expense->nguyenLieu)->don_vi_tinh }}</td>
-                        <td class="price-text">{{ $unitPrice !== null ? number_format((float) $unitPrice, 0, ',', '.') . 'đ' : '—' }}</td>
-                        <td class="price-text">{{ $totalCost !== null ? number_format($totalCost, 0, ',', '.') . 'đ' : '—' }}</td>
-                        <td>{{ $expense->phuong_thuc_thanh_toan }}</td>
-                        <td>{{ $expense->nguoiTao->ho_ten ?? '—' }}</td>
-                        <td class="text-muted">{{ $expense->ghi_chu ?: '—' }}</td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="9" class="empty-state">Chưa có khoản chi nào cho ca này.</td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-
-    @if($expenses->hasPages())
-        <div class="card-footer">
-            <div class="pagination-footer">
-                <span class="pagination-info">Hiển thị {{ $expenses->firstItem() }}-{{ $expenses->lastItem() }} / {{ $expenses->total() }} khoản</span>
-                {{ $expenses->appends(request()->query())->links() }}
-            </div>
-        </div>
-    @endif
-</div>
-
-<div class="grid-3 mb-20">
-    <div class="stat-card">
-        <div class="stat-label">Tổng chi (tiền mặt)</div>
-        <div class="stat-value" style="font-size: 20px;">{{ number_format($summary['tong_tien_mat'] ?? 0, 0, ',', '.') }}đ</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">Tổng chi (chuyển khoản)</div>
-        <div class="stat-value" style="font-size: 20px;">{{ number_format($summary['tong_tien_chuyen_khoan'] ?? 0, 0, ',', '.') }}đ</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-label">Tổng chi</div>
-        <div class="stat-value" style="font-size: 20px;">{{ number_format($summary['tong_chi'] ?? 0, 0, ',', '.') }}đ</div>
-    </div>
+<div id="expenses-data-wrap">
+    @include('manager.expenses.partials.data')
 </div>
 @endsection
+
+@push('scripts')
+<script>
+    // ── Polling chi tiêu trong ca: khoản chi mới + tổng kết tự cập nhật, không cần F5 ──
+    (function () {
+        var wrap = document.getElementById('expenses-data-wrap');
+        if (!wrap) return;
+        var INTERVAL = 15000; // 15 giây
+        var inFlight = false;
+
+        function refresh() {
+            if (inFlight || document.hidden) return;
+            inFlight = true;
+            fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-Partial': '1' } })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (data && typeof data.html === 'string') wrap.innerHTML = data.html;
+                })
+                .catch(function () { /* im lặng */ })
+                .finally(function () { inFlight = false; });
+        }
+
+        setInterval(refresh, INTERVAL);
+    })();
+</script>
+@endpush
 
 

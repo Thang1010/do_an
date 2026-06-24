@@ -97,6 +97,29 @@ class InventoryController extends Controller
         ));
     }
 
+    /**
+     * Polling nhẹ: chỉ tính lại số nguyên liệu hết/sắp hết và trả về dải cảnh báo.
+     */
+    public function alertPoll(Request $request)
+    {
+        $currentPurpose = $this->normalizePurposeFilter($request->input('muc_dich_su_dung'));
+
+        $lowCount = DB::query()
+            ->fromSub($this->applyPurposeFilter($this->baseInventoryQuery(), $currentPurpose), 'inventory_balance')
+            ->whereRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) <= 3')
+            ->whereRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) > 0')
+            ->count();
+
+        $hetCount = DB::query()
+            ->fromSub($this->applyPurposeFilter($this->baseInventoryQuery(), $currentPurpose), 'inventory_balance')
+            ->whereRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) <= 0')
+            ->count();
+
+        return response()->json([
+            'html' => view('manager.inventory.partials.stock-alert', compact('hetCount', 'lowCount'))->render(),
+        ]);
+    }
+
     public function import(Request $request)
     {
         $currentPurpose = $this->normalizePurposeFilter($request->input('muc_dich_su_dung'));

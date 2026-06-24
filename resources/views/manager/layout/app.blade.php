@@ -330,29 +330,10 @@
                         </div>
 
                         <div class="notification-dropdown-list">
-                            @forelse($recentNotifications as $notification)
-                                @php
-                                    $data = (array) ($notification->data ?? []);
-                                    $titleRaw = $data['title'] ?? 'Thông báo hệ thống';
-                                    $messageRaw = $data['message'] ?? 'Bạn có thông báo mới.';
-                                    $title = is_array($titleRaw)
-                                        ? implode(', ', array_filter($titleRaw, 'strlen'))
-                                        : (is_scalar($titleRaw) ? (string) $titleRaw : 'Thông báo hệ thống');
-                                    $message = is_array($messageRaw)
-                                        ? implode(', ', array_filter($messageRaw, 'strlen'))
-                                        : (is_scalar($messageRaw) ? (string) $messageRaw : 'Bạn có thông báo mới.');
-                                @endphp
-                                <a href="{{ route('manager.notifications.open', $notification->id) }}"
-                                    class="notification-item {{ $notification->read_at ? '' : 'unread' }}">
-                                    <div class="notification-item-title">{{ $title }}</div>
-                                    <div class="notification-item-message">{{ $message }}</div>
-                                    <div class="notification-item-time">
-                                        {{ optional($notification->created_at)->format('d/m H:i') }}
-                                    </div>
-                                </a>
-                            @empty
-                                <div class="notification-empty">Chưa có thông báo nào.</div>
-                            @endforelse
+                            @include('partials.notification-items', [
+                                'recentNotifications' => $recentNotifications,
+                                'openRoute' => 'manager.notifications.open',
+                            ])
                         </div>
 
                         <div class="notification-dropdown-footer">
@@ -706,6 +687,50 @@
             if (!menu) return;
             menu.classList.toggle('open');
         }
+
+        // ── Polling thông báo: tự cập nhật badge + danh sách, không cần F5 ──
+        (function () {
+            var POLL_URL = '{{ route('manager.notifications.poll') }}';
+            var INTERVAL = 20000; // 20 giây
+            var inFlight = false;
+
+            function updateBadge(count) {
+                var btn = document.getElementById('notif-btn');
+                if (!btn) return;
+                var badge = btn.querySelector('.badge');
+                if (count > 0) {
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'badge';
+                        btn.appendChild(badge);
+                    }
+                    badge.textContent = count > 99 ? 99 : count;
+                } else if (badge) {
+                    badge.remove();
+                }
+            }
+
+            function poll() {
+                if (inFlight || document.hidden) return;
+                // Không cập nhật khi dropdown đang mở để tránh giật nội dung đang đọc
+                var dropdown = document.getElementById('notif-dropdown');
+                if (dropdown && dropdown.classList.contains('open')) return;
+
+                inFlight = true;
+                fetch(POLL_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (data) {
+                        if (!data) return;
+                        updateBadge(data.count || 0);
+                        var list = document.querySelector('#notif-dropdown .notification-dropdown-list');
+                        if (list && typeof data.html === 'string') list.innerHTML = data.html;
+                    })
+                    .catch(function () { /* im lặng, tránh chặn UI */ })
+                    .finally(function () { inFlight = false; });
+            }
+
+            setInterval(poll, INTERVAL);
+        })();
 
         // Confirm delete — shows a centered modal instead of browser confirm()
         (function () {

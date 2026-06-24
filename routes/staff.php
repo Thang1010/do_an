@@ -62,6 +62,7 @@ Route::prefix('staff')->name('staff.')->middleware(['auth', 'role:nhân viên'])
 
     // ── Notifications ────────────────────────────────────────────────
     Route::get('/notifications',             [StaffNotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/notifications/poll',        [StaffNotificationController::class, 'poll'])->name('notifications.poll');
     Route::get('/notifications/{id}/open',   [StaffNotificationController::class, 'open'])->name('notifications.open');
     Route::post('/notifications/read-all',   [StaffNotificationController::class, 'markAllRead'])->name('notifications.read-all');
 

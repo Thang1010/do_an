@@ -21,11 +21,12 @@
 @endsection
 
 @section('content')
+	<script>document.documentElement.classList.add('reveal-on');</script>
 	<main class="py-16">
 
 		<!-- ============ BEST SELLERS: ALL ============ -->
 		<section id="best-sellers" class="max-w-[1680px] mx-auto px-8 sm:px-12 lg:px-20 mb-20 relative">
-			<div class="text-center mb-12">
+			<div class="text-center mb-12 reveal">
 				<h2 class="section-title">Top 10 món bán chạy nhất trong tuần</h2>
 			</div>
 
@@ -39,7 +40,7 @@
 				</button>
 
 				<!-- Product Grid -->
-				<div id="sellers-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+				<div id="sellers-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 reveal-stagger">
 					@if(isset($bestSellers) && $bestSellers->count() > 0)
 						@foreach($bestSellers as $product)
 							<div id="product-{{ Str::slug($product->ten_san_pham) }}" class="product-card cursor-pointer"
@@ -102,7 +103,7 @@
 					alt="Coffee Banner Left" />
 
 				<!-- Center Content -->
-				<div class="flex flex-col items-center justify-center text-center px-8 py-10 lg:py-12">
+				<div class="flex flex-col items-center justify-center text-center px-8 py-10 lg:py-12 reveal">
 					<h2 class="discover-title max-w-xl mb-10">
 						Hãy xem qua những hương vị ngon nhất của chúng tôi!
 					</h2>
@@ -121,13 +122,13 @@
 
 		<!-- ============ TESTIMONIALS ============ -->
 		<section id="testimonials" class="max-w-[1680px] mx-auto px-8 sm:px-12 lg:px-16 mb-20">
-			<div class="text-center mb-12">
+			<div class="text-center mb-12 reveal">
 				<p class="testimonial-subtitle mb-2">Hãy đến và tham gia nào</p>
 				<h2 class="testimonial-title">Khách hàng yêu quý của chúng tôi</h2>
 			</div>
 
 			<div
-				class="flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 md:grid md:grid-cols-3 md:overflow-visible md:snap-none">
+				class="flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 md:grid md:grid-cols-3 md:overflow-visible md:snap-none reveal-stagger">
 				@if(isset($testimonials) && $testimonials->count() > 0)
 					@foreach($testimonials as $review)
 						<div id="testimonial-{{ $review->id }}"
@@ -190,7 +191,7 @@
 					alt="Newsletter Left" />
 
 				<!-- Content -->
-				<div class="flex flex-col justify-center px-8 lg:px-12 py-12 lg:py-10 w-full max-w-2xl mx-auto">
+				<div class="flex flex-col justify-center px-8 lg:px-12 py-12 lg:py-10 w-full max-w-2xl mx-auto reveal">
 					<h2 class="newsletter-title mb-4">
 						Tham gia ngay và nhận ngay ưu đãi giảm giá 15%!
 					</h2>
@@ -235,9 +236,56 @@
 	🥺 Bạn hãy đăng nhập để yêu thích sản phẩm nhé!
 </div>
 
+@push('styles')
 <style>
 #guest-heart-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ===== Scroll reveal: chỉ kích hoạt khi có JS (.reveal-on) để tránh ẩn nội dung khi tắt JS ===== */
+html { scroll-behavior: smooth; }
+
+.reveal-on .reveal {
+	opacity: 0;
+	transform: translateY(36px);
+	transition: opacity .8s cubic-bezier(.22,.61,.36,1), transform .8s cubic-bezier(.22,.61,.36,1);
+	will-change: opacity, transform;
+}
+.reveal-on .reveal.is-visible {
+	opacity: 1;
+	transform: none;
+}
+
+/* Hiệu ứng so le cho các phần tử con (thẻ sản phẩm, đánh giá) */
+.reveal-on .reveal-stagger > * {
+	opacity: 0;
+	transform: translateY(28px);
+	transition: opacity .6s ease-out, transform .6s ease-out;
+	will-change: opacity, transform;
+}
+.reveal-on .reveal-stagger.is-visible > * {
+	opacity: 1;
+	transform: none;
+}
+.reveal-on .reveal-stagger.is-visible > *:nth-child(1) { transition-delay: .05s; }
+.reveal-on .reveal-stagger.is-visible > *:nth-child(2) { transition-delay: .12s; }
+.reveal-on .reveal-stagger.is-visible > *:nth-child(3) { transition-delay: .19s; }
+.reveal-on .reveal-stagger.is-visible > *:nth-child(4) { transition-delay: .26s; }
+.reveal-on .reveal-stagger.is-visible > *:nth-child(5) { transition-delay: .33s; }
+.reveal-on .reveal-stagger.is-visible > *:nth-child(6) { transition-delay: .40s; }
+.reveal-on .reveal-stagger.is-visible > *:nth-child(7) { transition-delay: .47s; }
+.reveal-on .reveal-stagger.is-visible > *:nth-child(n+8) { transition-delay: .54s; }
+
+/* Tôn trọng tùy chọn giảm chuyển động của người dùng */
+@media (prefers-reduced-motion: reduce) {
+	html { scroll-behavior: auto; }
+	.reveal-on .reveal,
+	.reveal-on .reveal-stagger > * {
+		opacity: 1 !important;
+		transform: none !important;
+		transition: none !important;
+	}
+}
 </style>
+@endpush
 
 @push('scripts')
 	<script>
@@ -364,5 +412,28 @@
 				}
 			});
 		});
+
+		// ── Scroll reveal: hiện dần các section khi cuộn tới ──────
+		(function () {
+			var els = document.querySelectorAll('.reveal, .reveal-stagger');
+			if (!els.length) return;
+
+			// Trình duyệt không hỗ trợ IntersectionObserver → hiện hết, không ẩn nội dung.
+			if (!('IntersectionObserver' in window)) {
+				els.forEach(function (el) { el.classList.add('is-visible'); });
+				return;
+			}
+
+			var observer = new IntersectionObserver(function (entries) {
+				entries.forEach(function (entry) {
+					if (entry.isIntersecting) {
+						entry.target.classList.add('is-visible');
+						observer.unobserve(entry.target);
+					}
+				});
+			}, { threshold: 0.15, rootMargin: '0px 0px -10% 0px' });
+
+			els.forEach(function (el) { observer.observe(el); });
+		})();
 	</script>
 @endpush

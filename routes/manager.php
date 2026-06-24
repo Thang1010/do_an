@@ -29,11 +29,13 @@ Route::prefix('manager')->name('manager.')->middleware(['auth', 'role:quản lý
 
     // ── Dashboard & Profile ───────────────────────────────────────────
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/stats-poll', [DashboardController::class, 'statsPoll'])->name('dashboard.stats-poll');
     Route::get('/profile', [ManagerProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ManagerProfileController::class, 'update'])->name('profile.update');
 
     // ── Notifications ─────────────────────────────────────────────────
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/notifications/poll', [NotificationController::class, 'poll'])->name('notifications.poll');
     Route::get('/notifications/{id}/open', [NotificationController::class, 'open'])->name('notifications.open');
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
 
@@ -158,6 +160,7 @@ Route::prefix('manager')->name('manager.')->middleware(['auth', 'role:quản lý
 
     // ── Inventory ─────────────────────────────────────────────────────
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+    Route::get('/inventory/alert-poll', [InventoryController::class, 'alertPoll'])->name('inventory.alert-poll');
     Route::get('/inventory/import', [InventoryController::class, 'import'])->name('inventory.import');
     Route::post('/inventory/import', [InventoryController::class, 'storeImport'])->name('inventory.import.store');
     Route::get('/inventory/export', [InventoryController::class, 'export'])->name('inventory.export');

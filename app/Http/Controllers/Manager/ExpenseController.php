@@ -92,6 +92,13 @@ class ExpenseController extends Controller
             ];
         }
 
+        // Polling: chỉ trả danh sách chi tiêu + tổng kết của ca đang xem để tự cập nhật.
+        if ($request->header('X-Partial')) {
+            return response()->json([
+                'html' => view('manager.expenses.partials.data', compact('expenses', 'summary'))->render(),
+            ]);
+        }
+
         return view('manager.expenses.index', [
             'shiftGroups' => $shiftGroups,
             'selectedShift' => $selectedShift,

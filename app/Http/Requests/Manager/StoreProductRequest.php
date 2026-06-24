@@ -119,6 +119,7 @@ class StoreProductRequest extends FormRequest
             $this->validateDuplicateRecipe($validator);
 
             // Validate sizes
+            $seenHeSoMoi = []; // hệ số giá của các kích cỡ MỚI trong cùng một lần gửi
             foreach ($this->input('sizes', []) as $index => $size) {
                 $kichCoId = (string) ($size['kich_co_id'] ?? '');
 
@@ -133,6 +134,11 @@ class StoreProductRequest extends FormRequest
                     if ($maMoi === '') {
                         $validator->errors()->add("sizes.$index.ma_kich_co_moi", 'Vui lòng nhập mã kích cỡ mới.');
                     }
+
+                    // Hệ số giá phải là duy nhất: khi tạo MỚI một kích cỡ (không trùng tên/mã
+                    // nên không phải đang "sửa" kích cỡ cũ) mà hệ số giá đã tồn tại ở một kích cỡ
+                    // khác → chặn để tránh hai kích cỡ khác nhau cùng một hệ số giá.
+                    $this->validateUniqueHeSoGia($validator, $index, $tenMoi, $maMoi, $size['he_so_gia'] ?? null, $seenHeSoMoi);
                 } else {
                     $selectedId = (int) $kichCoId;
                     if ($selectedId <= 0 || !KichCo::whereKey($selectedId)->exists()) {
@@ -141,6 +147,61 @@ class StoreProductRequest extends FormRequest
                 }
             }
         });
+    }
+
+    /**
+     * Chặn việc tạo MỚI một kích cỡ có hệ số giá đã tồn tại.
+     *
+     * - Nếu tên/mã trùng kích cỡ đã có → coi là "sửa" kích cỡ đó, KHÔNG chặn.
+     * - Nếu là kích cỡ mới hoàn toàn nhưng hệ số giá đã có ở một kích cỡ khác
+     *   (trong CSDL hoặc ở một dòng "khác" khác trong cùng lần gửi) → báo lỗi.
+     */
+    private function validateUniqueHeSoGia(
+        ValidatorInstance $validator,
+        int|string $index,
+        string $tenMoi,
+        string $maMoi,
+        mixed $heSoRaw,
+        array &$seenHeSoMoi
+    ): void {
+        $heSo = is_numeric($heSoRaw) ? (float) $heSoRaw : 1.0;
+        if ($heSo <= 0) {
+            $heSo = 1.0;
+        }
+
+        // Đang "sửa" một kích cỡ đã tồn tại (trùng tên hoặc mã) → bỏ qua kiểm tra hệ số giá.
+        $isEdit = KichCo::query()
+            ->when($tenMoi !== '', fn ($q) => $q->where('ten_kich_co', $tenMoi))
+            ->when($maMoi !== '', fn ($q) => $q->orWhere('ma_kich_co', $maMoi))
+            ->when($tenMoi === '' && $maMoi === '', fn ($q) => $q->whereRaw('1 = 0'))
+            ->exists();
+
+        if ($isEdit) {
+            return;
+        }
+
+        $heSoLabel = rtrim(rtrim(number_format($heSo, 2, '.', ''), '0'), '.');
+
+        // Trùng hệ số giá với một kích cỡ mới khác trong cùng lần gửi.
+        if (isset($seenHeSoMoi[$heSoLabel])) {
+            $validator->errors()->add(
+                "sizes.$index.he_so_gia",
+                "Hệ số giá {$heSoLabel} bị trùng với một kích cỡ mới khác. Mỗi kích cỡ phải có hệ số giá riêng."
+            );
+            return;
+        }
+        $seenHeSoMoi[$heSoLabel] = true;
+
+        // Trùng hệ số giá với một kích cỡ đã có trong CSDL.
+        $conflict = KichCo::whereRaw('ABS(he_so_gia - ?) < 0.0001', [$heSo])->first();
+        if ($conflict) {
+            $maTrung = trim((string) ($conflict->ma_kich_co ?? ''));
+            $maPhanLabel = $maTrung !== '' ? " (mã {$maTrung})" : '';
+            $validator->errors()->add(
+                "sizes.$index.he_so_gia",
+                "Đã có kích cỡ \"{$conflict->ten_kich_co}\"{$maPhanLabel} với hệ số giá {$heSoLabel}. Vui lòng dùng hệ số giá khác."
+            );
+        }
     }
 
     /**

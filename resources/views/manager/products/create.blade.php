@@ -188,9 +188,9 @@
                                 <div class="form-group size-field-flex">
                                     <div class="flex-1">
                                         <label class="form-label">Hệ số giá</label>
-                                        <input type="number" name="sizes[{{ $i }}][he_so_gia]" class="form-control hs-gia-input"
+                                        <input type="number" name="sizes[{{ $i }}][he_so_gia]" class="form-control hs-gia-input @error("sizes.$i.he_so_gia") is-invalid @enderror"
                                                step="0.1" min="1" placeholder="1.0" value="{{ $size['he_so_gia'] ?? 1 }}">
-                                        @error("sizes.$i.he_so_gia")<div class="form-error">{{ $message }}</div>@enderror
+                                        {{-- Lỗi hệ số giá chỉ làm đỏ viền ô; nội dung lỗi hiển thị ở khối thông báo đầu trang. --}}
                                     </div>
                                     <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.size-row').remove()">Xóa</button>
                                 </div>

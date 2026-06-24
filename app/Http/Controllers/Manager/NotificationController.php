@@ -57,4 +57,25 @@ class NotificationController extends Controller
 
         return back()->with('success', 'Đã đánh dấu tất cả thông báo là đã đọc.');
     }
+
+    /**
+     * Trả JSON cho polling: số thông báo chưa đọc + HTML danh sách gần đây.
+     */
+    public function poll(Request $request)
+    {
+        $user = $request->user();
+
+        $recentNotifications = $user->notifications()->latest()->limit(8)->get();
+        $count = $user->unreadNotifications()->count();
+
+        $html = view('partials.notification-items', [
+            'recentNotifications' => $recentNotifications,
+            'openRoute' => 'manager.notifications.open',
+        ])->render();
+
+        return response()->json([
+            'count' => $count,
+            'html' => $html,
+        ]);
+    }
 }

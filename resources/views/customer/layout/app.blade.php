@@ -16,6 +16,44 @@
 	<link rel="stylesheet" href="{{ asset('css/home.css') }}">
 	<link rel="stylesheet" href="{{ asset('css/chatbot-fab.css') }}">
 
+	@verbatim
+	<style>
+		/* ===== Hiệu ứng chuyển trang mượt mà ===== */
+		/* Trình duyệt hỗ trợ View Transitions (Chrome/Edge): tự cross-fade khi điều hướng */
+		@view-transition { navigation: auto; }
+
+		::view-transition-old(root) {
+			animation: vt-fade-out .15s ease both;
+		}
+		::view-transition-new(root) {
+			animation: vt-fade-in .25s cubic-bezier(.22, .61, .36, 1) both;
+		}
+		@keyframes vt-fade-out {
+			to { opacity: 0; }
+		}
+		@keyframes vt-fade-in {
+			from { opacity: 0; transform: translateY(10px); }
+			to   { opacity: 1; transform: translateY(0); }
+		}
+
+		/* Fallback cho trình duyệt CHƯA hỗ trợ (Firefox/Safari): fade-in nhẹ khi tải trang */
+		@supports not (view-transition-name: none) {
+			@keyframes page-enter {
+				from { opacity: 0; transform: translateY(8px); }
+				to   { opacity: 1; transform: translateY(0); }
+			}
+			body { animation: page-enter .3s ease both; }
+		}
+
+		/* Tôn trọng tùy chọn giảm chuyển động */
+		@media (prefers-reduced-motion: reduce) {
+			::view-transition-old(root),
+			::view-transition-new(root),
+			body { animation: none !important; }
+		}
+	</style>
+	@endverbatim
+
 	@stack('styles')
 	@yield('head')
 </head>

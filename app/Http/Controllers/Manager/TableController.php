@@ -79,6 +79,14 @@ class TableController extends Controller
 
         $tables = $query->orderBy('so_ban')->paginate(20)->withQueryString();
 
+        // Polling: chỉ trả lưới bàn (bỏ qua tạo QR tốn kém) để tự cập nhật trạng thái.
+        // Dùng header X-Partial để URL sạch, không rò 'partial' vào link phân trang.
+        if ($request->header('X-Partial')) {
+            return response()->json([
+                'html' => view('manager.tables.partials.grid', compact('tables'))->render(),
+            ]);
+        }
+
         // QR gọi món cho toàn bộ bàn (không phân trang) để in ngay trong modal.
         $qrTables = BanAn::where('trang_thai', '!=', 'ngưng sử dụng')
             ->orderBy('so_ban')

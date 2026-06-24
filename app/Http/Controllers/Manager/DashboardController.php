@@ -100,4 +100,47 @@ class DashboardController extends Controller
             'topProducts',    'maxSold'
         ));
     }
+
+    /**
+     * Polling nhẹ: chỉ tính lại 4 thẻ thống kê đầu trang (bỏ qua biểu đồ, top SP).
+     */
+    public function statsPoll()
+    {
+        $today = Carbon::today();
+
+        $doanhThuHomNay = DonHang::join('chi_tiet_don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')
+            ->whereDate('don_hang.created_at', $today)
+            ->sum('chi_tiet_don_hang.tong_tien');
+
+        $doanhThuHomQua = DonHang::join('chi_tiet_don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')
+            ->whereDate('don_hang.created_at', $today->copy()->subDay())
+            ->sum('chi_tiet_don_hang.tong_tien');
+
+        $donHangHomNay = DonHang::whereDate('created_at', $today)->count();
+        $donHangHomQua = DonHang::whereDate('created_at', $today->copy()->subDay())->count();
+
+        $khachHangMoi = NguoiDung::whereDate('created_at', $today)
+            ->where('vai_tro', 'khách hàng')
+            ->count();
+
+        $balanceExpr = TransactionType::stockBalanceExpression('lich_su_kho');
+        $nguyenLieuSapHet = NguyenLieu::query()
+            ->dangSuDung()
+            ->leftJoin('lich_su_kho', 'lich_su_kho.nguyen_lieu_id', '=', 'nguyen_lieu.id')
+            ->select('nguyen_lieu.id')
+            ->selectRaw("COALESCE({$balanceExpr}, 0) as so_luong")
+            ->selectRaw('(SELECT MAX(ctsp.so_luong_can) FROM cong_thuc_san_pham ctsp WHERE ctsp.nguyen_lieu_id = nguyen_lieu.id) as max_tieu_hao')
+            ->groupBy('nguyen_lieu.id')
+            ->havingRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) <= 3')
+            ->get()
+            ->count();
+
+        return response()->json([
+            'html' => view('manager.dashboard.partials.stat-cards', compact(
+                'doanhThuHomNay', 'doanhThuHomQua',
+                'donHangHomNay',  'donHangHomQua',
+                'khachHangMoi',   'nguyenLieuSapHet'
+            ))->render(),
+        ]);
+    }
 }

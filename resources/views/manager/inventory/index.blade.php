@@ -54,21 +54,9 @@
 </div>
 
 
-@if($hetCount > 0 || $lowCount > 0)
-<div class="alert alert-warning alert-row {{ $hetCount > 0 ? 'alert-danger-strong' : '' }}">
-    <span>
-        @if($hetCount > 0)
-            Có <strong>{{ $hetCount }}</strong> nguyên liệu <strong>đã hết hàng</strong> (tồn kho = 0).
-        @endif
-        @if($lowCount > 0)
-            Có <strong>{{ $lowCount }}</strong> nguyên liệu <strong>sắp hết</strong> (chỉ còn đủ làm ≤ 3 cốc/sản phẩm).
-        @endif
-        — cần nhập kho ngay!
-    </span>
-    <button onclick="document.getElementById('low-stock-section').scrollIntoView({behavior:'smooth'})"
-            class="btn {{ $hetCount > 0 ? 'btn-danger' : 'btn-warning' }} btn-sm">Xem ngay</button>
+<div id="stock-alert-wrap">
+    @include('manager.inventory.partials.stock-alert')
 </div>
-@endif
 
 <div class="tab-card mb-20">
     <div class="tab-list tab-list-inner">
@@ -650,6 +638,31 @@
 
 @push('scripts')
 <script>
+    // ── Polling cảnh báo tồn kho: tự cập nhật dải hết/sắp hết, không cần F5 ──
+    (function () {
+        var wrap = document.getElementById('stock-alert-wrap');
+        if (!wrap) return;
+        var INTERVAL = 20000; // 20 giây
+        var inFlight = false;
+        var purpose = new URLSearchParams(window.location.search).get('muc_dich_su_dung') || '';
+        var POLL_URL = "{{ route('manager.inventory.alert-poll') }}"
+            + (purpose ? ('?muc_dich_su_dung=' + encodeURIComponent(purpose)) : '');
+
+        function refresh() {
+            if (inFlight || document.hidden) return;
+            inFlight = true;
+            fetch(POLL_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (data && typeof data.html === 'string') wrap.innerHTML = data.html;
+                })
+                .catch(function () { /* im lặng */ })
+                .finally(function () { inFlight = false; });
+        }
+
+        setInterval(refresh, INTERVAL);
+    })();
+
     // ── Nhập/Xuất kho nhiều nguyên liệu (modal) ──
     function syncBatchUnit(sel) {
         const opt = sel.options[sel.selectedIndex];

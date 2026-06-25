@@ -46,7 +46,7 @@ class TableController extends Controller
 
         $tables = BanAn::query()
             ->with(['donHang' => function ($q) {
-                $q->with(['nguoiDung', 'nhanVien']);
+                $q->with(['nguoiDung', 'nhanVien', 'chiTietDonHang']);
             }])
             ->orderBy('so_ban')
             ->get();
@@ -141,6 +141,17 @@ class TableController extends Controller
         // If there are session items, the raw subtotal increases, so the final total is raw subtotal - discount
         $displayTotal = max(0, $calcTotal - $discountAmount);
 
+        // Đơn khách tự gọi (QR/tài khoản) đã thanh toán nhưng chưa được đánh dấu phục vụ
+        // → hiển thị riêng phần "Món khách vừa gọi" nổi bật trong chi tiết bàn.
+        $newPaidOrders = collect();
+        if ($selectedTable) {
+            $newPaidOrders = $selectedTable->donHang()
+                ->khachChuaPhucVu()
+                ->with(['chiTietDonHang.kichCo', 'nguoiDung'])
+                ->orderBy('created_at')
+                ->get();
+        }
+
                 // Store info for payment
                 $storeId = $user->cua_hang_id;
                 $store = CuaHang::query()
@@ -193,7 +204,7 @@ class TableController extends Controller
                 ))->render(),
                 'detail' => view('staff.tables.partials.detail-panel', compact(
                     'selectedTable', 'selectedOrder', 'selectedItems', 'store', 'availableVouchers', 'selectedVoucherId',
-                    'selectedTableHasUnpaid', 'displayTotal'
+                    'selectedTableHasUnpaid', 'displayTotal', 'newPaidOrders'
                 ))->render(),
             ]);
         }
@@ -202,7 +213,7 @@ class TableController extends Controller
             'tables', 'currentShift', 'currentAttendance', 'ingredients',
             'selectedTable', 'selectedOrder', 'selectedItems', 'store', 'menuCategories',
             'menuProducts', 'selectedCategoryId', 'selectedProductId', 'selectedVoucherId',
-            'availableVouchers', 'assignOrder', 'selectedTableHasUnpaid', 'displayTotal'
+            'availableVouchers', 'assignOrder', 'selectedTableHasUnpaid', 'displayTotal', 'newPaidOrders'
         ));
     }
 
@@ -225,20 +236,18 @@ class TableController extends Controller
     {
         $table = BanAn::findOrFail($id);
 
-        DB::transaction(function () use ($table): void {
-            $unpaidOrders = DonHang::where('ban_an_id', $table->id)
-                ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
-                ->get();
+        // Trả bàn = khách đã rời đi → chỉ đưa bàn về trống.
+        // KHÔNG xóa đơn. Còn đơn chưa thanh toán thì phải thanh toán (hoặc
+        // dùng "Xóa thông tin bàn") trước, nên ở đây chặn lại.
+        $hasUnpaid = DonHang::where('ban_an_id', $table->id)
+            ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
+            ->exists();
 
-            foreach ($unpaidOrders as $order) {
-                $this->inventoryService->restoreIngredientsForOrder($order);
-                ThanhToan::where('don_hang_id', $order->id)->delete();
-                $order->chiTietDonHang()->delete();
-                $order->delete();
-            }
+        if ($hasUnpaid) {
+            return back()->with('error', "Bàn {$table->so_ban} còn đơn chưa thanh toán. Vui lòng thanh toán hoặc dùng \"Xóa thông tin bàn\" trước khi trả bàn.");
+        }
 
-            $table->update(['trang_thai' => 'trống']);
-        });
+        $table->update(['trang_thai' => 'trống']);
 
         return redirect()
             ->route('staff.tables.index')
@@ -723,6 +732,24 @@ class TableController extends Controller
 
         return redirect()
             ->route('staff.tables.index', ['table' => $table->id]);
+    }
+
+    /**
+     * Đánh dấu một đơn khách tự gọi là "đã phục vụ" → tắt báo món mới ở bàn.
+     */
+    public function markServed(int $tableId, int $orderId)
+    {
+        $order = DonHang::where('id', $orderId)
+            ->where('ban_an_id', $tableId)
+            ->firstOrFail();
+
+        if (is_null($order->da_xem_luc)) {
+            $order->update(['da_xem_luc' => now()]);
+        }
+
+        return redirect()
+            ->route('staff.tables.index', ['table' => $tableId])
+            ->with('success', 'Đã đánh dấu đã phục vụ đơn khách.');
     }
 
     // ─── Helpers ───

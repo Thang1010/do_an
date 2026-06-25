@@ -78,16 +78,7 @@
             </tbody>
         </table>
     </div>
-    @if(isset($products) && $products->hasPages())
-    <div class="card-footer">
-        <div class="pagination-footer">
-            <span class="pagination-info">
-                Hiển thị {{ $products->firstItem() }}–{{ $products->lastItem() }} / {{ $products->total() }} sản phẩm
-            </span>
-            {{ $products->links() }}
-        </div>
-    </div>
-    @endif
+    @include('manager.partials.pager', ['paginator' => $products, 'label' => 'sản phẩm'])
 </div>
 
 @endsection

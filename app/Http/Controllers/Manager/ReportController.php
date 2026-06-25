@@ -19,7 +19,47 @@ class ReportController extends Controller
      */
     public function revenue(Request $request)
     {
+        if ($this->invalidDateRange($request)) {
+            return redirect()->route('manager.reports.revenue')
+                ->with('error', 'Ngày kết thúc không được nhỏ hơn ngày bắt đầu.');
+        }
+
+        if ($this->exceedsSixMonths($request)) {
+            return redirect()->route('manager.reports.revenue')
+                ->with('error', 'Khoảng thời gian lọc không được vượt quá 6 tháng.');
+        }
+
         return $this->buildReport($request, 'revenue');
+    }
+
+    /**
+     * Người dùng chọn ngày kết thúc nhỏ hơn ngày bắt đầu (chỉ xét khi chọn cả 2 mốc).
+     */
+    private function invalidDateRange(Request $request): bool
+    {
+        if (! ($request->filled('from') && $request->filled('to'))) {
+            return false;
+        }
+
+        $from = Carbon::parse($request->from)->startOfDay();
+        $to = Carbon::parse($request->to)->endOfDay();
+
+        return $to->lt($from);
+    }
+
+    /**
+     * Khoảng lọc from→to có vượt quá 6 tháng không (chỉ xét khi người dùng tự chọn cả 2 mốc).
+     */
+    private function exceedsSixMonths(Request $request): bool
+    {
+        if (! ($request->filled('from') && $request->filled('to'))) {
+            return false;
+        }
+
+        $from = Carbon::parse($request->from)->startOfDay();
+        $to = Carbon::parse($request->to)->endOfDay();
+
+        return $from->copy()->addMonths(6)->lt($to);
     }
 
 
@@ -81,6 +121,16 @@ class ReportController extends Controller
     }
     public function exportRevenueExcel(Request $request)
     {
+        if ($this->invalidDateRange($request)) {
+            return redirect()->route('manager.reports.revenue')
+                ->with('error', 'Ngày kết thúc không được nhỏ hơn ngày bắt đầu.');
+        }
+
+        if ($this->exceedsSixMonths($request)) {
+            return redirect()->route('manager.reports.revenue')
+                ->with('error', 'Khoảng thời gian lọc không được vượt quá 6 tháng.');
+        }
+
         [$from, $to] = $this->resolveDateRange($request);
 
         $revenueByDay = DonHang::join('chi_tiet_don_hang', 'don_hang.id', '=', 'chi_tiet_don_hang.don_hang_id')

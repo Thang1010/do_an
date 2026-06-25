@@ -96,6 +96,13 @@
                             </div>
                             @error('nhiet_do')<div class="form-error">{{ $message }}</div>@enderror
                         </div>
+                        <div class="form-group form-group-flat">
+                            <label class="form-label">Sản phẩm nổi bật</label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 8px;">
+                                <input type="checkbox" name="noi_bat" value="1" {{ old('noi_bat', $product->noi_bat ?? 0) ? 'checked' : '' }}>
+                                Đánh dấu nổi bật (hiện badge & ưu tiên hiển thị cho khách)
+                            </label>
+                        </div>
                     </div>
 
                     <div class="form-group mt-3" style="margin-top: 15px;">

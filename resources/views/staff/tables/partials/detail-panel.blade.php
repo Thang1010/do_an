@@ -1,4 +1,40 @@
 @if(isset($selectedTable) || isset($assignOrder))
+    @php $newPaidOrders = $newPaidOrders ?? collect(); @endphp
+    @if(isset($selectedTable) && $newPaidOrders->count() > 0)
+        <div class="new-orders-block">
+            <div class="new-orders-block__title">
+                🔔 Món khách vừa gọi thêm (đã thanh toán) — cần làm &amp; mang ra
+            </div>
+            @foreach($newPaidOrders as $idx => $order)
+                <div class="new-order-batch">
+                    <div class="new-order-batch__head">
+                        <span class="new-order-batch__label">
+                            @php $who = $order->nguoiDung?->hoSoKhachHang?->ho_ten ?? $order->nguoiDung?->email; @endphp
+                            Đợt {{ $idx + 1 }} · {{ \Carbon\Carbon::parse($order->created_at)->format('H:i') }}
+                            · {{ $who ? 'TK: ' . $who : 'Khách QR' }}
+                        </span>
+                        <span class="new-order-batch__tag">MỚI</span>
+                    </div>
+                    <ul class="new-order-batch__items">
+                        @foreach($order->chiTietDonHang as $ct)
+                            <li>
+                                <span class="new-order-batch__qty">x{{ $ct->so_luong }}</span>
+                                {{ $ct->ten_san_pham }}
+                                @if($ct->ten_kich_co) <em>({{ $ct->ten_kich_co }})</em> @endif
+                                @if($ct->ghi_chu_mon)
+                                    <span class="new-order-batch__note">— {{ $ct->ghi_chu_mon }}</span>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                    <form method="POST" action="{{ route('staff.tables.order.served', [$selectedTable->id, $order->id]) }}">
+                        @csrf @method('PATCH')
+                        <button type="submit" class="btn btn-primary btn-sm new-order-batch__done">Đã phục vụ</button>
+                    </form>
+                </div>
+            @endforeach
+        </div>
+    @endif
     <div class="card">
         <div class="card-header" style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
             <div>

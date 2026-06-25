@@ -87,14 +87,7 @@
             </tbody>
         </table>
     </div>
-    @if(isset($customers) && method_exists($customers,'hasPages') && $customers->hasPages())
-    <div class="card-footer">
-        <div class="pagination-footer">
-            <span class="text-sm text-muted">Hiển thị {{ $customers->firstItem() }}–{{ $customers->lastItem() }} / {{ $customers->total() }}</span>
-            {{ $customers->appends(request()->query())->links() }}
-        </div>
-    </div>
-    @endif
+    @include('manager.partials.pager', ['paginator' => $customers, 'label' => 'khách hàng'])
 </div>
 
 <div class="modal-backdrop" id="create-customer-modal" data-auto-open="{{ ($errors->any() && old('from') === 'customers') ? '1' : '0' }}">

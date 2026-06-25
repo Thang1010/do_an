@@ -45,7 +45,7 @@ class UserController extends Controller
             $query->where('trang_thai', $map[$request->trang_thai] ?? $request->trang_thai);
         }
 
-        $customers = $query->latest()->paginate(20)->withQueryString();
+        $customers = $query->latest()->paginate(10)->withQueryString();
 
         $totalCustomersQuery = NguoiDung::query()->where('vai_tro', 'khách hàng');
         $this->applyStoreScope($totalCustomersQuery);
@@ -74,7 +74,7 @@ class UserController extends Controller
             $query->where('trang_thai', $map[$request->trang_thai] ?? $request->trang_thai);
         }
 
-        $staffList = $query->latest()->paginate(20)->withQueryString();
+        $staffList = $query->latest()->paginate(10)->withQueryString();
         $totalStaffQuery = NguoiDung::query()->where('vai_tro', 'nhân viên');
         $this->applyStoreScope($totalStaffQuery);
         $totalStaff = $totalStaffQuery->count();
@@ -116,7 +116,7 @@ class UserController extends Controller
 
         $admins = $query->orderByRaw("CASE WHEN vai_tro = 'chủ cửa hàng' THEN 1 ELSE 2 END")
             ->latest()
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
         $totalAdminsQuery = NguoiDung::query()->whereIn('vai_tro', ['quản lý', 'chủ cửa hàng']);
         $this->applyStoreScope($totalAdminsQuery);
@@ -275,7 +275,7 @@ class UserController extends Controller
     public function pendingApprovals(Request $request)
     {
         $query = $this->buildPendingApprovalQuery($request);
-        $pendingUsers = $query->latest('created_at')->paginate(20)->withQueryString();
+        $pendingUsers = $query->latest('created_at')->paginate(10)->withQueryString();
 
         $pendingCount = (clone $this->buildPendingApprovalQuery($request))->count();
 

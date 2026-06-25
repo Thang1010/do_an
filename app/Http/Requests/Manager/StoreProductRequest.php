@@ -50,6 +50,7 @@ class StoreProductRequest extends FormRequest
             'gia_khuyen_mai'            => 'nullable|numeric|min:0',
             'trang_thai_ban'            => 'required|in:dang_ban,ngung_ban',
             'co_cong_thuc'              => 'nullable|in:0,1',
+            'noi_bat'                   => 'nullable|in:0,1',
             'nhiet_do'                  => 'nullable|array',
             'nhiet_do.*'                => 'in:nóng,lạnh',
             'anh_chinh'                 => 'nullable|mimes:' . implode(',', $this->supportedImageExtensions()) . '|max:5120',

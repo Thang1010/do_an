@@ -84,16 +84,7 @@
         </table>
     </div>
 
-    @if($positions->hasPages())
-    <div class="card-footer">
-        <div class="pagination-footer">
-            <span class="pagination-info">
-                Hiển thị {{ $positions->firstItem() }}-{{ $positions->lastItem() }} / {{ $positions->total() }} chức vụ
-            </span>
-            {{ $positions->links() }}
-        </div>
-    </div>
-    @endif
+    @include('manager.partials.pager', ['paginator' => $positions, 'label' => 'chức vụ'])
 </div>
 
 @endsection

@@ -23,10 +23,12 @@ class DonHang extends Model
         'voucher_nguoi_dung_id',
         'email_khach_hang',
         'da_giao_luc',
+        'da_xem_luc',
     ];
 
     protected $casts = [
         'da_giao_luc' => 'datetime',
+        'da_xem_luc' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -189,6 +191,33 @@ class DonHang extends Model
     public function scopeWhereLoaiDon($query, string $loai)
     {
         return $query->whereHas('chiTietDonHang', fn($q) => $q->where('loai_don', $loai));
+    }
+
+    /**
+     * Đơn do KHÁCH tự gọi (QR/tài khoản, nhan_vien_id null), đã thanh toán,
+     * và CHƯA được nhân viên đánh dấu "đã phục vụ" → cần làm/mang ra.
+     */
+    public function scopeKhachChuaPhucVu($query)
+    {
+        return $query->whereNull('nhan_vien_id')
+            ->whereNull('da_xem_luc')
+            ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'đã thanh toán'));
+    }
+
+    /**
+     * Kiểm tra trên instance (dùng khi đã eager-load chiTietDonHang để tránh N+1).
+     */
+    public function laMonKhachMoi(): bool
+    {
+        if (!is_null($this->nhan_vien_id) || !is_null($this->da_xem_luc)) {
+            return false;
+        }
+
+        $items = $this->relationLoaded('chiTietDonHang')
+            ? $this->chiTietDonHang
+            : $this->chiTietDonHang()->get();
+
+        return $items->contains(fn($ct) => $ct->trang_thai_thanh_toan === 'đã thanh toán');
     }
 
     /**

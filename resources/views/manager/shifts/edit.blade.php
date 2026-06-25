@@ -108,14 +108,7 @@
                 <div class="form-grid-2">
                     <div class="form-group">
                         <label class="form-label">Giờ bắt đầu <span>*</span></label>
-                        <div class="time-spin-wrap" data-time-spin>
-                            <div class="time-spin-fields">
-                                <input type="number" min="0" max="23" step="1" class="form-control time-spin-input" data-time-hour placeholder="HH" autocomplete="off">
-                                <span class="time-spin-separator">:</span>
-                                <input type="number" min="0" max="59" step="1" class="form-control time-spin-input" data-time-minute placeholder="mm" autocomplete="off">
-                            </div>
-                            <input type="hidden" name="gio_bat_dau" value="{{ $shiftStartValue }}" data-time-hidden>
-                        </div>
+                        <input type="time" name="gio_bat_dau" class="form-control" value="{{ $shiftStartValue }}" required>
                         @error('gio_bat_dau')
                             <div class="form-error">{{ $message }}</div>
                         @enderror
@@ -123,14 +116,7 @@
 
                     <div class="form-group">
                         <label class="form-label">Giờ kết thúc <span>*</span></label>
-                        <div class="time-spin-wrap" data-time-spin>
-                            <div class="time-spin-fields">
-                                <input type="number" min="0" max="23" step="1" class="form-control time-spin-input" data-time-hour placeholder="HH" autocomplete="off">
-                                <span class="time-spin-separator">:</span>
-                                <input type="number" min="0" max="59" step="1" class="form-control time-spin-input" data-time-minute placeholder="mm" autocomplete="off">
-                            </div>
-                            <input type="hidden" name="gio_ket_thuc" value="{{ $shiftEndValue }}" data-time-hidden>
-                        </div>
+                        <input type="time" name="gio_ket_thuc" class="form-control" value="{{ $shiftEndValue }}" required>
                         @error('gio_ket_thuc')
                             <div class="form-error">{{ $message }}</div>
                         @enderror
@@ -170,10 +156,6 @@
 
 @push('styles')
 <style>
-.time-spin-wrap { max-width: 220px; }
-.time-spin-fields { display: flex; align-items: center; gap: 8px; }
-.time-spin-input { max-width: 88px; text-align: center; padding-left: 8px; padding-right: 8px; }
-.time-spin-separator { font-weight: 700; color: var(--text-dark); font-size: 16px; }
 
 .role-group { border: 1px solid #edf2f7; border-radius: 8px; margin-bottom: 10px; }
 .role-group > summary {
@@ -205,50 +187,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const shiftId = form.dataset.shiftId;
     let oldSelected = [];
     try { oldSelected = JSON.parse(form.dataset.oldSelected || '[]').map(String); } catch (e) { oldSelected = []; }
-
-    // ── Time spinner ──
-    const parsePart = (rawValue, min, max) => {
-        if (rawValue === null || rawValue === undefined || String(rawValue).trim() === '') return null;
-        const parsed = Number.parseInt(String(rawValue), 10);
-        if (Number.isNaN(parsed)) return null;
-        return Math.min(max, Math.max(min, parsed));
-    };
-
-    Array.from(document.querySelectorAll('[data-time-spin]')).forEach((container) => {
-        const hourInput = container.querySelector('[data-time-hour]');
-        const minuteInput = container.querySelector('[data-time-minute]');
-        const hiddenInput = container.querySelector('[data-time-hidden]');
-        if (!hourInput || !minuteInput || !hiddenInput) return;
-
-        const applyHiddenToVisible = () => {
-            const matched = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(hiddenInput.value || '').trim());
-            if (!matched) return;
-            hourInput.value = matched[1];
-            minuteInput.value = matched[2];
-        };
-
-        const syncVisibleToHidden = () => {
-            const hourPart = parsePart(hourInput.value, 0, 23);
-            const minutePart = parsePart(minuteInput.value, 0, 59);
-            if (hourPart === null && minutePart === null) {
-                hiddenInput.value = '';
-                return;
-            }
-            const hh = String(hourPart ?? 0).padStart(2, '0');
-            const mm = String(minutePart ?? 0).padStart(2, '0');
-            hourInput.value = hh;
-            minuteInput.value = mm;
-            hiddenInput.value = `${hh}:${mm}`;
-        };
-
-        applyHiddenToVisible();
-        syncVisibleToHidden();
-
-        ['input', 'change', 'blur'].forEach((eventName) => {
-            hourInput.addEventListener(eventName, syncVisibleToHidden);
-            minuteInput.addEventListener(eventName, syncVisibleToHidden);
-        });
-    });
 
     // ── Lấy danh sách nhân sự ──
     function getValues() {

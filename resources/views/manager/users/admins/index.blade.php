@@ -107,14 +107,7 @@
         </table>
     </div>
 
-    @if(isset($admins) && method_exists($admins, 'hasPages') && $admins->hasPages())
-    <div class="card-footer">
-        <div class="pagination-footer">
-            <span class="text-sm text-muted">Hiển thị {{ $admins->firstItem() }}–{{ $admins->lastItem() }} / {{ $admins->total() }}</span>
-            {{ $admins->appends(request()->query())->links() }}
-        </div>
-    </div>
-    @endif
+    @include('manager.partials.pager', ['paginator' => $admins, 'label' => 'tài khoản'])
 </div>
 
 <div class="modal-backdrop" id="create-admin-modal" data-auto-open="{{ ($errors->any() && old('from') === 'admins') ? '1' : '0' }}">

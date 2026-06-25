@@ -62,15 +62,6 @@
         </table>
     </div>
 
-    @if(isset($notifications) && method_exists($notifications, 'hasPages') && $notifications->hasPages())
-    <div class="card-footer">
-        <div class="pagination-footer">
-            <span class="pagination-info">
-                Hiển thị {{ $notifications->firstItem() }}-{{ $notifications->lastItem() }} / {{ $notifications->total() }} thông báo
-            </span>
-            {{ $notifications->links() }}
-        </div>
-    </div>
-    @endif
+    @include('manager.partials.pager', ['paginator' => $notifications, 'label' => 'thông báo'])
 </div>
 @endsection

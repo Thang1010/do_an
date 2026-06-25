@@ -45,17 +45,9 @@ class ExpenseController extends Controller
         } elseif ($filterDate !== '') {
             $allGroupIds = CaLamViec::whereDate('ngay_lam', $filterDate)->pluck('id');
         } else {
-            $selectedShift = $this->resolveSelectedShift($shiftGroups, null);
-            $selectedShiftId = $selectedShift?->id;
-            
-            if ($selectedShiftId) {
-                $shift = CaLamViec::find($selectedShiftId);
-                $allGroupIds = $shift ? CaLamViec::where('ngay_lam', $shift->ngay_lam)
-                    ->where('ten_ca', $shift->ten_ca)
-                    ->where('gio_bat_dau', $shift->gio_bat_dau)
-                    ->where('gio_ket_thuc', $shift->gio_ket_thuc)
-                    ->pluck('id') : collect([$selectedShiftId]);
-            }
+            // Mặc định khi mới vào trang: lọc theo ngày hiện tại
+            $filterDate = now()->toDateString();
+            $allGroupIds = CaLamViec::whereDate('ngay_lam', $filterDate)->pluck('id');
         }
 
         $expenses = ChiTieu::query()
@@ -64,7 +56,7 @@ class ExpenseController extends Controller
                 $q->whereIn('chi_tieu.ca_lam_viec_id', $allGroupIds);
             })
             ->latest('created_at')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         $summary = [

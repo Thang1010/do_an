@@ -89,14 +89,7 @@
         </table>
     </div>
 
-    @if($requests->hasPages())
-    <div class="card-footer">
-        <div class="pagination-footer">
-            <span class="pagination-info">Hiển thị {{ $requests->firstItem() }}-{{ $requests->lastItem() }} / {{ $requests->total() }} yêu cầu</span>
-            {{ $requests->links() }}
-        </div>
-    </div>
-    @endif
+    @include('manager.partials.pager', ['paginator' => $requests, 'label' => 'yêu cầu'])
 </div>
 @endsection
 

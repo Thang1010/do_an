@@ -33,7 +33,7 @@ class IngredientController extends Controller
                 $query->where('muc_dich_su_dung', $purpose);
             })
             ->orderBy('ten_nguyen_lieu')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return view('manager.ingredients.index', [
@@ -183,7 +183,7 @@ class IngredientController extends Controller
             $this->applyStoreScopeToRequests($query);
         }
 
-        $requests = $query->latest('created_at')->paginate(20)->withQueryString();
+        $requests = $query->latest('created_at')->paginate(10)->withQueryString();
 
         return view('manager.ingredients.requests.index', [
             'requests' => $requests,

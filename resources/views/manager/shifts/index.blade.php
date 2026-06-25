@@ -115,16 +115,7 @@
 		</table>
 	</div>
 
-	@if(isset($shifts) && method_exists($shifts, 'hasPages') && $shifts->hasPages())
-	<div class="card-footer">
-		<div class="pagination-footer">
-			<span class="pagination-info">
-				Hiển thị {{ $shifts->firstItem() }}-{{ $shifts->lastItem() }} / {{ $shifts->total() }} ca làm
-			</span>
-			{{ $shifts->links() }}
-		</div>
-	</div>
-	@endif
+	@include('manager.partials.pager', ['paginator' => $shifts, 'label' => 'ca làm'])
 </div>
 
 @endsection

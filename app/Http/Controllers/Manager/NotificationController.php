@@ -32,7 +32,7 @@ class NotificationController extends Controller
         $notifications = $request->user()
             ->notifications()
             ->latest()
-            ->paginate(20);
+            ->paginate(10);
 
         return view('manager.notifications.index', compact('notifications'));
     }

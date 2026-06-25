@@ -49,7 +49,7 @@ class InventoryController extends Controller
                 ELSE 2 
             END")
             ->orderBy('nguyen_lieu.ten_nguyen_lieu')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         // "Sắp hết" = với tồn kho hiện tại chỉ làm được <= 3 cốc/sản phẩm (và > 0).
@@ -66,12 +66,12 @@ class InventoryController extends Controller
 
         $importLog = $this->buildHistoryQuery($request, 'import')
             ->latest('created_at')
-            ->paginate(15, ['*'], 'import_page')
+            ->paginate(10, ['*'], 'import_page')
             ->withQueryString();
 
         $exportLog = $this->buildHistoryQuery($request, 'export')
             ->latest('created_at')
-            ->paginate(15, ['*'], 'export_page')
+            ->paginate(10, ['*'], 'export_page')
             ->withQueryString();
 
         $nguyenLieus = NguyenLieu::query()->dangSuDung()->orderBy('ten_nguyen_lieu')->get();
@@ -347,7 +347,7 @@ class InventoryController extends Controller
             'nguoi_tao_id' => Auth::id(),
             'ghi_chu' => $request->filled('ghi_chu')
                 ? trim((string) $request->ghi_chu)
-                : 'Cập nhật tồn kho theo mục đích sử dụng',
+                : 'Điều chỉnh tồn kho (kiểm kê)',
             'created_at' => now(),
         ]);
 
@@ -358,7 +358,7 @@ class InventoryController extends Controller
         }
 
         return redirect()->route('manager.inventory.index', $redirectParams)
-            ->with('success', "Đã cập nhật tồn kho «{$nguyenLieu->ten_nguyen_lieu}».");
+            ->with('success', "Đã điều chỉnh tồn kho «{$nguyenLieu->ten_nguyen_lieu}».");
     }
 
     public function exportStockExcel(Request $request)

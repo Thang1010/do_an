@@ -57,6 +57,7 @@ class TableController extends Controller
     public function index(Request $request)
     {
         $query = BanAn::query()
+            ->with(['donHang' => fn($q) => $q->khachChuaPhucVu()->with('chiTietDonHang')])
             ->withCount([
                 'donHang as so_don_chua_thanh_toan' => function ($q) {
                     $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'chưa thanh toán'));
@@ -77,7 +78,7 @@ class TableController extends Controller
             $query->where('trang_thai', $this->toDbTrangThai($request->trang_thai));
         }
 
-        $tables = $query->orderBy('so_ban')->paginate(20)->withQueryString();
+        $tables = $query->orderBy('so_ban')->paginate(10)->withQueryString();
 
         // Polling: chỉ trả lưới bàn (bỏ qua tạo QR tốn kém) để tự cập nhật trạng thái.
         // Dùng header X-Partial để URL sạch, không rò 'partial' vào link phân trang.
@@ -147,7 +148,7 @@ class TableController extends Controller
             ->latest()
             ->first();
 
-        $dishItems = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
+        $dishItems = collect();
         $totalDishQty = 0;
         $totalDiscount = 0;
         $totalPayable = 0;
@@ -156,7 +157,7 @@ class TableController extends Controller
 
         if ($latestOrder) {
             $dishQuery = $latestOrder->chiTietDonHang()->with('kichCo')->latest('created_at');
-            $dishItems = $dishQuery->paginate(20)->withQueryString();
+            $dishItems = $dishQuery->get();
             
             $totalDishQty = (clone $dishQuery)->sum('so_luong');
             $totalDiscount = $latestOrder->so_tien_giam;
@@ -202,6 +203,13 @@ class TableController extends Controller
         $tableQrCode = $this->tableQrDataUri($table->id);
         $tableQrUrl = url(route('order.table', ['table' => $table->id], false));
 
+        // Đơn khách tự gọi (QR/tài khoản) đã thanh toán, chưa được đánh dấu phục vụ.
+        $newPaidOrders = $table->donHang()
+            ->khachChuaPhucVu()
+            ->with(['chiTietDonHang.kichCo', 'nguoiDung'])
+            ->orderBy('created_at')
+            ->get();
+
         return view('manager.tables.show', compact(
             'table',
             'dishItems',
@@ -216,6 +224,7 @@ class TableController extends Controller
             'categories',
             'tableQrCode',
             'tableQrUrl',
+            'newPaidOrders',
         ));
     }
 
@@ -238,20 +247,18 @@ class TableController extends Controller
     {
         $table = BanAn::findOrFail($id);
 
-        DB::transaction(function () use ($table): void {
-            $unpaidOrders = DonHang::where('ban_an_id', $table->id)
-                ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
-                ->get();
+        // Trả bàn = khách đã rời đi → chỉ đưa bàn về trống.
+        // KHÔNG xóa đơn. Còn đơn chưa thanh toán thì phải thanh toán (hoặc
+        // dùng "Xóa thông tin bàn") trước, nên ở đây chặn lại.
+        $hasUnpaid = DonHang::where('ban_an_id', $table->id)
+            ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
+            ->exists();
 
-            foreach ($unpaidOrders as $order) {
-                $this->inventoryService->restoreIngredientsForOrder($order);
-                ThanhToan::where('don_hang_id', $order->id)->delete();
-                $order->chiTietDonHang()->delete();
-                $order->delete();
-            }
+        if ($hasUnpaid) {
+            return back()->with('error', "Bàn {$table->so_ban} còn đơn chưa thanh toán. Vui lòng thanh toán hoặc dùng \"Xóa thông tin bàn\" trước khi trả bàn.");
+        }
 
-            $table->update(['trang_thai' => 'trống']);
-        });
+        $table->update(['trang_thai' => 'trống']);
 
         return redirect()
             ->route('manager.tables.index')
@@ -491,6 +498,24 @@ class TableController extends Controller
 
         return redirect()->route('manager.tables.index')
             ->with('success', "Đã xóa thông tin bàn {$table->so_ban}. Bàn đã trở về trạng thái trống.");
+    }
+
+    /**
+     * Đánh dấu một đơn khách tự gọi là "đã phục vụ" → tắt báo món mới ở bàn.
+     */
+    public function markServed(int $tableId, int $orderId)
+    {
+        $order = DonHang::where('id', $orderId)
+            ->where('ban_an_id', $tableId)
+            ->firstOrFail();
+
+        if (is_null($order->da_xem_luc)) {
+            $order->update(['da_xem_luc' => now()]);
+        }
+
+        return redirect()
+            ->route('manager.tables.show', $tableId)
+            ->with('success', 'Đã đánh dấu đã phục vụ đơn khách.');
     }
 
     public function destroy(int $id)

@@ -89,7 +89,7 @@
                 <tbody>
                     @forelse($profiles as $index => $profile)
                         <tr>
-                            <td>{{ $profiles->firstItem() + $index }}</td>
+                            <td>{{ $index + 1 }}</td>
                             <td>{{ $profile->nguoiDung?->hoSoNhanVien?->ho_ten ?? $profile->nguoiDung?->email ?? '—' }}</td>
                             <td>{{ $profile->nguoiDung?->vai_tro ?? '—' }}</td>
                             <td>{{ $profile->nguoiDung?->trang_thai ?? '—' }}</td>
@@ -115,17 +115,6 @@
             </table>
         </div>
 
-        @if($profiles->hasPages())
-            <div class="card-footer" style="border-top: 1px solid var(--border);">
-                <div class="pagination-footer">
-                    <span class="pagination-info">
-                        Hiển thị {{ $profiles->firstItem() }}-{{ $profiles->lastItem() }} / {{ $profiles->total() }}
-                        {{ strtolower($profileRoleLabel) }}
-                    </span>
-                    {{ $profiles->links() }}
-                </div>
-            </div>
-        @endif
     </div>
 
     <!-- Assign Profiles Modal -->

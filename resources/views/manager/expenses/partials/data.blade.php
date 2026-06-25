@@ -48,14 +48,7 @@
         </table>
     </div>
 
-    @if($expenses->hasPages())
-        <div class="card-footer">
-            <div class="pagination-footer">
-                <span class="pagination-info">Hiển thị {{ $expenses->firstItem() }}-{{ $expenses->lastItem() }} / {{ $expenses->total() }} khoản</span>
-                {{ $expenses->appends(request()->query())->links() }}
-            </div>
-        </div>
-    @endif
+    @include('manager.partials.pager', ['paginator' => $expenses, 'label' => 'khoản'])
 </div>
 
 <div class="grid-3 mb-20">

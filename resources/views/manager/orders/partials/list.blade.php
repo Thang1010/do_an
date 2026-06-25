@@ -70,14 +70,5 @@
             </tbody>
         </table>
     </div>
-    @if(isset($orders) && method_exists($orders, 'hasPages') && $orders->hasPages())
-        <div class="card-footer">
-            <div class="pagination-footer">
-                <span class="text-sm text-muted">
-                    Hiển thị {{ $orders->firstItem() }}–{{ $orders->lastItem() }} / {{ $orders->total() }} đơn
-                </span>
-                {{ $orders->appends(request()->query())->links() }}
-            </div>
-        </div>
-    @endif
+    @include('manager.partials.pager', ['paginator' => $orders, 'label' => 'đơn'])
 </div>

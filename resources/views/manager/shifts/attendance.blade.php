@@ -128,16 +128,7 @@
 		</table>
 	</div>
 
-	@if(isset($attendanceRecords) && method_exists($attendanceRecords, 'hasPages') && $attendanceRecords->hasPages())
-	<div class="card-footer">
-		<div class="pagination-footer">
-			<span class="pagination-info">
-				Hiển thị {{ $attendanceRecords->firstItem() }}-{{ $attendanceRecords->lastItem() }} / {{ $attendanceRecords->total() }} bản ghi
-			</span>
-			{{ $attendanceRecords->links() }}
-		</div>
-	</div>
-	@endif
+	@include('manager.partials.pager', ['paginator' => $attendanceRecords, 'label' => 'bản ghi'])
 </div>
 
 <div class="modal-backdrop" id="create-attendance-modal">

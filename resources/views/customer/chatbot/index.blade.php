@@ -257,10 +257,32 @@
 			var chatContext = {};
 			var hasSuggested = false;
 
+			function escapeHtml(s) {
+				return String(s)
+					.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+					.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+			}
+
+			// Escape an toàn rồi biến link Markdown [chữ](url) và URL trần thành thẻ <a> bấm được.
+			function linkifyBotText(rawText) {
+				var safe = escapeHtml(rawText);
+				safe = safe.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, function (m, label, url) {
+					return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + label + '</a>';
+				});
+				safe = safe.replace(/(^|[\s(])(https?:\/\/[^\s<]+)/g, function (m, pre, url) {
+					return pre + '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+				});
+				return safe;
+			}
+
 			function appendMessage(text, role, record) {
 				var bubble = document.createElement('div');
 				bubble.className = 'chat-message ' + (role === 'user' ? 'user' : 'bot');
-				bubble.textContent = text;
+				if (role === 'user') {
+					bubble.textContent = text;
+				} else {
+					bubble.innerHTML = linkifyBotText(text);
+				}
 				messages.appendChild(bubble);
 				messages.scrollTop = messages.scrollHeight;
 				if (record !== false) {

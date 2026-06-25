@@ -42,7 +42,7 @@
         <div class="card-header">
             <span class="card-title">Danh sách mã giảm giá</span>
         </div>
-        <div class="table-wrap" style="min-height: 55vh;">
+        <div class="table-wrap">
             <table>
                 <thead>
                     <tr>
@@ -133,24 +133,15 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="empty-state-sm">
-                                Chưa có mã giảm giá nào.
+                            <td colspan="9" class="empty-state">
+                                Chưa có mã giảm giá nào. <a href="{{ route('manager.vouchers.create') }}" class="link-primary">Tạo ngay</a>
                             </td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
-    @if(isset($vouchers) && method_exists($vouchers, 'hasPages') && $vouchers->hasPages())
-        <div class="card-footer" style="border-top: 1px solid var(--border);">
-            <div class="pagination-footer">
-                <span class="pagination-info">
-                    Hiển thị {{ $vouchers->firstItem() }}-{{ $vouchers->lastItem() }} / {{ $vouchers->total() }} mã giảm giá
-                </span>
-                {{ $vouchers->links() }}
-            </div>
-        </div>
-    @endif
+    @include('manager.partials.pager', ['paginator' => $vouchers, 'label' => 'mã giảm giá'])
     </div>
 
     {{-- Stats --}}

@@ -32,7 +32,7 @@ class SalaryController extends Controller
             ->with(['hoSoNhanVien.chucVu', 'hoSoQuanLy.chucVu'])
             ->when(!empty($filterRole), fn(Builder $q) => $q->where('vai_tro', $filterRole))
             ->orderBy('email')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         $totalRevenue = $this->totalRevenue($periodStart, $periodEnd);

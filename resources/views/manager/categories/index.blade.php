@@ -100,16 +100,7 @@
 		</table>
 	</div>
 
-	@if(isset($categories) && method_exists($categories, 'hasPages') && $categories->hasPages())
-	<div class="card-footer">
-		<div class="pagination-footer">
-			<span class="pagination-info">
-				Hiển thị {{ $categories->firstItem() }}-{{ $categories->lastItem() }} / {{ $categories->total() }} danh mục
-			</span>
-			{{ $categories->links() }}
-		</div>
-	</div>
-	@endif
+	@include('manager.partials.pager', ['paginator' => $categories, 'label' => 'danh mục'])
 </div>
 
 {{-- Modal thêm danh mục --}}

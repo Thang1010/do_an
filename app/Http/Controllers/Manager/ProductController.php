@@ -284,7 +284,7 @@ class ProductController extends Controller
             $query->where('trang_thai_ban', $this->toDbTrangThaiBan($request->trang_thai));
         }
 
-        $products = $query->latest()->paginate(15)->withQueryString();
+        $products = $query->latest()->paginate(10)->withQueryString();
         $danhMucs = DanhMuc::orderBy('ten_danh_muc')->get();
 
         return view('manager.products.index', compact('products', 'danhMucs'));
@@ -313,6 +313,7 @@ class ProductController extends Controller
             'gia_khuyen_mai' => $validated['gia_khuyen_mai'] ?? $validated['gia_goc'],
             'trang_thai_ban' => $validated['trang_thai_ban'],
             'nhiet_do' => isset($validated['nhiet_do']) ? implode(',', (array) $validated['nhiet_do']) : null,
+            'noi_bat' => $request->boolean('noi_bat'),
         ];
         $data['trang_thai_ban'] = $this->toDbTrangThaiBan($data['trang_thai_ban']);
         $coCongThuc = $request->boolean('co_cong_thuc');
@@ -371,6 +372,7 @@ class ProductController extends Controller
             'gia_khuyen_mai' => $validated['gia_khuyen_mai'] ?? $validated['gia_goc'],
             'trang_thai_ban' => $validated['trang_thai_ban'],
             'nhiet_do' => isset($validated['nhiet_do']) ? implode(',', (array) $validated['nhiet_do']) : null,
+            'noi_bat' => $request->boolean('noi_bat'),
         ];
         $data['trang_thai_ban'] = $this->toDbTrangThaiBan($data['trang_thai_ban']);
         $coCongThuc = $request->boolean('co_cong_thuc');
@@ -581,6 +583,18 @@ class ProductController extends Controller
         return response()->json([
             'success' => true,
             'trang_thai' => $this->toFormTrangThaiBan($product->trang_thai_ban),
+        ]);
+    }
+
+    /** Bật/tắt "nổi bật" cho sản phẩm (AJAX toggle) */
+    public function updateNoiBat(Request $request, int $id)
+    {
+        $product = SanPham::findOrFail($id);
+        $product->update(['noi_bat' => $request->boolean('noi_bat')]);
+
+        return response()->json([
+            'success' => true,
+            'noi_bat' => (bool) $product->noi_bat,
         ]);
     }
 

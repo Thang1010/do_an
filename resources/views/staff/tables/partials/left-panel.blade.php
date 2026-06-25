@@ -121,6 +121,11 @@
                 $customerName = $latestOrder?->nguoiDung?->hoSoKhachHang?->ho_ten ?? $latestOrder?->nguoiDung?->email ?? null;
                 $customerAvatar = $latestOrder?->nguoiDung?->avatar_url ?? null;
                 $orderAmount = $latestOrder?->tong_tien ?? 0;
+
+                // Món khách vừa gọi (QR/tài khoản) đã thanh toán, chưa được đánh dấu phục vụ
+                $soMonMoi = $table->donHang
+                    ->filter(fn($o) => $o->laMonKhachMoi())
+                    ->sum(fn($o) => $o->chiTietDonHang->sum('so_luong'));
             @endphp
             @if(isset($assignOrder))
                 @if(in_array($table->trang_thai, ['trống'], true))
@@ -161,7 +166,10 @@
                 @endif
             @else
                 <a href="/staff/tables?table={{ $table->id }}"
-                   class="table-card table-card--{{ $statusClass }} {{ $isSelected ? 'active' : '' }}">
+                   class="table-card table-card--{{ $statusClass }} {{ $isSelected ? 'active' : '' }} {{ $soMonMoi > 0 ? 'table-card--has-new' : '' }}">
+                    @if($soMonMoi > 0)
+                        <span class="table-card__new-badge">🔔 {{ $soMonMoi }} món mới</span>
+                    @endif
                     <div class="table-card__header">
                         <span class="table-card__number">Bàn {{ $table->so_ban }}</span>
                         <span class="table-card__status table-card__status--{{ $statusClass }}">{{ $statusLabel }}</span>

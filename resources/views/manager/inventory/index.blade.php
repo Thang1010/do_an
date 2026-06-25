@@ -18,7 +18,6 @@
         return '—';
     };
     $currentPurposeValue = $currentPurpose ?? '';
-    $isSupplyPurpose = $currentPurposeValue === 'Vật tư';
 @endphp
 
 @push('styles')
@@ -42,9 +41,6 @@
         <h1 class="page-title">Quản lý kho nguyên liệu</h1>
         <p class="page-subtitle">
             Theo dõi tồn kho, lịch sử nhập/xuất kho và xuất báo cáo Excel • {{ $purposeLabel ?? 'Tất cả' }}
-            @if($isSupplyPurpose)
-                • Có thể chỉnh tay số lượng tồn
-            @endif
         </p>
     </div>
     <div class="page-actions">
@@ -62,7 +58,7 @@
     <div class="tab-list tab-list-inner">
         <button class="tab-btn active" data-tab-key="stock" onclick="activateInventoryTab('stock', this)">Tồn kho hiện tại</button>
         <button class="tab-btn" data-tab-key="import-log" onclick="activateInventoryTab('import-log', this)">Lịch sử nhập kho</button>
-        <button class="tab-btn" data-tab-key="export-log" onclick="activateInventoryTab('export-log', this)">Lịch sử xuất/điều chỉnh</button>
+        <button class="tab-btn" data-tab-key="export-log" onclick="activateInventoryTab('export-log', this)">Lịch sử xuất kho & điều chỉnh</button>
     </div>
 
     <div class="tab-panel active p-24" id="tab-stock">
@@ -99,7 +95,7 @@
                         <th>Mục đích</th>
                         <th>Tồn kho</th>
                         <th>Trạng thái</th>
-                        <th>Thao tác</th>
+                        <th class="text-center">Thao tác</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -143,30 +139,20 @@
                                         data-stock="{{ number_format((float) $item->so_luong, 2, '.', '') }}">
                                     Xuất
                                 </button>
-                                @if($isSupplyPurpose)
-                                    @if($isSupplyPurpose)
-                                        <form method="POST" action="{{ route('manager.inventory.stock.update') }}" class="inline-form">
-                                            @csrf
-                                            @method('PATCH')
-                                            <input type="hidden" name="nguyen_lieu_id" value="{{ $item->id }}">
-                                            <input type="hidden" name="return_muc_dich_su_dung" value="{{ $currentPurposeValue }}">
-                                            <input type="number"
-                                                   name="so_luong_moi"
-                                                   step="0.01"
-                                                   min="0"
-                                                   class="form-control"
-                                                   style="width: 120px;"
-                                                   value="{{ number_format((float) $item->so_luong, 2, '.', '') }}">
-                                            <button type="submit" class="btn btn-primary btn-sm">Cập nhật tồn</button>
-                                        </form>
-                                    @endif
-                                @endif
+                                <button type="button" class="btn btn-primary btn-sm"
+                                        onclick="openInventoryAdjustModal(this)"
+                                        data-id="{{ $item->id }}"
+                                        data-name="{{ $item->ten_nguyen_lieu }}"
+                                        data-unit="{{ $item->don_vi_tinh }}"
+                                        data-stock="{{ number_format((float) $item->so_luong, 2, '.', '') }}">
+                                    Điều chỉnh
+                                </button>
                             </div>
                         </td>
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="7" class="empty-state">
+                        <td colspan="6" class="empty-state">
                             Chưa có nguyên liệu nào trong kho.
                         </td>
                     </tr>
@@ -174,14 +160,7 @@
                 </tbody>
             </table>
         </div>
-        @if($inventory->hasPages())
-        <div class="card-footer">
-            <div class="pagination-footer">
-                <span class="text-sm text-muted">Hiển thị {{ $inventory->firstItem() }}–{{ $inventory->lastItem() }} / {{ $inventory->total() }}</span>
-                {{ $inventory->appends(request()->query())->links() }}
-            </div>
-        </div>
-        @endif
+        @include('manager.partials.pager', ['paginator' => $inventory, 'label' => 'nguyên liệu'])
 
     </div>
 
@@ -281,14 +260,7 @@
             </table>
         </div>
 
-        @if($importLog->hasPages())
-        <div class="card-footer mt-12">
-            <div class="pagination-footer">
-                <span class="text-sm text-muted">Hiển thị {{ $importLog->firstItem() }}–{{ $importLog->lastItem() }} / {{ $importLog->total() }}</span>
-                {{ $importLog->appends(request()->query())->links() }}
-            </div>
-        </div>
-        @endif
+        @include('manager.partials.pager', ['paginator' => $importLog, 'label' => 'lượt nhập', 'footerClass' => 'mt-12'])
     </div>
 
     <div class="tab-panel p-24" id="tab-export-log">
@@ -372,14 +344,7 @@
             </table>
         </div>
 
-        @if($exportLog->hasPages())
-        <div class="card-footer mt-12">
-            <div class="pagination-footer">
-                <span class="text-sm text-muted">Hiển thị {{ $exportLog->firstItem() }}–{{ $exportLog->lastItem() }} / {{ $exportLog->total() }}</span>
-                {{ $exportLog->appends(request()->query())->links() }}
-            </div>
-        </div>
-        @endif
+        @include('manager.partials.pager', ['paginator' => $exportLog, 'label' => 'lượt xuất', 'footerClass' => 'mt-12'])
     </div>
 </div>
 
@@ -529,6 +494,49 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeModal('inventory-export-modal')">Hủy</button>
                 <button type="submit" class="btn btn-danger">Xác nhận xuất kho</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Modal điều chỉnh tồn kho (kiểm kê) cho 1 nguyên liệu --}}
+<div class="modal-backdrop" id="inventory-adjust-modal">
+    <div class="modal-box" style="max-width: 460px; width: calc(100% - 32px);">
+        <form method="POST" action="{{ route('manager.inventory.stock.update') }}">
+            @csrf
+            @method('PATCH')
+            <input type="hidden" name="return_muc_dich_su_dung" value="{{ $currentPurposeValue }}">
+            <input type="hidden" name="nguyen_lieu_id" id="adjust-modal-id">
+            <div class="modal-header">
+                <span class="modal-title">Điều chỉnh tồn kho</span>
+                <button type="button" class="modal-close" onclick="closeModal('inventory-adjust-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Nguyên liệu</label>
+                    <input type="text" class="form-control" id="adjust-modal-name" readonly
+                           style="background-color:#f3f4f6; color:#374151; cursor:not-allowed;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tồn kho hiện tại (theo hệ thống)</label>
+                    <input type="text" class="form-control" id="adjust-modal-stock" readonly
+                           style="background-color:#f3f4f6; color:#6b7280; cursor:not-allowed;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Số lượng thực tế (sau kiểm kê) <span>*</span></label>
+                    <input type="number" step="0.01" min="0" name="so_luong_moi" id="adjust-modal-qty"
+                           class="form-control" placeholder="Nhập số đếm được thực tế" required>
+                    <p class="form-hint">Hệ thống sẽ tự tính chênh lệch và ghi nhận một giao dịch "điều chỉnh".</p>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Lý do điều chỉnh</label>
+                    <input type="text" name="ghi_chu" class="form-control" maxlength="500"
+                           placeholder="Kiểm kê chênh lệch, hao hụt, nhập sai...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('inventory-adjust-modal')">Hủy</button>
+                <button type="submit" class="btn btn-primary">Xác nhận điều chỉnh</button>
             </div>
         </form>
     </div>
@@ -757,6 +765,17 @@
             'Tối đa ' + formatStockLabel(d.stock, d.unit) + ' (theo tồn kho hiện tại).';
         openModal('inventory-export-modal');
         setTimeout(() => qty.focus(), 60);
+    }
+
+    function openInventoryAdjustModal(button) {
+        const d = button.dataset;
+        document.getElementById('adjust-modal-id').value = d.id;
+        document.getElementById('adjust-modal-name').value = d.name;
+        document.getElementById('adjust-modal-stock').value = formatStockLabel(d.stock, d.unit);
+        const qty = document.getElementById('adjust-modal-qty');
+        qty.value = d.stock;
+        openModal('inventory-adjust-modal');
+        setTimeout(() => { qty.focus(); qty.select(); }, 60);
     }
 
     function showInventoryDetailFromEl(button) {

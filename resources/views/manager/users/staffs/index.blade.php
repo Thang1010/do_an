@@ -105,14 +105,7 @@
 		</table>
 	</div>
 
-	@if(isset($staffList) && method_exists($staffList, 'hasPages') && $staffList->hasPages())
-	<div class="card-footer">
-		<div class="pagination-footer">
-			<span class="text-sm text-muted">Hiển thị {{ $staffList->firstItem() }}–{{ $staffList->lastItem() }} / {{ $staffList->total() }}</span>
-			{{ $staffList->appends(request()->query())->links() }}
-		</div>
-	</div>
-	@endif
+	@include('manager.partials.pager', ['paginator' => $staffList, 'label' => 'nhân viên'])
 </div>
 
 <div class="modal-backdrop" id="create-staff-modal" data-auto-open="{{ ($errors->any() && (old('from') === 'staff' || old('from') === 'staffs')) ? '1' : '0' }}">

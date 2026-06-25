@@ -66,6 +66,15 @@ class HomeController extends Controller
 
         $bestSellers = $this->bestSellers([], $from, 10);
 
+        // Sản phẩm NỔI BẬT (do quán đánh dấu) để hiển thị mục riêng ở trang chủ.
+        $featuredProducts = SanPham::whereIn('trang_thai_ban', ['dang_ban', 'đang bán'])
+            ->where('noi_bat', true)
+            ->withAvg('danhGiaSanPham as avg_rating', 'so_sao')
+            ->with('kichCo')
+            ->orderByDesc('created_at')
+            ->limit(8)
+            ->get();
+
         // Lấy đánh giá từ top 10 đồ uống bán chạy: chỉ hiển thị đánh giá tích cực,
         // mỗi sản phẩm 1 đánh giá có số sao cao nhất. Sản phẩm không có đánh giá
         // tích cực sẽ không xuất hiện ở trang chủ.
@@ -102,6 +111,7 @@ class HomeController extends Controller
             'categoryImages',
             'categorySlugs',
             'bestSellers',
+            'featuredProducts',
             'testimonials'
         ));
     }

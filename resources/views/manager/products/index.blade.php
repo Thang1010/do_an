@@ -55,6 +55,7 @@
                     <th>Danh mục</th>
                     <th>Giá bán</th>
                     <th>Trạng thái</th>
+                    <th>Nổi bật</th>
                     <th>Đã bán</th>
                     <th class="col-action-xl">Thao tác</th>
                 </tr>
@@ -68,7 +69,11 @@
                              alt="{{ $product->ten_san_pham }}" class="img-preview img-preview-sm">
                     </td>
                     <td>
-                        <div class="font-600">{{ $product->ten_san_pham }}</div>
+                        <div class="font-600">
+                            {{ $product->ten_san_pham }}
+                            <span id="feature-badge-{{ $product->id }}" class="badge"
+                                  style="background:#f59e0b;color:#3b2600;font-size:11px;margin-left:4px;{{ $product->noi_bat ? '' : 'display:none;' }}">⭐ Nổi bật</span>
+                        </div>
                         <div class="text-12 text-muted">{{ Str::limit($product->mo_ta, 50) }}</div>
                     </td>
                     <td>{{ $product->danhMuc->ten_danh_muc ?? '—' }}</td>
@@ -85,6 +90,16 @@
                             {{ $product->trang_thai === 'dang_ban' ? 'Đang bán' : 'Ngừng bán' }}
                         </span>
                     </td>
+                    <td>
+                        <label class="toggle-switch">
+                            <input type="checkbox" {{ $product->noi_bat ? 'checked' : '' }}
+                                   onchange="toggleNoiBat({{ $product->id }}, this)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="text-12 text-muted ml-6" id="noi-bat-label-{{ $product->id }}">
+                            {{ $product->noi_bat ? 'Nổi bật' : '' }}
+                        </span>
+                    </td>
                     <td>{{ $product->so_luong_ban ?? 0 }}</td>
                     <td>
                         <div class="action-row">
@@ -99,7 +114,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="8" class="empty-state">
+                    <td colspan="9" class="empty-state">
                         Chưa có sản phẩm nào. <a href="{{ route('manager.products.create') }}" class="link-primary">Thêm ngay</a>
                     </td>
                 </tr>
@@ -107,16 +122,7 @@
             </tbody>
         </table>
     </div>
-    @if(isset($products) && $products->hasPages())
-    <div class="card-footer">
-        <div class="pagination-footer">
-            <span class="pagination-info">
-                Hiển thị {{ $products->firstItem() }}–{{ $products->lastItem() }} / {{ $products->total() }} sản phẩm
-            </span>
-            {{ $products->links() }}
-        </div>
-    </div>
-    @endif
+    @include('manager.partials.pager', ['paginator' => $products, 'label' => 'sản phẩm'])
 </div>
 
 @endsection
@@ -141,6 +147,31 @@ function toggleStatus(productId, checkbox) {
                 showNotice(data.message);
             }
         }
+    }).catch(() => {
+        checkbox.checked = !checkbox.checked; // revert on error
+    });
+}
+
+function toggleNoiBat(productId, checkbox) {
+    fetch(`/manager/products/${productId}/noi-bat`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content
+                            || '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ noi_bat: checkbox.checked ? 1 : 0 })
+    }).then(async response => {
+        if (!response.ok) {
+            checkbox.checked = !checkbox.checked; // revert on error
+            return;
+        }
+        const data = await response.json();
+        const on = !!data.noi_bat;
+        const label = document.getElementById('noi-bat-label-' + productId);
+        if (label) label.textContent = on ? 'Nổi bật' : '';
+        const badge = document.getElementById('feature-badge-' + productId);
+        if (badge) badge.style.display = on ? '' : 'none';
     }).catch(() => {
         checkbox.checked = !checkbox.checked; // revert on error
     });

@@ -119,7 +119,7 @@ Kinh doanh / <a href="{{ route('manager.vouchers.index') }}">Mã giảm giá & K
                         $isUsed = $item->trang_thai === 'đã dùng';
                     @endphp
                     <tr>
-                        <td>{{ $danhSachNguoiNhan->firstItem() + $index }}</td>
+                        <td>{{ $index + 1 }}</td>
                         <td class="font-600">{{ $item->nguoiDung?->hoSoKhachHang?->ho_ten ?? $item->nguoiDung?->email ?? 'Không xác định' }}</td>
                         <td>{{ $item->nguoiDung->so_dien_thoai ?? '—' }}</td>
                         <td>{{ $item->nguoiDung->email ?? '—' }}</td>
@@ -145,15 +145,5 @@ Kinh doanh / <a href="{{ route('manager.vouchers.index') }}">Mã giảm giá & K
     </div>
 </div>
 
-@if($danhSachNguoiNhan->hasPages())
-<div class="card-footer" style="border-top: 0;">
-    <div class="pagination-footer">
-        <span class="pagination-info">
-            Hiển thị {{ $danhSachNguoiNhan->firstItem() }}-{{ $danhSachNguoiNhan->lastItem() }} / {{ $danhSachNguoiNhan->total() }} người nhận
-        </span>
-        {{ $danhSachNguoiNhan->links() }}
-    </div>
-</div>
-@endif
 
 @endsection

@@ -56,7 +56,7 @@ class CategoryController extends Controller
             $query->where('trang_thai', $this->toDbTrangThai($request->trang_thai));
         }
 
-        $categories = $query->latest()->paginate(15)->withQueryString();
+        $categories = $query->latest()->paginate(10)->withQueryString();
 
         return view('manager.categories.index', compact('categories'));
     }
@@ -107,7 +107,8 @@ class CategoryController extends Controller
         $products = $category->sanPham()
             ->withCount(['chiTietDonHang as so_luong_ban'])
             ->latest()
-            ->paginate(15);
+            ->paginate(10)
+            ->withQueryString();
         return view('manager.categories.show', compact('category', 'products'));
     }
 

@@ -923,7 +923,7 @@ class ShiftController extends Controller
 
         $attendanceRecords = $this->buildAttendanceQuery($selectedDate, $employeeKeyword, $selectedShiftId)
             ->latest('id')
-            ->paginate(15)
+            ->paginate(10)
             ->withQueryString();
 
         return view('manager.shifts.attendance', [

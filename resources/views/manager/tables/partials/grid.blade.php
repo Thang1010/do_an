@@ -25,6 +25,9 @@
                         default => 'badge-active',
                     };
 
+                    // donHang đã được nạp sẵn chỉ gồm đơn khách mới chưa phục vụ (controller).
+                    $soMonMoi = $table->donHang->sum(fn($o) => $o->chiTietDonHang->sum('so_luong'));
+
                     $paymentClass = 'badge-default';
                     $paymentLabel = 'Không có';
                     $showPaymentBadge = false;
@@ -49,6 +52,9 @@
                     <td><span class="font-600">{{ $table->so_ban }}</span></td>
                     <td>
                         <span class="badge {{ $statusClass }}">{{ ucfirst($table->trang_thai) }}</span>
+                        @if($soMonMoi > 0)
+                            <span class="badge badge-new-order">🔔 {{ $soMonMoi }} món mới</span>
+                        @endif
                     </td>
                     <td>
                         @if($showPaymentBadge)
@@ -85,14 +91,5 @@
         </table>
     </div>
 
-    @if(isset($tables) && method_exists($tables, 'hasPages') && $tables->hasPages())
-    <div class="card-footer">
-        <div class="pagination-footer">
-            <span class="pagination-info">
-                Hiển thị {{ $tables->firstItem() }}-{{ $tables->lastItem() }} / {{ $tables->total() }} bàn ăn
-            </span>
-            {{ $tables->links() }}
-        </div>
-    </div>
-    @endif
+    @include('manager.partials.pager', ['paginator' => $tables, 'label' => 'bàn ăn'])
 </div>

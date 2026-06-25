@@ -871,6 +871,7 @@
 		};
 	</script>
 	@include('partials.app-modals')
+	@include('partials.flatpickr')
 	@stack('scripts')
 </body>
 

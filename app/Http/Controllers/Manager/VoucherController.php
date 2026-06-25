@@ -138,7 +138,7 @@ class VoucherController extends Controller
 
         $this->applyFilters($query, $request);
 
-        $vouchers = $query->latest()->paginate(15)->withQueryString();
+        $vouchers = $query->latest()->paginate(10)->withQueryString();
 
         $now = Carbon::now();
         $todayStart = $now->copy()->startOfDay();
@@ -185,7 +185,7 @@ class VoucherController extends Controller
 
         $this->applyUserVoucherFilters($userVoucherQuery, $request);
 
-        $danhSachNguoiNhan = $userVoucherQuery->paginate(20)->withQueryString();
+        $danhSachNguoiNhan = $userVoucherQuery->get();
 
         $tongNguoiNhan = $voucher->voucherNguoiDung()->count();
         $tongDaDung = $voucher->voucherNguoiDung()->where('trang_thai', 'đã dùng')->count();

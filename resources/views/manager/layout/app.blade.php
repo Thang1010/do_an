@@ -274,6 +274,31 @@
         </div>
     </aside>
 
+    {{-- Giữ nguyên vị trí cuộn của sidebar khi chuyển trang (chạy ngay khi parse
+         tới đây để khôi phục trước khi vẽ, tránh hiện tượng nhảy về đầu). --}}
+    <script>
+        (function () {
+            var KEY = 'mgr_sidebar_scroll';
+            var sidebar = document.getElementById('sidebar');
+            if (!sidebar) return;
+
+            var saved = sessionStorage.getItem(KEY);
+            if (saved !== null) sidebar.scrollTop = parseInt(saved, 10) || 0;
+
+            var t = null;
+            sidebar.addEventListener('scroll', function () {
+                if (t) return;
+                t = setTimeout(function () {
+                    sessionStorage.setItem(KEY, sidebar.scrollTop);
+                    t = null;
+                }, 100);
+            });
+            window.addEventListener('beforeunload', function () {
+                sessionStorage.setItem(KEY, sidebar.scrollTop);
+            });
+        })();
+    </script>
+
     <!-- =============== MAIN WRAPPER =============== -->
     <div id="main-wrapper">
 
@@ -878,6 +903,7 @@
     </script>
 
     @include('partials.app-modals')
+    @include('partials.flatpickr')
     @stack('scripts')
 </body>
 

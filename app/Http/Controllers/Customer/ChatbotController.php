@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
+use App\Models\CuaHang;
 use App\Models\DanhGiaSanPham;
 use App\Models\DonHang;
 use App\Models\NguoiDung;
@@ -175,9 +176,13 @@ class ChatbotController extends Controller
 
         $systemPrompt = "Bạn là trợ lý tư vấn của quán cafe XM Coffee. Trả lời ngắn gọn, thân thiện.\n";
         $systemPrompt .= "NGÔN NGỮ: Bạn CHỈ hỗ trợ TIẾNG VIỆT và TIẾNG ANH. Hãy trả lời bằng ĐÚNG ngôn ngữ mà khách đang dùng (khách viết/nói tiếng Việt thì trả lời tiếng Việt; tiếng Anh thì trả lời tiếng Anh). Nếu khách dùng ngôn ngữ KHÁC (không phải Việt/Anh), hãy lịch sự trả lời bằng tiếng Anh rằng bạn chỉ hỗ trợ tiếng Việt và tiếng Anh (\"Sorry, I only support Vietnamese and English.\").\n";
-        $systemPrompt .= "Bạn hỗ trợ: tư vấn đồ uống/menu VÀ quản lý GIỎ HÀNG của khách (ghi chú và nhiệt độ nóng/lạnh cho từng món đã có trong giỏ).\n";
-        $systemPrompt .= "TỪ CHỐI CÁC CÂU HỎI NGOÀI LỀ (toán học, văn học, lập trình, triết học...). Lịch sự báo rằng bạn chỉ hỗ trợ tư vấn đồ uống, menu và giỏ hàng của quán.\n";
-        $systemPrompt .= "KHÔNG ĐƯỢC TIẾT LỘ CÔNG THỨC của các món ăn/đồ uống dưới bất kỳ hình thức nào. Công thức chỉ để bạn ngầm hiểu nguyên liệu.\n";
+        $systemPrompt .= "PHẠM VI HỖ TRỢ — hãy NHIỆT TÌNH trả lời MỌI câu hỏi LIÊN QUAN ĐẾN QUÁN:\n"
+            ."- Thông tin cửa hàng: tên quán, địa chỉ, số điện thoại, giờ mở/đóng cửa, website/fanpage, giới thiệu về quán.\n"
+            ."- Tư vấn chọn món: gợi ý món NỔI BẬT, BÁN CHẠY, ĐƯỢC YÊU THÍCH, ĐÁNH GIÁ CAO; nêu ưu điểm (được yêu thích, nhiều sao...) để giúp khách dễ chọn.\n"
+            ."- Menu/đồ uống và quản lý GIỎ HÀNG của khách (ghi chú và nhiệt độ nóng/lạnh cho từng món đã có trong giỏ).\n";
+        $systemPrompt .= "CHỈ từ chối khi câu hỏi HOÀN TOÀN KHÔNG liên quan tới quán (toán học, lập trình, chính trị, tin tức, đời tư...). Khi đó lịch sự nói rằng bạn chỉ hỗ trợ các vấn đề về quán XM Coffee.\n";
+        $systemPrompt .= "TUYỆT ĐỐI KHÔNG TIẾT LỘ CÔNG THỨC, ĐỊNH LƯỢNG hay CÁCH PHA CHẾ/CHẾ BIẾN của bất kỳ món nào. Nếu khách hỏi công thức/cách làm/định lượng nguyên liệu, hãy lịch sự từ chối (vd: 'Đây là bí quyết riêng của quán ạ') nhưng vẫn vui vẻ tư vấn món phù hợp. Thông tin nguyên liệu phía dưới CHỈ để bạn ngầm hiểu nhằm tư vấn sức khỏe, KHÔNG được liệt kê ra cho khách.\n";
+        $systemPrompt .= "TRÌNH BÀY LIÊN KẾT: mọi đường link hãy viết dạng Markdown [chữ mô tả](URL) để khách bấm được, KHÔNG dán URL trần. Khi khách hỏi về trang/fanpage/facebook của quán, hãy trả lời kèm liên kết với CHỮ HIỂN THỊ đúng là 'Fanpage của XM Coffee', ví dụ: [Fanpage của XM Coffee](URL).\n";
 
         if ($menuContext === '') {
             $systemPrompt .= "Hiện tại cửa hàng chưa có món nào. Xin hãy thông báo và xin lỗi khách, không gợi ý gì thêm.\n";
@@ -213,6 +218,21 @@ class ChatbotController extends Controller
         }
         if ($pastReviewsText !== '') {
             $systemPrompt .= "\nCác món khách từng đánh giá tốt: {$pastReviewsText}.";
+        }
+
+        $storeContext = $this->buildStoreContext();
+        if ($storeContext !== '') {
+            $systemPrompt .= "\n\nTHÔNG TIN CỬA HÀNG (dùng để trả lời khi khách hỏi về quán):\n".$storeContext;
+        }
+
+        $highlightsContext = $this->buildHighlightsContext();
+        if ($highlightsContext !== '') {
+            $systemPrompt .= "\n\nGỢI Ý CỦA QUÁN (dùng khi khách nhờ tư vấn hoặc lười chọn):\n".$highlightsContext;
+            $systemPrompt .= "\nPHÂN BIỆT RÕ 3 nhóm trên, KHÔNG được nhầm lẫn:\n"
+                ."- 'Món NỔI BẬT' = món do QUÁN CHỦ ĐỘNG chọn/đánh dấu để quảng bá. Khi khách hỏi 'món nổi bật / quán có gì nổi bật', CHỈ liệt kê đúng nhóm 'Món NỔI BẬT', KHÔNG lấy món đánh giá cao hay yêu thích thay thế.\n"
+                ."- 'Món ĐÁNH GIÁ CAO' = món được KHÁCH chấm nhiều sao. Đây KHÔNG phải là món nổi bật; một món đánh giá cao KHÔNG tự động trở thành nổi bật và ngược lại.\n"
+                ."- 'Món YÊU THÍCH' = món được nhiều khách thêm vào yêu thích, cũng khác với nổi bật.\n"
+                ."Chỉ dùng đúng nhóm khớp với câu hỏi của khách; nếu khách hỏi chung chung thì có thể nêu cả ba nhưng phải gọi đúng tên từng nhóm.\n";
         }
 
         $messages = [
@@ -706,6 +726,110 @@ class ChatbotController extends Controller
         }
 
         return [implode("\n", $lines), $keys];
+    }
+
+    /**
+     * Thông tin cửa hàng để chatbot trả lời các câu hỏi về quán
+     * (địa chỉ, giờ mở cửa, liên hệ, giới thiệu...).
+     */
+    private function buildStoreContext(): string
+    {
+        $store = CuaHang::query()->first();
+        if (! $store) {
+            return '';
+        }
+
+        $fmtTime = fn ($t) => $t ? substr((string) $t, 0, 5) : null;
+
+        $parts = [];
+        if ($store->ten_cua_hang) $parts[] = "- Tên quán: {$store->ten_cua_hang}";
+        if ($store->dia_chi) $parts[] = "- Địa chỉ: {$store->dia_chi}";
+        if ($store->so_dien_thoai) $parts[] = "- Số điện thoại: {$store->so_dien_thoai}";
+        if ($store->gio_mo_cua && $store->gio_dong_cua) {
+            $parts[] = "- Giờ mở cửa: {$fmtTime($store->gio_mo_cua)} - {$fmtTime($store->gio_dong_cua)} hằng ngày";
+        }
+        if ($store->lien_ket_trang) $parts[] = "- Website/Fanpage: {$store->lien_ket_trang}";
+        if ($store->mo_ta) $parts[] = "- Giới thiệu: {$store->mo_ta}";
+
+        return implode("\n", $parts);
+    }
+
+    /**
+     * Các "điểm nhấn" để tư vấn khi khách lười chọn: món nổi bật (xếp theo bán chạy),
+     * món được yêu thích nhiều nhất, món được đánh giá cao nhất.
+     */
+    private function buildHighlightsContext(): string
+    {
+        $sellable = ['dang_ban', 'đang bán'];
+        $sections = [];
+
+        $salesMap = DB::table('chi_tiet_don_hang')
+            ->select('san_pham_id', DB::raw('SUM(so_luong) as total_sold'))
+            ->groupBy('san_pham_id')
+            ->pluck('total_sold', 'san_pham_id')
+            ->toArray();
+
+        // 1) Món nổi bật, ưu tiên xếp theo lượng đã bán.
+        $featured = SanPham::whereIn('trang_thai_ban', $sellable)
+            ->where('noi_bat', true)
+            ->get(['id', 'ten_san_pham'])
+            ->sortByDesc(fn ($p) => (int) ($salesMap[$p->id] ?? 0))
+            ->take(8);
+        if ($featured->isNotEmpty()) {
+            $names = $featured->map(function ($p) use ($salesMap) {
+                $sold = (int) ($salesMap[$p->id] ?? 0);
+                return $sold > 0 ? "{$p->ten_san_pham} (đã bán {$sold})" : $p->ten_san_pham;
+            })->implode(', ');
+            $sections[] = "- Món NỔI BẬT quán muốn giới thiệu (xếp theo bán chạy): {$names}.";
+        }
+
+        // 2) Món được nhiều tài khoản yêu thích nhất.
+        $favCounts = DB::table('san_pham_yeu_thich')
+            ->select('san_pham_id', DB::raw('COUNT(*) as so_thich'))
+            ->groupBy('san_pham_id')
+            ->orderByDesc('so_thich')
+            ->limit(5)
+            ->pluck('so_thich', 'san_pham_id');
+        if ($favCounts->isNotEmpty()) {
+            $favNames = SanPham::whereIn('id', $favCounts->keys())
+                ->whereIn('trang_thai_ban', $sellable)
+                ->pluck('ten_san_pham', 'id');
+            $list = [];
+            foreach ($favCounts as $id => $count) {
+                if (isset($favNames[$id])) {
+                    $list[] = "{$favNames[$id]} ({$count} lượt thích)";
+                }
+            }
+            if (! empty($list)) {
+                $sections[] = '- Món được KHÁCH YÊU THÍCH nhiều nhất: '.implode(', ', $list).'.';
+            }
+        }
+
+        // 3) Món có điểm đánh giá trung bình cao nhất (kèm số lượt).
+        $rated = DB::table('danh_gia_san_pham')
+            ->select('san_pham_id', DB::raw('AVG(so_sao) as avg_star'), DB::raw('COUNT(*) as so_danh_gia'))
+            ->groupBy('san_pham_id')
+            ->orderByDesc('avg_star')
+            ->orderByDesc('so_danh_gia')
+            ->limit(5)
+            ->get();
+        if ($rated->isNotEmpty()) {
+            $rateNames = SanPham::whereIn('id', $rated->pluck('san_pham_id'))
+                ->whereIn('trang_thai_ban', $sellable)
+                ->pluck('ten_san_pham', 'id');
+            $list = [];
+            foreach ($rated as $row) {
+                if (isset($rateNames[$row->san_pham_id])) {
+                    $star = number_format((float) $row->avg_star, 1);
+                    $list[] = "{$rateNames[$row->san_pham_id]} ({$star}★, {$row->so_danh_gia} đánh giá)";
+                }
+            }
+            if (! empty($list)) {
+                $sections[] = '- Món được ĐÁNH GIÁ CAO nhất: '.implode(', ', $list).'.';
+            }
+        }
+
+        return implode("\n", $sections);
     }
 
     private function buildMenuContext(): string

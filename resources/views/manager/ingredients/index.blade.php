@@ -81,13 +81,6 @@
         </table>
     </div>
 
-    @if($ingredients->hasPages())
-    <div class="card-footer">
-        <div class="pagination-footer">
-            <span class="pagination-info">Hiển thị {{ $ingredients->firstItem() }}-{{ $ingredients->lastItem() }} / {{ $ingredients->total() }} nguyên liệu</span>
-            {{ $ingredients->links() }}
-        </div>
-    </div>
-    @endif
+    @include('manager.partials.pager', ['paginator' => $ingredients, 'label' => 'nguyên liệu'])
 </div>
 @endsection

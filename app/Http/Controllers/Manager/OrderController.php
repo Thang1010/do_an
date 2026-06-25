@@ -50,6 +50,20 @@ class OrderController extends Controller
 
     public function index(Request $request)
     {
+        // Giới hạn khoảng lọc tối đa 6 tháng (chỉ khi người dùng tự chọn cả 2 mốc).
+        if ($request->filled('tu_ngay') && $request->filled('den_ngay') && ! $request->header('X-Partial')) {
+            $from = Carbon::parse($request->tu_ngay)->startOfDay();
+            $to = Carbon::parse($request->den_ngay)->endOfDay();
+            if ($to->lt($from)) {
+                return redirect()->route('manager.orders.index')
+                    ->with('error', 'Ngày kết thúc không được nhỏ hơn ngày bắt đầu.');
+            }
+            if ($from->copy()->addMonths(6)->lt($to)) {
+                return redirect()->route('manager.orders.index')
+                    ->with('error', 'Khoảng thời gian lọc không được vượt quá 6 tháng.');
+            }
+        }
+
         $query = DonHang::with(['nguoiDung', 'nhanVien', 'banAn', 'chiTietDonHang']);
 
         if (!$request->filled('tu_ngay') && !$request->filled('den_ngay')) {
@@ -113,7 +127,7 @@ class OrderController extends Controller
             $query->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', $request->pay_status));
         }
 
-        $orders = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
+        $orders = $query->orderByDesc('created_at')->paginate(10)->withQueryString();
 
         // Polling: chỉ trả bảng đơn (bỏ qua toàn bộ dữ liệu cho modal tạo đơn) để tự cập nhật.
         // Dùng header X-Partial để URL sạch, không rò vào link phân trang.

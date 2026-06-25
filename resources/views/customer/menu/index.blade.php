@@ -72,6 +72,9 @@
                             <div class="menu-card-img-wrap">
                                 <img src="{{ $product->image_url }}" alt="{{ $product->ten_san_pham }}" class="menu-card-img"
                                     loading="lazy" />
+                                @if($product->noi_bat)
+                                    <span class="menu-card-feature-badge">⭐ Nổi bật</span>
+                                @endif
                                 @php $isFav = isset($product->is_favorite) && $product->is_favorite; @endphp
                                 <button class="menu-card-heart {{ $isFav ? 'liked' : '' }}" aria-label="Yêu thích"
                                     data-wishlist="{{ $product->id }}" onclick="event.stopPropagation();">

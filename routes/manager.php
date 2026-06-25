@@ -50,6 +50,7 @@ Route::prefix('manager')->name('manager.')->middleware(['auth', 'role:quản lý
     Route::put('/products/{id}', [ProductController::class, 'update'])->middleware('role:chủ cửa hàng')->name('products.update');
     Route::delete('/products/{id}', [ProductController::class, 'destroy'])->middleware('role:chủ cửa hàng')->name('products.destroy');
     Route::post('/products/{id}/status', [ProductController::class, 'updateStatus'])->middleware('role:chủ cửa hàng')->name('products.status');
+    Route::post('/products/{id}/noi-bat', [ProductController::class, 'updateNoiBat'])->middleware('role:chủ cửa hàng')->name('products.noi-bat');
 
     // ── Categories ────────────────────────────────────────────────────
     // Quản lý: chỉ xem
@@ -67,6 +68,7 @@ Route::prefix('manager')->name('manager.')->middleware(['auth', 'role:quản lý
     Route::get('/tables/{id}', [TableController::class, 'show'])->name('tables.show');
 
     Route::post('/tables/{id}/add-item', [TableController::class, 'addItem'])->name('tables.add-item');
+    Route::patch('/tables/{id}/orders/{orderId}/served', [TableController::class, 'markServed'])->name('tables.order.served');
     Route::patch('/tables/{id}/payment', [TableController::class, 'updateOrderPayment'])->name('tables.payment.update');
     Route::patch('/tables/{id}/enter', [TableController::class, 'enterTable'])->name('tables.enter');
     Route::patch('/tables/{id}/release', [TableController::class, 'releaseTable'])->name('tables.release');

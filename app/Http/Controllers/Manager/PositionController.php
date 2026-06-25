@@ -53,7 +53,7 @@ class PositionController extends Controller
             })
             ->orderByRaw("CASE WHEN vai_tro_ap_dung = ? THEN 0 ELSE 1 END", [self::MANAGER_ROLE])
             ->orderBy('ten_chuc_vu')
-            ->paginate(12)
+            ->paginate(10)
             ->withQueryString();
 
         return view('manager.positions.index', [
@@ -127,8 +127,7 @@ class PositionController extends Controller
                 ->with(['nguoiDung', 'chucVu'])
                 ->where('chuc_vu_id', $position->id)
                 ->orderBy('id')
-                ->paginate(15)
-                ->withQueryString();
+                ->get();
 
             $assignedCount = HoSoQuanLy::query()->where('chuc_vu_id', $position->id)->count();
 
@@ -144,8 +143,7 @@ class PositionController extends Controller
                 ->with(['nguoiDung', 'chucVu'])
                 ->where('chuc_vu_id', $position->id)
                 ->orderBy('id')
-                ->paginate(15)
-                ->withQueryString();
+                ->get();
 
             $assignedCount = HoSoNhanVien::query()->where('chuc_vu_id', $position->id)->count();
 

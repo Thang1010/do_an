@@ -30,6 +30,7 @@ class SanPham extends Model
         return [
             'gia_goc' => 'float',
             'gia_khuyen_mai' => 'float',
+            'noi_bat' => 'boolean',
         ];
     }
 

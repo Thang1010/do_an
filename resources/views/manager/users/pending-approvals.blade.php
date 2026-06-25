@@ -99,14 +99,7 @@
             </table>
         </div>
 
-        @if($pendingUsers->hasPages())
-        <div class="card-footer">
-            <div class="pagination-footer">
-                <span class="pagination-info">Hiển thị {{ $pendingUsers->firstItem() }}-{{ $pendingUsers->lastItem() }} / {{ $pendingUsers->total() }} tài khoản</span>
-                {{ $pendingUsers->links() }}
-            </div>
-        </div>
-        @endif
+        @include('manager.partials.pager', ['paginator' => $pendingUsers, 'label' => 'tài khoản'])
     </div>
 </form>
 @endsection

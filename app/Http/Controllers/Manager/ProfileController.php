@@ -79,6 +79,8 @@ class ProfileController extends Controller
                 'cua_hang_dia_chi' => ['nullable', 'string', 'max:255'],
                 'cua_hang_lien_ket_trang' => ['nullable', 'string', 'max:255'],
                 'cua_hang_mo_ta' => ['nullable', 'string'],
+                'cua_hang_gio_mo_cua' => ['nullable', 'date_format:H:i'],
+                'cua_hang_gio_dong_cua' => ['nullable', 'date_format:H:i'],
             ]);
         } elseif ($user->vai_tro === 'nhân viên') {
             $rules = array_merge($rules, [
@@ -99,6 +101,8 @@ class ProfileController extends Controller
         $validated = $request->validate($rules, [
             'email.email' => 'Email không hợp lệ.',
             'email.unique' => 'Email đã được sử dụng.',
+            'cua_hang_gio_mo_cua.date_format' => 'Giờ mở cửa không hợp lệ.',
+            'cua_hang_gio_dong_cua.date_format' => 'Giờ đóng cửa không hợp lệ.',
         ]);
 
         $filename = null;
@@ -159,12 +163,24 @@ class ProfileController extends Controller
                     ->first() ?? CuaHang::first();
 
                 if ($store) {
-                    $store->update([
+                    $storeData = [
                         'so_dien_thoai' => $this->normalizeNullable($validated['cua_hang_so_dien_thoai'] ?? null),
                         'dia_chi' => $this->normalizeNullable($validated['cua_hang_dia_chi'] ?? null),
                         'lien_ket_trang' => $this->normalizeNullable($validated['cua_hang_lien_ket_trang'] ?? null),
                         'mo_ta' => $this->normalizeNullable($validated['cua_hang_mo_ta'] ?? null),
-                    ]);
+                    ];
+
+                    // Cột giờ mở/đóng KHÔNG nullable → chỉ ghi đè khi có giá trị mới.
+                    $gioMo = $this->normalizeNullable($validated['cua_hang_gio_mo_cua'] ?? null);
+                    $gioDong = $this->normalizeNullable($validated['cua_hang_gio_dong_cua'] ?? null);
+                    if ($gioMo) {
+                        $storeData['gio_mo_cua'] = $gioMo . ':00';
+                    }
+                    if ($gioDong) {
+                        $storeData['gio_dong_cua'] = $gioDong . ':00';
+                    }
+
+                    $store->update($storeData);
 
                     if (!$user->cua_hang_id) {
                         $user->update(['cua_hang_id' => $store->id]);

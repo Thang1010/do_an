@@ -132,6 +132,18 @@
                                 <input type="text" name="cua_hang_dia_chi" class="form-control"
                                     value="{{ old('cua_hang_dia_chi', $storeProfile?->dia_chi) }}">
                             </div>
+                            <div class="form-group">
+                                <label class="form-label">Giờ mở cửa</label>
+                                <input type="time" name="cua_hang_gio_mo_cua" class="form-control"
+                                    value="{{ old('cua_hang_gio_mo_cua', $storeProfile?->gio_mo_cua ? \Illuminate\Support\Str::substr($storeProfile->gio_mo_cua, 0, 5) : '') }}">
+                                @error('cua_hang_gio_mo_cua')<div class="form-error">{{ $message }}</div>@enderror
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Giờ đóng cửa</label>
+                                <input type="time" name="cua_hang_gio_dong_cua" class="form-control"
+                                    value="{{ old('cua_hang_gio_dong_cua', $storeProfile?->gio_dong_cua ? \Illuminate\Support\Str::substr($storeProfile->gio_dong_cua, 0, 5) : '') }}">
+                                @error('cua_hang_gio_dong_cua')<div class="form-error">{{ $message }}</div>@enderror
+                            </div>
                             <div class="form-group" style="grid-column: 1 / -1;">
                                 <label class="form-label">Liên kết trang (Fanpage)</label>
                                 <input type="url" name="cua_hang_lien_ket_trang" class="form-control"

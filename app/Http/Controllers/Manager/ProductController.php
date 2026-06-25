@@ -182,13 +182,33 @@ class ProductController extends Controller
      * Kiểm tra điều kiện để bật bán ("đang bán").
      * Trả về null nếu đủ điều kiện; ngược lại trả về chuỗi lý do cụ thể.
      *
-     * - Sản phẩm quản lý "theo số lượng" (không dùng công thức): luôn đủ điều kiện (miễn trừ).
+     * - Sản phẩm quản lý "theo số lượng" (không công thức): chặn bật bán khi tồn kho
+     *   của "nguyên liệu tự thân" (chính sản phẩm) đã hết (≤ 0).
      * - Sản phẩm quản lý "theo nguyên liệu": phải có công thức và tồn kho mỗi nguyên liệu
      *   phải ≥ số lượng cần cho 1 phần.
      */
     private function sellBlockReason(SanPham $product): ?string
     {
         if (rtrim($product->loai_quan_ly_kho ?? '') !== 'theo nguyên liệu') {
+            // Sản phẩm bán lẻ: kho chính là "nguyên liệu tự thân" gắn qua san_pham_id.
+            $selfIngredient = NguyenLieu::where('san_pham_id', $product->id)
+                ->where('trang_thai', NguyenLieu::TRANG_THAI_DANG_DUNG)
+                ->first();
+
+            if (!$selfIngredient) {
+                return null; // không theo dõi kho → không chặn
+            }
+
+            $balanceExpression = \App\Enums\TransactionType::stockBalanceExpression('lich_su_kho');
+            $stock = (float) (DB::table('lich_su_kho')
+                ->where('nguyen_lieu_id', $selfIngredient->id)
+                ->selectRaw("COALESCE({$balanceExpression}, 0) as so_luong")
+                ->value('so_luong') ?? 0);
+
+            if ($stock <= 0) {
+                return 'Không thể bật bán: sản phẩm đã hết hàng trong kho. Vui lòng nhập thêm hàng trước.';
+            }
+
             return null;
         }
 

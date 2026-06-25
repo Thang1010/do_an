@@ -44,10 +44,20 @@ class LichSuKho extends Model
                 ->value('so_luong') ?? 0);
 
             if ($currentStock <= 0) {
+                // 1) Sản phẩm CÓ công thức dùng nguyên liệu này.
                 $productIds = CongThucSanPham::where('nguyen_lieu_id', $ingredientId)->pluck('san_pham_id');
+
+                // 2) Sản phẩm BÁN LẺ (không công thức): nguyên liệu này CHÍNH LÀ sản phẩm đó
+                //    (gắn qua nguyen_lieu.san_pham_id) → hết hàng cũng phải ngừng bán.
+                $selfProductId = NguyenLieu::whereKey($ingredientId)->value('san_pham_id');
+                if ($selfProductId) {
+                    $productIds = $productIds->push($selfProductId);
+                }
+
                 if ($productIds->isNotEmpty()) {
-                    SanPham::whereIn('id', $productIds)
-                        ->where('loai_quan_ly_kho', 'theo nguyên liệu')
+                    // Áp cho cả 'theo nguyên liệu' lẫn 'theo số lượng' — id đã được lấy đúng
+                    // theo từng loại ở trên nên không cần lọc loai_quan_ly_kho nữa.
+                    SanPham::whereIn('id', $productIds->unique()->values())
                         ->where('trang_thai_ban', 'đang bán')
                         ->update(['trang_thai_ban' => 'ngừng bán']);
                 }

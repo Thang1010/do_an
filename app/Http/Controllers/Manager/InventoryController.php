@@ -124,7 +124,7 @@ class InventoryController extends Controller
     {
         $currentPurpose = $this->normalizePurposeFilter($request->input('muc_dich_su_dung'));
         $nguyenLieus = $this->applyPurposeFilter($this->baseInventoryQuery(), $currentPurpose)
-            ->orderByRaw('CASE WHEN so_luong <= 0 THEN 0 ELSE 1 END')
+            ->orderByRaw('CASE WHEN ' . $this->balanceExpressionRaw() . ' <= 0 THEN 0 ELSE 1 END')
             ->orderBy('nguyen_lieu.ten_nguyen_lieu')
             ->get();
 
@@ -217,7 +217,7 @@ class InventoryController extends Controller
     {
         $currentPurpose = $this->normalizePurposeFilter($request->input('muc_dich_su_dung'));
         $nguyenLieus = $this->applyPurposeFilter($this->baseInventoryQuery(), $currentPurpose)
-            ->orderByRaw('CASE WHEN so_luong <= 0 THEN 0 ELSE 1 END')
+            ->orderByRaw('CASE WHEN ' . $this->balanceExpressionRaw() . ' <= 0 THEN 0 ELSE 1 END')
             ->orderBy('nguyen_lieu.ten_nguyen_lieu')
             ->get();
         $selectedNguyenLieuId = $request->query('nguyen_lieu_id');
@@ -419,7 +419,7 @@ class InventoryController extends Controller
         }
 
         if ($request->filled('trang_thai')) {
-            $expr = 'FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1))';
+            $expr = $this->cupsExpression();
             if ($request->trang_thai === 'het') {
                 $query->havingRaw("{$expr} <= 0");
             } elseif ($request->trang_thai === 'sap_het') {
@@ -460,10 +460,23 @@ class InventoryController extends Controller
             );
     }
 
-    /** Biểu thức SQL: số cốc/sản phẩm có thể làm với tồn kho hiện tại. */
+    /**
+     * Tồn kho dạng GỐC (hàm gộp), KHÔNG dùng alias `so_luong`.
+     * Dùng trong ORDER BY/HAVING để tương thích ONLY_FULL_GROUP_BY (MySQL 5.7):
+     * trong ORDER BY/HAVING, alias `so_luong` bị hiểu thành cột `lich_su_kho.so_luong`
+     * (không gộp, không trong GROUP BY) → lỗi 1055. Dùng nguyên SUM(...) thì hợp lệ.
+     */
+    private function balanceExpressionRaw(): string
+    {
+        return 'COALESCE(' . $this->stockBalanceExpression() . ', 0)';
+    }
+
+    /** Biểu thức SQL: số cốc/sản phẩm có thể làm với tồn kho hiện tại (dạng gốc, an toàn cho ORDER BY/HAVING). */
     private function cupsExpression(): string
     {
-        return 'FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1))';
+        $maxTieuHao = '(SELECT MAX(ctsp.so_luong_can) FROM cong_thuc_san_pham ctsp WHERE ctsp.nguyen_lieu_id = nguyen_lieu.id)';
+
+        return 'FLOOR(' . $this->balanceExpressionRaw() . ' / GREATEST(COALESCE(' . $maxTieuHao . ', 1), 1))';
     }
 
     private function buildHistoryQuery(Request $request, string $type): Builder

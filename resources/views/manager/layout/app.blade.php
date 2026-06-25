@@ -40,7 +40,7 @@
         <nav class="sidebar-nav">
             @php
                 $isStoreOwner = auth()->check() && auth()->user()->vai_tro === 'chủ cửa hàng';
-                $inventoryPurposes = \Illuminate\Support\Facades\Cache::remember('manager.inventory.purposes', now()->addMinutes(5), function () {
+                $loadInventoryPurposes = function () {
                     return \App\Models\NguyenLieu::query()
                         ->whereNotNull('muc_dich_su_dung')
                         ->where('muc_dich_su_dung', '!=', '')
@@ -49,7 +49,18 @@
                         ->unique()
                         ->values()
                         ->toArray();
-                });
+                };
+                // Cache 5 phút cho nhẹ; nếu cache backend lỗi (vd Redis sập) thì
+                // vẫn truy vấn trực tiếp để không làm sập cả khu quản lý.
+                try {
+                    $inventoryPurposes = \Illuminate\Support\Facades\Cache::remember(
+                        \App\Models\NguyenLieu::PURPOSES_CACHE_KEY,
+                        now()->addMinutes(5),
+                        $loadInventoryPurposes
+                    );
+                } catch (\Throwable $e) {
+                    $inventoryPurposes = $loadInventoryPurposes();
+                }
                 $currentInventoryPurpose = request('muc_dich_su_dung', '');
             @endphp
 

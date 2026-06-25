@@ -4,15 +4,30 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 class NguyenLieu extends Model
 {
     public const TRANG_THAI_DANG_DUNG = 'đang sử dụng';
     public const TRANG_THAI_NGUNG_DUNG = 'ngừng sử dụng';
 
+    /** Cache danh sách "mục đích sử dụng" hiển thị ở sidebar (layout manager). */
+    public const PURPOSES_CACHE_KEY = 'manager.inventory.purposes';
+
     protected $table = 'nguyen_lieu';
 
     public $timestamps = false;
+
+    /**
+     * Khi nguyên liệu thay đổi (thêm/sửa/xóa) thì xóa cache danh sách mục đích
+     * sử dụng để menu "Quản lý kho" ở sidebar cập nhật ngay, không phải đợi 5 phút.
+     */
+    protected static function booted(): void
+    {
+        $forgetPurposes = static fn () => Cache::forget(self::PURPOSES_CACHE_KEY);
+        static::saved($forgetPurposes);
+        static::deleted($forgetPurposes);
+    }
 
     protected $fillable = [
         'san_pham_id',

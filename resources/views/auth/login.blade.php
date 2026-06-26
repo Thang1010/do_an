@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Đăng nhập - XM Coffee</title>
+    <link rel="icon" type="image/png" href="{{ asset('images/logo_web.png') }}">
+    <link rel="apple-touch-icon" href="{{ asset('images/logo_web.png') }}">
     <meta name="description" content="Đăng nhập vào tài khoản XM Coffee của bạn.">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <link rel="preconnect" href="https://fonts.googleapis.com">

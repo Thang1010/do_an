@@ -73,6 +73,71 @@ class OrderInventoryService
     }
 
     /**
+     * Kiểm tra tồn kho cho đơn hàng mà KHÔNG ghi gì vào kho.
+     *
+     * Dùng cho pre-check khi khách ấn "Thanh toán": nếu thiếu nguyên liệu thì
+     * chặn tạo link thanh toán và báo "sản phẩm đã hết hàng".
+     *
+     * @return string[] Danh sách mô tả nguyên liệu thiếu (rỗng = đủ kho).
+     */
+    public function checkStockForOrder(DonHang $order): array
+    {
+        $usage = $this->ingredientUsageForOrder($order->id);
+        if (empty($usage)) {
+            return [];
+        }
+
+        $stocks = $this->currentStocksForIngredients(array_keys($usage));
+        $shortages = [];
+
+        foreach ($usage as $ingredientId => $data) {
+            $required = (float) $data['qty'];
+            $available = (float) ($stocks[$ingredientId] ?? 0);
+
+            if ($required > $available + 0.00001) {
+                $shortages[] = sprintf(
+                    '%s (cần %.2f, còn %.2f)',
+                    $data['name'],
+                    $required,
+                    $available
+                );
+            }
+        }
+
+        return $shortages;
+    }
+
+    /**
+     * Xuất kho nguyên liệu cho đơn KHÁCH HÀNG khi thanh toán THÀNH CÔNG.
+     *
+     * Khác với exportIngredientsForOrder(): KHÔNG kiểm tra/không throw khi thiếu kho,
+     * vì tiền đã vào PayOS rồi — trường hợp đua mili-giây hi hữu thì cho phép tồn kho
+     * xuống âm, và xử lý bằng quy trình hoàn tiền + xóa đơn thủ công (xóa đơn sẽ hoàn kho).
+     */
+    public function exportIngredientsForPaidOrder(DonHang $order): void
+    {
+        $usage = $this->ingredientUsageForOrder($order->id);
+
+        foreach ($usage as $ingredientId => $data) {
+            $required = (float) $data['qty'];
+
+            if ($required <= 0) {
+                continue;
+            }
+
+            LichSuKho::create([
+                'nguyen_lieu_id' => (int) $ingredientId,
+                'loai_giao_dich' => 'xuất kho',
+                'don_hang_id' => $order->id,
+                'so_luong' => $required,
+                'nguoi_tao_id' => Auth::id(),
+                'ghi_chu' => 'Xuất theo thanh toán thành công đơn hàng #' . $order->id,
+                'created_at' => now(),
+            ]);
+        }
+    }
+
+    /**
      * Tính lượng nguyên liệu sử dụng cho đơn hàng.
      *
      * Bao gồm cả:

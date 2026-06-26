@@ -5,7 +5,9 @@
     <div style="margin-bottom: 12px; padding: 10px; background-color: #f1f5f9; border-radius: 8px;">
         <div style="margin-bottom: 4px;">Tổng tiền: <strong>{{ number_format($order->tong_tien ?? 0, 0, ',', '.') }}đ</strong></div>
         <div style="margin-bottom: 4px;">Phương thức: <strong>{{ $order->phuong_thuc_thanh_toan ?? 'chuyển khoản' }}</strong></div>
-        <div style="margin-bottom: 4px;">Thời gian: <strong>{{ now()->format('H:i d/m/Y') }}</strong></div>
+        <div style="margin-bottom: 4px;">Thời gian thanh toán: <strong>{{ now()->format('H:i d/m/Y') }}</strong></div>
+        <div style="margin-bottom: 4px;">Thời gian đặt hàng: <strong>{{ optional($order->created_at)->format('H:i d/m/Y') }}</strong></div>
+        <div style="margin-bottom: 4px;">{{ $order->loai_don === 'đặt hàng trước' ? 'Thời gian hẹn đến' : 'Dự kiến hoàn thành' }}: <strong>{{ $order->thoi_gian_den ? $order->thoi_gian_den->format('H:i d/m/Y') : '—' }}</strong></div>
     </div>
     
     <p style="margin-bottom: 4px;">Chi tiết món ăn:</p>

@@ -21,6 +21,9 @@
 
 				<div class="cart-payment-meta" style="margin-bottom: 16px;">
 					<div><strong>Ngày tạo:</strong> {{ optional($order->created_at)->format('d/m/Y H:i') }}</div>
+					@if($order->thoi_gian_den)
+						<div><strong>{{ $order->loai_don === 'đặt hàng trước' ? 'Thời gian hẹn đến' : 'Dự kiến hoàn thành' }}:</strong> {{ $order->thoi_gian_den->format('d/m/Y H:i') }}</div>
+					@endif
 					@if($order->banAn)
 						<div><strong>Bàn:</strong> {{ $order->banAn->ten_ban ?? ('Bàn ' . $order->banAn->so_ban) }}</div>
 					@endif

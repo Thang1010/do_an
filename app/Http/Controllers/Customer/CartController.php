@@ -18,6 +18,9 @@ use Illuminate\Support\Facades\DB;
 
 class CartController extends Controller
 {
+    /** Thời gian pha chế ước lượng cho MỖI sản phẩm (phút). Dùng tính thời gian dự kiến hoàn thành đơn. */
+    private const PHUT_MOI_SAN_PHAM = 5;
+
     public function __construct(
         private readonly PaymentService $paymentService,
         private readonly OrderInventoryService $inventoryService,
@@ -471,7 +474,7 @@ class CartController extends Controller
                     'phuong_thuc_thanh_toan' => 'chuyển khoản',
                 ], $cart, null);
 
-                session()->forget(['cart', 'qr_ban_an_id']);
+                // Giữ giỏ hàng & QR tới khi thanh toán THÀNH CÔNG (xóa ở luồng success). Khách hủy → không mất giỏ.
                 if ($request->ajax()) {
                     return response()->json([
                         'success' => true,
@@ -496,7 +499,7 @@ class CartController extends Controller
                 'phuong_thuc_thanh_toan' => 'chuyển khoản',
             ], $cart, null);
 
-            session()->forget(['cart', 'qr_ban_an_id']);
+            // Giữ giỏ hàng & QR tới khi thanh toán THÀNH CÔNG (xóa ở luồng success). Khách hủy → không mất giỏ.
             if ($request->ajax()) {
                 return response()->json([
                     'success' => true,
@@ -548,7 +551,7 @@ class CartController extends Controller
                     'phuong_thuc_thanh_toan' => 'chuyển khoản',
                 ], $cart, $voucherId);
 
-                session()->forget(['cart', 'qr_ban_an_id']);
+                // Giữ giỏ hàng & QR tới khi thanh toán THÀNH CÔNG (xóa ở luồng success). Khách hủy → không mất giỏ.
                 if ($request->ajax()) {
                     return response()->json([
                         'success' => true,
@@ -575,7 +578,7 @@ class CartController extends Controller
                     'phuong_thuc_thanh_toan' => 'chuyển khoản',
                 ], $cart, $voucherId);
 
-                session()->forget(['cart', 'qr_ban_an_id']);
+                // Giữ giỏ hàng & QR tới khi thanh toán THÀNH CÔNG (xóa ở luồng success). Khách hủy → không mất giỏ.
                 if ($request->ajax()) {
                     return response()->json([
                         'success' => true,
@@ -605,7 +608,7 @@ class CartController extends Controller
                 'phuong_thuc_thanh_toan' => 'chuyển khoản',
             ], $cart, $voucherId);
 
-            session()->forget(['cart', 'qr_ban_an_id']);
+            // Giữ giỏ hàng & QR tới khi thanh toán THÀNH CÔNG (xóa ở luồng success). Khách hủy → không mất giỏ.
             if ($request->ajax()) {
                 return response()->json([
                     'success' => true,
@@ -623,6 +626,9 @@ class CartController extends Controller
     // ── Trang success ─────────────────────────────────────────────
     public function success()
     {
+        // Tới được trang xác nhận = đã thanh toán xong → dọn giỏ hàng (an toàn, nếu còn).
+        session()->forget(['cart', 'qr_ban_an_id']);
+
         $orderCode = session('order_code') ?: request()->query('order_code');
         $orderCodes = session('order_codes', []);
 
@@ -661,6 +667,21 @@ class CartController extends Controller
 
         if ($order->nguoi_dung_id && (!auth()->check() || (auth()->id() !== $order->nguoi_dung_id && !in_array(auth()->user()->vai_tro, ['nhân viên', 'quản lý', 'chủ cửa hàng'])))) {
             abort(403);
+        }
+
+        // Đơn KHÁCH HÀNG: kiểm tra tồn kho TRƯỚC khi tạo link thanh toán.
+        // Nếu trong lúc khách chần chừ mà nguyên liệu đã hết (người khác mua trước)
+        // → báo "đã hết hàng" và không cho thanh toán. Đơn cửa hàng đã trừ kho từ
+        // lúc tạm tính nên bỏ qua check này.
+        if (is_null($order->nhan_vien_id)) {
+            $shortages = $this->inventoryService->checkStockForOrder($order);
+            if (!empty($shortages)) {
+                $message = 'Rất tiếc, sản phẩm đã hết hàng: ' . implode('; ', $shortages);
+                if (request()->ajax() || request()->wantsJson()) {
+                    return response()->json(['success' => false, 'message' => $message]);
+                }
+                return back()->with('error', $message);
+            }
         }
 
         $clientId = env('PAYOS_CLIENT_ID');
@@ -720,6 +741,7 @@ class CartController extends Controller
                     'success' => true,
                     'checkoutUrl' => $checkoutUrl,
                     'payosOrderId' => $payosOrderId,
+                    'returnUrl' => $data['returnUrl'],
                 ]);
             }
 
@@ -740,6 +762,7 @@ class CartController extends Controller
         $order = DonHang::where('ma_don_hang', $orderCode)->firstOrFail();
         
         if ($order->trang_thai_thanh_toan === 'đã thanh toán') {
+            session()->forget(['cart', 'qr_ban_an_id']);
             return response()->json(['success' => true, 'status' => 'đã thanh toán']);
         }
 
@@ -766,9 +789,24 @@ class CartController extends Controller
                     $status = $response->json('data.status');
                     if ($status === 'PAID') {
                         $order->updatePaymentStatus('đã thanh toán', 'chuyển khoản');
+                        $this->exportStockForPaidCustomerOrder($order);
                         $this->paymentService->syncThanhToanRecord($order, 'chuyển khoản', 'đã thanh toán');
                         $this->paymentService->applyTableStatusAfterPayment($order->fresh());
+
+                        // Gửi email xác nhận cho KHÁCH (kèm thời gian đặt & dự kiến hoàn thành).
+                        // Nhánh này chỉ chạy 1 lần (lần đầu đơn chuyển sang "đã thanh toán") nên không gửi trùng.
+                        if ($order->nguoiDung && $order->nguoiDung->email) {
+                            \Illuminate\Support\Facades\Mail::to($order->nguoiDung->email)->send(new \App\Mail\CustomerOrderPaidMail($order));
+                        } elseif ($order->email_khach_hang) {
+                            \Illuminate\Support\Facades\Mail::to($order->email_khach_hang)->send(new \App\Mail\CustomerOrderPaidMail($order));
+                        }
+
+                        session()->forget(['cart', 'qr_ban_an_id']);
                         return response()->json(['success' => true, 'status' => 'đã thanh toán']);
+                    }
+                    // Khách bấm "Hủy" trên PayOS → link bị huỷ/hết hạn → báo client đóng modal.
+                    if (in_array($status, ['CANCELLED', 'EXPIRED'], true)) {
+                        return response()->json(['success' => true, 'status' => 'đã hủy']);
                     }
                 }
             } catch (\Exception $e) {
@@ -787,8 +825,14 @@ class CartController extends Controller
 
         if ($request->code === '00' && $order->trang_thai_thanh_toan !== 'đã thanh toán') {
             $order->updatePaymentStatus('đã thanh toán', 'chuyển khoản');
+            $this->exportStockForPaidCustomerOrder($order);
             $this->paymentService->syncThanhToanRecord($order, 'chuyển khoản', 'đã thanh toán');
             $this->paymentService->applyTableStatusAfterPayment($order->fresh());
+        }
+
+        // Quay về từ PayOS (thành công) → xóa giỏ hàng.
+        if ($order->trang_thai_thanh_toan === 'đã thanh toán') {
+            session()->forget(['cart', 'qr_ban_an_id']);
         }
 
         if ($source === 'staff' && $order->ban_an_id) {
@@ -806,12 +850,19 @@ class CartController extends Controller
         $source = $request->query('source');
 
         if ($source === 'staff' && $order->ban_an_id) {
-            return redirect()->route('staff.tables.index', ['table' => $order->ban_an_id])->with('error', 'Hủy thanh toán PayOS.');
+            $fallbackUrl = route('staff.tables.index', ['table' => $order->ban_an_id]);
         } elseif ($source === 'manager' && $order->ban_an_id) {
-            return redirect()->route('manager.tables.index', ['table' => $order->ban_an_id])->with('error', 'Hủy thanh toán PayOS.');
+            $fallbackUrl = route('manager.tables.index', ['table' => $order->ban_an_id]);
+        } else {
+            $fallbackUrl = route('menu.index');
         }
 
-        return redirect()->route('menu.index')->with('error', 'Bạn đã hủy thanh toán đơn hàng ' . $orderCode);
+        // Trang này bị PayOS nạp trong iframe khi khách HỦY. Nếu đang trong iframe (modal)
+        // → báo trang cha đóng modal; nếu mở full-page → điều hướng về fallbackUrl như cũ.
+        return response()->view('customer.cart.payos-cancel', [
+            'orderCode' => $orderCode,
+            'fallbackUrl' => $fallbackUrl,
+        ]);
     }
 
     public function cancelGuest(Request $request)
@@ -838,6 +889,48 @@ class CartController extends Controller
         return redirect()->route('menu.index')->with('success', 'Đã hủy đơn hàng.');
     }
 
+    /**
+     * Khách HỦY/ĐÓNG modal thanh toán mà chưa trả tiền → xóa đơn chưa thanh toán
+     * (hoàn voucher), NHƯNG GIỮ NGUYÊN giỏ hàng để khách đặt lại.
+     *
+     * Đơn khách CHƯA trừ kho (chỉ trừ khi thanh toán thành công) nên KHÔNG hoàn kho
+     * ở đây — hoàn sẽ làm tồn kho bị cộng khống.
+     */
+    public function abandonPayment(Request $request, string $orderCode)
+    {
+        $order = DonHang::where('ma_don_hang', $orderCode)->first();
+        if (!$order) {
+            return response()->json(['success' => true]); // đã bị xóa rồi
+        }
+
+        // Chỉ chủ đơn (thành viên) hoặc đơn khách vãng lai mới được hủy.
+        if ($order->nguoi_dung_id && (!auth()->check() || auth()->id() !== $order->nguoi_dung_id)) {
+            abort(403);
+        }
+
+        if ($order->trang_thai_thanh_toan === 'đã thanh toán') {
+            return response()->json(['success' => false, 'message' => 'Đơn đã thanh toán.'], 422);
+        }
+
+        $banAnId = $order->ban_an_id;
+        DB::transaction(function () use ($order) {
+            // Chỉ hoàn kho cho đơn do CỬA HÀNG tạo (đã trừ kho từ trước). Đơn khách
+            // chưa trừ kho khi chưa thanh toán nên không hoàn (tránh cộng khống).
+            if (!is_null($order->nhan_vien_id)) {
+                $this->inventoryService->restoreIngredientsForOrder($order);
+            }
+            \App\Models\ThanhToan::where('don_hang_id', $order->id)->delete();
+            $order->chiTietDonHang()->delete();
+            $order->delete(); // booted() của DonHang tự hoàn voucher
+        });
+
+        if ($banAnId) {
+            TableStatusService::refreshForTable($banAnId);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
     public function confirmPayment(Request $request, string $orderCode)
     {
         $request->validate([
@@ -852,6 +945,7 @@ class CartController extends Controller
 
         if ($order->trang_thai_thanh_toan !== 'đã thanh toán') {
             $order->updatePaymentStatus('đã thanh toán', 'chuyển khoản');
+            $this->exportStockForPaidCustomerOrder($order);
             $this->paymentService->syncThanhToanRecord($order, 'chuyển khoản', 'đã thanh toán');
             $this->paymentService->applyTableStatusAfterPayment($order->fresh());
 
@@ -861,6 +955,8 @@ class CartController extends Controller
                 \Illuminate\Support\Facades\Mail::to($order->email_khach_hang)->send(new \App\Mail\CustomerOrderPaidMail($order));
             }
         }
+
+        session()->forget(['cart', 'qr_ban_an_id']);
 
         // Khách hàng thành viên (chủ đơn) → trang chi tiết đơn; khách vãng lai → trang xác nhận.
         if ($order->nguoi_dung_id && auth()->check() && auth()->id() === $order->nguoi_dung_id) {
@@ -911,6 +1007,15 @@ class CartController extends Controller
             $trangThaiThanhToan = $attrs['trang_thai_thanh_toan'] ?? 'chưa thanh toán';
             $phuongThucThanhToan = $attrs['phuong_thuc_thanh_toan'] ?? null;
 
+            // Thời gian đến / dự kiến hoàn thành:
+            //  - 'đặt hàng trước': giờ khách tự chọn (đã truyền sẵn trong $attrs['thoi_gian_den']).
+            //  - 'mang về' / 'sử dụng ngay': tính từ thời điểm đặt + (tổng số sản phẩm × 5 phút/sản phẩm).
+            $thoiGianDen = $attrs['thoi_gian_den'] ?? null;
+            if ($thoiGianDen === null && in_array($loaiDon, ['mang về', 'sử dụng ngay'], true)) {
+                $tongSoLuong = array_sum(array_map(fn($i) => $i['qty'], $cart));
+                $thoiGianDen = now()->addMinutes(self::PHUT_MOI_SAN_PHAM * $tongSoLuong);
+            }
+
             $order = DonHang::create([
                 'ma_don_hang' => 'ORD-' . strtoupper(Str::random(8)),
                 'voucher_nguoi_dung_id' => $voucherNguoiDungId,
@@ -936,7 +1041,7 @@ class CartController extends Controller
                     'thanh_tien' => $thanhTien,
                     'ghi_chu_mon' => trim(($item['nhiet_do'] ? "({$item['nhiet_do']}) " : '') . ($item['note'] ?? '')),
                     'loai_don' => $loaiDon,
-                    'thoi_gian_den' => $attrs['thoi_gian_den'] ?? null,
+                    'thoi_gian_den' => $thoiGianDen,
                     'trang_thai_thanh_toan' => $trangThaiThanhToan,
                     'phuong_thuc_thanh_toan' => $phuongThucThanhToan,
                     'so_tien_giam' => $itemDiscount,
@@ -944,9 +1049,28 @@ class CartController extends Controller
                 ]);
             }
 
-            $this->inventoryService->exportIngredientsForOrder($order);
+            // KHÔNG trừ kho ở đây. Đơn khách chỉ trừ kho khi THANH TOÁN THÀNH CÔNG
+            // (xem exportStockForPaidCustomerOrder()). Đơn do cửa hàng tạo đã trừ kho
+            // ở luồng tạm tính/thêm món riêng.
 
             return $order;
         });
+    }
+
+    /**
+     * Trừ kho cho đơn KHÁCH HÀNG khi thanh toán thành công.
+     *
+     * CHỈ áp dụng cho đơn khách (nhan_vien_id === null). Đơn do cửa hàng tạo
+     * (nhân viên/quản lý/chủ) đã trừ kho lúc tạm tính/thêm món nên KHÔNG trừ lại
+     * ở đây để tránh trừ kho 2 lần (payosReturn/paymentStatusAjax dùng chung cho
+     * cả khách lẫn cửa hàng qua source=staff/manager).
+     */
+    private function exportStockForPaidCustomerOrder(DonHang $order): void
+    {
+        if (!is_null($order->nhan_vien_id)) {
+            return;
+        }
+
+        $this->inventoryService->exportIngredientsForPaidOrder($order);
     }
 }

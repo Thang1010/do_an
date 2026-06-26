@@ -21,14 +21,18 @@
 
     <div style="margin-bottom: 4px;">Phương thức: {{ $order->phuong_thuc_thanh_toan ?? 'chuyển khoản' }}</div>
     <div style="margin-bottom: 4px;">Thời gian thanh toán: {{ now()->format('H:i d/m/Y') }}</div>
-    
+    <div style="margin-bottom: 4px;">Thời gian đặt hàng: {{ optional($order->created_at)->format('H:i d/m/Y') }}</div>
+
     @if($order->loai_don === 'đặt hàng trước')
         <div style="margin-bottom: 4px;">Loại đơn: đặt trước</div>
         <div style="margin-bottom: 4px;">Thời gian dự kiến đến: {{ $order->thoi_gian_den ? $order->thoi_gian_den->format('H:i d/m/Y') : '' }}</div>
         <div style="margin-bottom: 4px;">Bàn: {{ $order->banAn ? $order->banAn->so_ban : 'Chưa chọn' }}</div>
     @else
-        <div style="margin-bottom: 4px;">Loại đơn: sử dụng tại quán</div>
-        <div style="margin-bottom: 4px;">Bàn: {{ $order->banAn ? $order->banAn->so_ban : 'Chưa chọn' }}</div>
+        <div style="margin-bottom: 4px;">Loại đơn: {{ $order->loai_don === 'mang về' ? 'mang về' : 'sử dụng tại quán' }}</div>
+        <div style="margin-bottom: 4px;">Thời gian dự kiến hoàn thành: {{ $order->thoi_gian_den ? $order->thoi_gian_den->format('H:i d/m/Y') : '' }}</div>
+        @if($order->loai_don !== 'mang về')
+            <div style="margin-bottom: 4px;">Bàn: {{ $order->banAn ? $order->banAn->so_ban : 'Chưa chọn' }}</div>
+        @endif
     @endif
 
     @if($order->voucherNguoiDung && $order->voucherNguoiDung->voucher)

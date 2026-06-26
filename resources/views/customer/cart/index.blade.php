@@ -353,7 +353,7 @@
                         <div id="payos-qr-container-customer" style="width:100%; height:490px; position: relative; overflow: hidden; margin-bottom: 16px;">
                             <p id="payos-loading-text-customer" style="color: #d1d5db; margin-top: 50px; position: relative; z-index: 10;">Đang tải mã QR...</p>
                             <div style="position: absolute; top: 0; left: 50%; margin-left: -200px; width: 400px; height: 650px; transform: scale(0.75); transform-origin: top center;">
-                                <iframe id="payos-qr-iframe-customer" src="" style="width:100%; height:100%; border:none; border-radius:12px; display:none;" allow="clipboard-write"></iframe>
+                                <iframe id="payos-qr-iframe-customer" src="" style="width:100%; height:100%; border:none; border-radius:12px; display:none; background:#1a120c;" allow="clipboard-write"></iframe>
                             </div>
                             <div id="payos-success-text-customer" style="display:none; position:absolute; inset:0; background:#1a120c; flex-direction:column; align-items:center; justify-content:center; gap:16px; border-radius:12px; z-index:20;">
                                 <div style="width:76px; height:76px; border-radius:50%; background:rgba(52,211,153,0.15); display:flex; align-items:center; justify-content:center;">
@@ -764,7 +764,9 @@ function handleCheckoutFormSubmit(e) {
 document.getElementById('guest-checkout-form')?.addEventListener('submit', handleCheckoutFormSubmit);
 document.getElementById('auth-checkout-form')?.addEventListener('submit', handleCheckoutFormSubmit);
 
+let currentPayosOrderCode = null;
 function openPayOSModal(orderCode, orderId) {
+    currentPayosOrderCode = orderCode;
     const modal = document.getElementById('payos-checkout-modal');
     if (!modal) return;
     modal.classList.add('open');
@@ -790,15 +792,17 @@ function openPayOSModal(orderCode, orderId) {
         onPaid: function () {
             successText.style.display = 'flex';
             setTimeout(function () {
-                // Khách hàng thành viên → trang chi tiết đơn; khách vãng lai → trang xác nhận.
+                // Khách hàng thành viên → trang chi tiết đơn; khách vãng lai → quay về trang menu.
                 if (IS_MEMBER && orderId) {
                     window.location.href = ORDER_DETAIL_BASE + '/' + orderId;
                 } else {
-                    window.location.href = SUCCESS_URL + '?order_code=' + encodeURIComponent(orderCode);
+                    window.location.href = menuUrl;
                 }
             }, 1000);
         },
-        onFail: function (msg) { showNotice(msg); closePayOSModal(); }
+        onFail: function (msg) { showNotice(msg); closePayOSModal(); },
+        // Khách bấm "Hủy" trên PayOS → đóng modal thay vì hiển thị trang điều hướng trong iframe.
+        onCancel: function () { closePayOSModal(); }
     });
 }
 
@@ -810,7 +814,23 @@ function closePayOSModal() {
     }
     document.body.classList.remove('cart-modal-open');
     PayOSPayment.stop();
-    window.location.reload();
+
+    // Hủy đơn CHƯA thanh toán để khỏi tồn đơn rác, NHƯNG giữ nguyên giỏ hàng.
+    // Không reload → không bị nháy trang; giỏ hàng vẫn còn để khách đặt lại.
+    if (currentPayosOrderCode) {
+        fetch('/cart/payment/' + encodeURIComponent(currentPayosOrderCode) + '/abandon', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).catch(function () {});
+        currentPayosOrderCode = null;
+    }
+
+    // Trả iframe về trống cho lần mở sau.
+    var ifr = document.getElementById('payos-qr-iframe-customer');
+    if (ifr) { ifr.src = ''; ifr.style.display = 'none'; }
 }
 
 document.getElementById('close-payos-modal')?.addEventListener('click', closePayOSModal);

@@ -44,6 +44,7 @@ Route::get('/cart/payment/{orderCode}/status', [CartController::class, 'paymentS
 Route::get('/cart/payment/{orderCode}/payos-return', [CartController::class, 'payosReturn'])->name('cart.payos.return');
 Route::get('/cart/payment/{orderCode}/payos-cancel', [CartController::class, 'payosCancel'])->name('cart.payos.cancel');
 Route::post('/cart/payment/{orderCode}/confirm', [CartController::class, 'confirmPayment'])->name('cart.payment.confirm');
+Route::post('/cart/payment/{orderCode}/abandon', [CartController::class, 'abandonPayment'])->name('cart.payos.abandon');
 Route::post('/cart/cancel', [CartController::class, 'cancelGuest'])->name('cart.cancel_guest');
 
 // Chatbot

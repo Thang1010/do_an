@@ -43,6 +43,10 @@
                         <span class="font-600">{{ ucfirst($order->loai_don ?? '—') }}</span>
                     </div>
                     <div class="flex-center-between">
+                        <span class="text-12 text-muted">{{ $order->loai_don === 'đặt hàng trước' ? 'Thời gian hẹn đến' : 'Dự kiến xong' }}</span>
+                        <span class="font-600">{{ $order->thoi_gian_den ? $order->thoi_gian_den->format('H:i d/m/Y') : '—' }}</span>
+                    </div>
+                    <div class="flex-center-between">
                         <span class="text-12 text-muted">Thanh toán</span>
                         @php $pc = $order->trang_thai_thanh_toan === 'đã thanh toán' ? 'badge-done' : 'badge-pending'; @endphp
                         <span class="badge {{ $pc }}">{{ ucfirst($order->trang_thai_thanh_toan) }}</span>

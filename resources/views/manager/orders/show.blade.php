@@ -90,7 +90,7 @@
 					<div class="font-600">{{ $order->banAn->so_ban ?? ($order->loai_don === 'mang về' ? 'Mang về (không có bàn)' : 'Không có') }}</div>
 				</div>
 				<div>
-					<div class="text-12 text-muted">Thời gian hẹn đến</div>
+					<div class="text-12 text-muted">{{ $order->loai_don === 'đặt hàng trước' ? 'Thời gian hẹn đến' : 'Dự kiến hoàn thành' }}</div>
 					<div class="font-600">{{ $order->thoi_gian_den ? $order->thoi_gian_den->format('H:i d/m/Y') : '—' }}
 					</div>
 				</div>

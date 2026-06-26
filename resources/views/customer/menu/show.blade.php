@@ -384,7 +384,7 @@
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' }
         }).then(r => {
-            if (r.status === 401) { showNotice('Bạn cần đăng nhập để yêu thích sản phẩm.'); return Promise.reject(); }
+            if (r.status === 401) { showNotice('Đăng nhập để lưu sản phẩm yêu thích. Nếu chưa có tài khoản, hãy đăng ký trước nhé!'); return Promise.reject(); }
             return r.json();
         }).then(data => {
             if (data && data.success) {

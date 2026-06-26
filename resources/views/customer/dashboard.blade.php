@@ -279,20 +279,10 @@
 		</section>
 
 	</main>
-
 @endsection
-
-<div id="guest-heart-toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#fff;border:1.5px solid #E2D9C8;border-radius:50px;padding:14px 24px;font-family:'Outfit',sans-serif;font-size:15px;color:#30261C;box-shadow:0 4px 24px rgba(0,0,0,0.10);z-index:9999;opacity:0;transition:opacity 0.3s,transform 0.3s;pointer-events:none;white-space:nowrap;">
-	🥺 Bạn hãy đăng nhập để yêu thích sản phẩm nhé!
-</div>
-
-<div id="guest-heart-toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#fff;border:1.5px solid #E2D9C8;border-radius:50px;padding:14px 24px;font-family:'Outfit',sans-serif;font-size:15px;color:#30261C;box-shadow:0 4px 24px rgba(0,0,0,0.10);z-index:9999;opacity:0;transition:opacity 0.3s,transform 0.3s;pointer-events:none;white-space:nowrap;">
-	🥺 Bạn hãy đăng nhập để yêu thích sản phẩm nhé!
-</div>
 
 @push('styles')
 <style>
-#guest-heart-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ===== Scroll reveal: chỉ kích hoạt khi có JS (.reveal-on) để tránh ẩn nội dung khi tắt JS ===== */
 html { scroll-behavior: smooth; }
@@ -352,18 +342,14 @@ html { scroll-behavior: smooth; }
 
 		var isAuthenticated = {{ auth()->check() ? 'true' : 'false' }};
 
-		function showGuestHeartToast() {
-			var toast = document.getElementById('guest-heart-toast');
-			if (!toast) return;
-			toast.classList.add('show');
-			setTimeout(function() { toast.classList.remove('show'); }, 3000);
-		}
-
 		document.querySelectorAll('.heart-btn').forEach(function(btn) {
 			btn.addEventListener('click', function(e) {
 				e.stopPropagation();
 				if (!isAuthenticated) {
-					showGuestHeartToast();
+					// Dùng lại hộp thông báo chung (giống trang menu).
+					if (typeof window.showNotice === 'function') {
+						window.showNotice('Đăng nhập để lưu sản phẩm yêu thích. Nếu chưa có tài khoản, hãy đăng ký trước nhé!');
+					}
 					return;
 				}
 				var productId = this.dataset.wishlistId;

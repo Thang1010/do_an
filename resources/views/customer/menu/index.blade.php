@@ -185,7 +185,7 @@
                 })
                     .then(response => {
                         if (response.status === 401) {
-                            showNotice('Bạn cần đăng nhập để yêu thích sản phẩm.');
+                            showNotice('Đăng nhập để lưu sản phẩm yêu thích. Nếu chưa có tài khoản, hãy đăng ký trước nhé!');
                             return Promise.reject('Unauthorized');
                         }
                         return response.json();

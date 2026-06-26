@@ -11,7 +11,7 @@
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link
-		href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600;700&family=Poppins:wght@400;500;600&family=Dancing+Script:wght@700&display=swap"
+		href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600;700&family=Poppins:wght@400;500;600&family=Dancing+Script:wght@700&display=swap"
 		rel="stylesheet">
 	<link rel="stylesheet" href="{{ asset('css/home.css') }}">
 	<link rel="stylesheet" href="{{ asset('css/chatbot-fab.css') }}">
@@ -345,14 +345,25 @@
 		@endif
 	@endauth
 
-	<a href="{{ route('chatbot.index') }}" class="chatbot-fab" aria-label="Mở trang chatbot">
+	<a href="{{ route('chatbot.index') }}" class="chatbot-fab" aria-label="Mở trợ lý AI tư vấn">
 		<span class="chatbot-fab-icon" aria-hidden="true">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path stroke-linecap="round" stroke-linejoin="round"
-					d="M8 10h8M8 14h5m-6 6l-3 3V7a3 3 0 013-3h10a3 3 0 013 3v6a3 3 0 01-3 3H7z" />
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+				stroke-linecap="round" stroke-linejoin="round">
+				<!-- Ăng-ten -->
+				<path d="M12 2.2v2.4" />
+				<circle cx="12" cy="1.7" r="1.05" fill="currentColor" stroke="none" />
+				<!-- Đầu robot -->
+				<rect x="4" y="4.6" width="16" height="12.4" rx="3.6" />
+				<!-- Tai hai bên -->
+				<path d="M4 9.4H2.4v3.2H4M20 9.4h1.6v3.2H20" />
+				<!-- Mắt -->
+				<circle cx="9" cy="10.7" r="1.35" fill="currentColor" stroke="none" />
+				<circle cx="15" cy="10.7" r="1.35" fill="currentColor" stroke="none" />
+				<!-- Miệng -->
+				<path d="M9.2 14h5.6" />
 			</svg>
 		</span>
-		<span class="chatbot-fab-label">Tư vấn</span>
+		<span class="chatbot-fab-label">AI tư vấn</span>
 	</a>
 
 	@if($showFooter)
@@ -466,7 +477,7 @@
 			<button type="button" onclick="closeGlobalSizeModal()"
 				style="position: absolute; right: 16px; top: 12px; background: none; border: none; color: #f1f0ee; font-size: 24px; cursor: pointer;">&times;</button>
 			<div id="global-size-modal-title"
-				style="font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 8px; color: #F0DDB8;">
+				style="font-family: 'Be Vietnam Pro', sans-serif; font-size: 22px; font-weight: 800; text-align: center; margin-bottom: 8px; color: #F0DDB8;">
 				Tên sản phẩm</div>
 			<p id="global-size-modal-subtitle"
 				style="font-size: 14px; color: rgba(241, 240, 238, 0.72); text-align: center; margin-bottom: 20px;">Vui
@@ -551,9 +562,9 @@
 		}
 
 		.force-password-modal__title {
-			font-family: 'Playfair Display', serif;
+			font-family: 'Be Vietnam Pro', sans-serif;
 			font-size: 22px;
-			font-weight: 700;
+			font-weight: 800;
 			text-align: center;
 			margin-bottom: 8px;
 		}

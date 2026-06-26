@@ -41,7 +41,7 @@
 }
 
 .chatbot-hero h1 {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Times New Roman', Times, serif;
     font-size: clamp(2.2rem, 3vw, 3.4rem);
     font-weight: 700;
     color: var(--gold-300);
@@ -50,7 +50,7 @@
 }
 
 .chatbot-hero p {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     font-size: 1.05rem;
     line-height: 1.6;
     color: rgba(248, 244, 238, 0.82);
@@ -92,7 +92,7 @@
 }
 
 .chat-window-title span:first-child {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     text-transform: uppercase;
     letter-spacing: 0.2em;
     font-size: 0.75rem;
@@ -100,7 +100,7 @@
 }
 
 .chat-window-title strong {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Times New Roman', Times, serif;
     font-size: 1.3rem;
 }
 
@@ -108,7 +108,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     font-size: 0.85rem;
 }
 
@@ -135,7 +135,7 @@
     max-width: 80%;
     padding: 14px 16px;
     border-radius: 16px;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     font-size: 0.95rem;
     line-height: 1.5;
     white-space: pre-line;
@@ -181,7 +181,7 @@
     border-radius: 14px;
     padding: 12px 14px;
     font-size: 0.95rem;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     outline: none;
 }
 
@@ -196,7 +196,7 @@
     color: var(--cream-100);
     border-radius: 14px;
     padding: 12px 18px;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     cursor: pointer;
     transition: transform 0.2s, background 0.2s;
 }
@@ -224,13 +224,13 @@
 }
 
 .suggestions-header h2 {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Times New Roman', Times, serif;
     font-size: 1.5rem;
     color: var(--gold-300);
 }
 
 .suggestions-header p {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     font-size: 0.95rem;
     color: rgba(248, 244, 238, 0.75);
 }
@@ -267,13 +267,13 @@
 }
 
 .chat-product-name {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     font-weight: 600;
     font-size: 1rem;
 }
 
 .chat-product-price {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     color: var(--coffee-600);
     font-weight: 600;
 }
@@ -285,7 +285,7 @@
     color: var(--cream-100);
     border-radius: 12px;
     padding: 10px 12px;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     cursor: pointer;
     transition: background 0.2s;
 }
@@ -298,7 +298,7 @@
     padding: 18px;
     border-radius: 16px;
     background: rgba(255, 255, 255, 0.08);
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     color: rgba(248, 244, 238, 0.75);
     text-align: center;
 }

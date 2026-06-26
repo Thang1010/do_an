@@ -272,6 +272,10 @@
 				safe = safe.replace(/(^|[\s(])(https?:\/\/[^\s<]+)/g, function (m, pre, url) {
 					return pre + '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
 				});
+				// Markdown nhan manh: thu tu 3 sao -> 2 sao -> 1 sao (tranh nuot nhau).
+				safe = safe.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
+				safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+				safe = safe.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
 				return safe;
 			}
 

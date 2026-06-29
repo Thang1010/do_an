@@ -67,9 +67,11 @@
                                 $sizeCode = $item->kichCo?->ma_kich_co;
                                 $sizeName = $item->kichCo?->ten_kich_co ?? $item->ten_kich_co;
                                 $sizeLabel = $sizeCode && $sizeName ? $sizeCode . ' - ' . $sizeName : ($sizeName ?? 'M');
+                                // Món thuộc đơn đã thanh toán → khóa, không cho sửa ghi chú/số lượng.
+                                $itemLocked = ($item->trang_thai_thanh_toan ?? null) === 'đã thanh toán';
                             @endphp
                             <div class="order-detail-item__size">{{ $sizeLabel }}</div>
-                            @if(isset($selectedTable))
+                            @if(isset($selectedTable) && ! $itemLocked)
                                 <div id="note-display-{{ $item->id }}" style="display:flex; align-items:center; gap:6px; margin-top:4px;">
                                     <span class="note-snippet {{ $item->ghi_chu_mon ? 'note-snippet--filled' : 'note-snippet--empty' }}">
                                         {{ $item->ghi_chu_mon ?: 'Chưa có ghi chú' }}
@@ -95,17 +97,21 @@
                             @endif
                         </div>
                         <div class="order-detail-item__qty">
-                            <form method="POST" action="{{ isset($selectedTable) ? route('staff.tables.update-item', [$selectedTable->id, $item->id]) : '#' }}" style="display:inline;">
-                                @csrf @method('PATCH')
-                                <input type="hidden" name="action" value="decrease">
-                                <button type="submit" class="qty-btn">−</button>
-                            </form>
-                            <span class="qty-value">x{{ $item->so_luong }}</span>
-                            <form method="POST" action="{{ isset($selectedTable) ? route('staff.tables.update-item', [$selectedTable->id, $item->id]) : '#' }}" style="display:inline;">
-                                @csrf @method('PATCH')
-                                <input type="hidden" name="action" value="increase">
-                                <button type="submit" class="qty-btn">+</button>
-                            </form>
+                            @if(isset($selectedTable) && ! $itemLocked)
+                                <form method="POST" action="{{ route('staff.tables.update-item', [$selectedTable->id, $item->id]) }}" style="display:inline;">
+                                    @csrf @method('PATCH')
+                                    <input type="hidden" name="action" value="decrease">
+                                    <button type="submit" class="qty-btn">−</button>
+                                </form>
+                                <span class="qty-value">x{{ $item->so_luong }}</span>
+                                <form method="POST" action="{{ route('staff.tables.update-item', [$selectedTable->id, $item->id]) }}" style="display:inline;">
+                                    @csrf @method('PATCH')
+                                    <input type="hidden" name="action" value="increase">
+                                    <button type="submit" class="qty-btn">+</button>
+                                </form>
+                            @else
+                                <span class="qty-value">x{{ $item->so_luong }}</span>
+                            @endif
                         </div>
                         <div class="order-detail-item__price">
                             {{ number_format(($item->don_gia ?? 0) * ($item->so_luong ?? 1), 0, ',', '.') }}đ

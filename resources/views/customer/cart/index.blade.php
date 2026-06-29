@@ -256,7 +256,8 @@
                             @auth
                                 <form id="auth-checkout-form" method="POST" action="{{ route('cart.checkout') }}">
                                     @csrf
-                                    <input type="hidden" name="loai_don_hidden" id="auth-loai-don-hidden" value="{{ !empty($qrTable) ? 'goi_mon' : 'dat_ban' }}">
+                                    @php $canReserve = $availableTables->count() > 0; @endphp
+                                    <input type="hidden" name="loai_don_hidden" id="auth-loai-don-hidden" value="{{ !empty($qrTable) ? 'goi_mon' : ($canReserve ? 'dat_ban' : 'goi_mon') }}">
                                     <input type="hidden" name="voucher_nguoi_dung_id" id="selected-voucher-id" value="">
 
                                     @if(empty(auth()->user()->email))
@@ -272,12 +273,12 @@
                                     <div class="cart-field-wrap">
                                         <label class="cart-field-label">Hình thức đặt *</label>
                                         <div class="cart-radio-group">
-                                            <label class="cart-radio-label">
-                                                <input type="radio" name="loai_don_ui" value="dat_ban" id="rd-dat-ban" checked>
+                                            <label class="cart-radio-label" @unless($canReserve) style="opacity:.5;cursor:not-allowed;" @endunless>
+                                                <input type="radio" name="loai_don_ui" value="dat_ban" id="rd-dat-ban" @checked($canReserve) @disabled(!$canReserve)>
                                                 <span>Đặt hàng trước</span>
                                             </label>
                                             <label class="cart-radio-label">
-                                                <input type="radio" name="loai_don_ui" value="goi_mon" id="rd-goi-mon">
+                                                <input type="radio" name="loai_don_ui" value="goi_mon" id="rd-goi-mon" @checked(!$canReserve)>
                                                 <span>Sử dụng ngay</span>
                                             </label>
                                             <label class="cart-radio-label">
@@ -285,6 +286,9 @@
                                                 <span>Mang về</span>
                                             </label>
                                         </div>
+                                        @unless($canReserve)
+                                            <p class="cart-field-hint warning">Hết bàn trống nên không thể "Đặt hàng trước". Bạn có thể chọn "Sử dụng ngay" hoặc "Mang về".</p>
+                                        @endunless
                                     </div>
 
                                     {{-- Đặt bàn trước (auth) --}}
@@ -295,9 +299,9 @@
                                         <p class="cart-field-hint">Thanh toán bằng chuyển khoản (QR) — bắt buộc khi đặt trước</p>
                                         <input type="hidden" name="phuong_thuc_thanh_toan_dat_ban" value="chuyển khoản">
                                         @if($availableTables->count() > 0)
-                                            <label class="cart-field-label mt-3">Chọn bàn (không bắt buộc)</label>
+                                            <label class="cart-field-label mt-3">Chọn bàn *</label>
                                             <select name="ban_an_id_dat_ban" class="cart-select">
-                                                <option value="">— Để quán tự xếp bàn —</option>
+                                                <option value="">— Chọn bàn trống —</option>
                                                 @foreach($availableTables as $table)
                                                     <option value="{{ $table->id }}">Bàn {{ $table->so_ban }}</option>
                                                 @endforeach
@@ -320,15 +324,16 @@
                                         @if(!empty($qrTable))
                                             <input type="hidden" name="ban_an_id_goi_mon" value="{{ $qrTable->id }}">
                                             <div class="cart-input" style="opacity:.85;">Bàn {{ $qrTable->so_ban }} (đã khoá theo QR)</div>
-                                        @elseif($availableTables->count() > 0)
+                                        @elseif($allTables->count() > 0)
                                             <select name="ban_an_id_goi_mon" class="cart-select">
                                                 <option value="">— Chọn bàn —</option>
-                                                @foreach($availableTables as $table)
-                                                    <option value="{{ $table->id }}">Bàn {{ $table->so_ban }}</option>
+                                                @foreach($allTables as $table)
+                                                    <option value="{{ $table->id }}">Bàn {{ $table->so_ban }}@if($table->trang_thai !== 'trống') ({{ $table->trang_thai }})@endif</option>
                                                 @endforeach
                                             </select>
+                                            <p class="cart-field-hint">Có thể chọn bàn đang phục vụ — món sẽ được gộp thêm vào bàn đó.</p>
                                         @else
-                                            <p class="cart-field-hint warning">Hết bàn trống, vui lòng gọi nhân viên.</p>
+                                            <p class="cart-field-hint warning">Hiện chưa có bàn khả dụng, vui lòng gọi nhân viên.</p>
                                         @endif
                                         <label class="cart-field-label mt-3">Phương thức thanh toán *</label>
                                         <select name="phuong_thuc_thanh_toan_goi_mon" class="cart-select">
@@ -347,7 +352,7 @@
                 <!-- PayOS QR Modal -->
                 <div class="cart-order-modal" id="payos-checkout-modal" aria-hidden="true" style="z-index: 10002;">
                     <div class="cart-order-backdrop" style="background: rgba(0,0,0,0.85);"></div>
-                    <div class="cart-order-panel" role="dialog" aria-modal="true" style="text-align: center; max-width: 500px; margin: 40px auto; display: flex; flex-direction: column;">
+                    <div class="cart-order-panel cart-modal-panel" role="dialog" aria-modal="true" style="text-align: center; max-width: 500px; margin: 40px auto; display: flex; flex-direction: column;">
                         <button type="button" class="cart-order-close" id="close-payos-modal" aria-label="Dong">x</button>
                         <h2 class="cart-checkout-title">Thanh toán đơn hàng</h2>
                         <div id="payos-qr-container-customer" style="width:100%; height:490px; position: relative; overflow: hidden; margin-bottom: 16px;">
@@ -660,6 +665,7 @@ function toggleOrderType() {
 
     // required theo từng hình thức (tránh field ẩn vẫn bị validate)
     document.querySelectorAll('input[name="thoi_gian_den"]').forEach(i => i.required = (val === 'dat_ban'));
+    document.querySelectorAll('select[name="ban_an_id_dat_ban"]').forEach(i => i.required = (val === 'dat_ban'));
     document.querySelectorAll('select[name="ban_an_id_goi_mon"]').forEach(i => i.required = (val === 'goi_mon'));
     document.querySelectorAll('select[name="phuong_thuc_thanh_toan_goi_mon"]').forEach(i => i.required = (val === 'goi_mon'));
 

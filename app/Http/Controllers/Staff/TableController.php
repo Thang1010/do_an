@@ -655,6 +655,19 @@ class TableController extends Controller
         $table = BanAn::findOrFail($tableId);
         $action = $request->input('action', 'increase');
 
+        // KHÓA SỬA ĐƠN ĐÃ THANH TOÁN: món thuộc đơn đã thanh toán (vd đơn khách đặt & trả tiền
+        // online rồi gửi lên bếp) thì nhân viên KHÔNG được sửa ghi chú / số lượng — chỉ phục vụ.
+        if (! Str::startsWith($itemId, 's_')) {
+            $lockedItem = ChiTietDonHang::find((int) $itemId);
+            if ($lockedItem && $lockedItem->trang_thai_thanh_toan === 'đã thanh toán') {
+                $msg = 'Đơn đã thanh toán, không thể chỉnh sửa.';
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json(['success' => false, 'message' => $msg], 422);
+                }
+                return redirect()->route('staff.tables.index', ['table' => $table->id])->with('error', $msg);
+            }
+        }
+
         // Cập nhật ghi chú món (không đổi số lượng / giá / kho)
         if ($action === 'note') {
             $note = trim((string) $request->input('ghi_chu_mon'));

@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\BanAn;
 use App\Models\ChiTietDonHang;
 use App\Models\DonHang;
+use App\Models\GioHang;
 use App\Models\KichCo;
+use App\Models\NguoiDung;
 use App\Models\SanPham;
+use App\Models\SanPhamKichCo;
 use App\Services\OrderNotificationService;
 use App\Services\PaymentService;
 use App\Services\TableStatusService;
@@ -29,12 +32,127 @@ class CartController extends Controller
     // ── Helpers ──────────────────────────────────────────────────
     private function getCart(): array
     {
+        // Khách thành viên: nếu phiên chưa có giỏ (vừa đăng nhập / phiên mới) thì nạp lại từ DB.
+        if (! session()->has('cart')) {
+            $user = $this->cartUser();
+            if ($user) {
+                session()->put('cart', $this->loadCartFromDb((int) $user->id));
+            }
+        }
+
         return session()->get('cart', []);
     }
 
     private function saveCart(array $cart): void
     {
         session()->put('cart', $cart);
+
+        // Khách thành viên: lưu giỏ vào DB để không mất khi đăng xuất / hết phiên.
+        $user = $this->cartUser();
+        if ($user) {
+            $this->persistCartToDb((int) $user->id, $cart);
+        }
+    }
+
+    /** Xoá giỏ (session + DB nếu là khách thành viên). Dùng sau khi đơn hàng đã hoàn tất. */
+    private function clearCart(): void
+    {
+        session()->forget('cart');
+        session()->forget('qr_ban_an_id');
+
+        $user = $this->cartUser();
+        if ($user) {
+            GioHang::where('nguoi_dung_id', $user->id)->delete();
+        }
+    }
+
+    /** Trả về user nếu là KHÁCH HÀNG đã đăng nhập (chỉ khách thành viên mới lưu giỏ theo tài khoản). */
+    private function cartUser(): ?NguoiDung
+    {
+        $user = auth()->user();
+
+        return ($user && $user->isKhachHang()) ? $user : null;
+    }
+
+    /** Ghi lại toàn bộ giỏ của user vào bảng gio_hang (thay thế dữ liệu cũ). */
+    private function persistCartToDb(int $userId, array $cart): void
+    {
+        DB::transaction(function () use ($userId, $cart) {
+            GioHang::where('nguoi_dung_id', $userId)->delete();
+
+            foreach ($cart as $item) {
+                $productId = (int) ($item['product_id'] ?? 0);
+                if (! $productId) {
+                    continue;
+                }
+
+                $sizeId = $item['size_id'] ?? null;
+                $sanPhamKichCoId = null;
+                if ($sizeId) {
+                    // Lấy dòng pivot tương ứng (đảm bảo size thuộc đúng sản phẩm).
+                    $sanPhamKichCoId = SanPhamKichCo::where('san_pham_id', $productId)
+                        ->where('kich_co_id', $sizeId)
+                        ->value('id');
+                }
+
+                GioHang::create([
+                    'nguoi_dung_id'       => $userId,
+                    'san_pham_id'         => $productId,
+                    'san_pham_kich_co_id' => $sanPhamKichCoId,
+                    'so_luong'            => max(1, (int) ($item['qty'] ?? 1)),
+                    'nhiet_do'            => ($item['nhiet_do'] ?? '') !== '' ? $item['nhiet_do'] : null,
+                    'ghi_chu'             => ($item['note'] ?? '') !== '' ? $item['note'] : null,
+                ]);
+            }
+        });
+    }
+
+    /** Dựng lại mảng giỏ (đúng cấu trúc session) từ bảng gio_hang, tự tính lại giá/tên/size. */
+    private function loadCartFromDb(int $userId): array
+    {
+        $rows = GioHang::with(['sanPham', 'sanPhamKichCo.kichCo'])
+            ->where('nguoi_dung_id', $userId)
+            ->orderBy('id')
+            ->get();
+
+        $cart = [];
+        foreach ($rows as $row) {
+            $product = $row->sanPham;
+            if (! $product) {
+                continue; // sản phẩm đã bị xoá
+            }
+
+            $price = (float) ($product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc);
+
+            $sizeId = null;
+            $sizeName = null;
+            $kichCo = $row->sanPhamKichCo?->kichCo;
+            if ($kichCo) {
+                $sizeId = $kichCo->id;
+                $sizeName = $kichCo->ten_kich_co;
+                $price = $price * (float) ($kichCo->he_so_gia ?? 1);
+            }
+
+            $nhietDo = $row->nhiet_do ?? '';
+            // Key có kèm id dòng để các món trùng (sản phẩm+size+nhiệt độ) khác ghi chú không bị gộp.
+            $key = $this->cartItemKey($product->id, $sizeId)
+                . ($nhietDo ? '_' . Str::slug($nhietDo) : '')
+                . '_' . $row->id;
+
+            $cart[$key] = [
+                'product_id' => $product->id,
+                'size_id'    => $sizeId,
+                'size_name'  => $sizeName,
+                'name'       => $product->ten_san_pham,
+                'image'      => $product->image_url,
+                'price'      => $price,
+                'qty'        => (int) $row->so_luong,
+                'nhiet_do'   => $nhietDo,
+                'note'       => $row->ghi_chu ?? '',
+            ];
+        }
+
+        return $cart;
     }
 
     private function cartItemKey(int $productId, ?int $sizeId = null): string
@@ -95,10 +213,16 @@ class CartController extends Controller
             ]);
         }
 
-        // Bàn đang trống
+        // Bàn đang trống — dùng cho ĐẶT HÀNG TRƯỚC (đặt bàn).
         $availableTables = BanAn::where('trang_thai', 'trống')
             ->orderBy('so_ban')
             ->get(['id', 'so_ban']);
+
+        // Tất cả bàn còn sử dụng (trừ "ngưng sử dụng") — dùng cho SỬ DỤNG NGAY:
+        // 1 bàn có thể gọi nhiều đợt nên cho chọn cả bàn đang phục vụ/đã đặt (giống order QR).
+        $allTables = BanAn::where('trang_thai', '!=', 'ngưng sử dụng')
+            ->orderBy('so_ban')
+            ->get(['id', 'so_ban', 'trang_thai']);
 
         // Bàn gắn theo QR (nếu khách vào từ QR tại bàn) → tự điền + khoá.
         $qrTable = null;
@@ -122,7 +246,7 @@ class CartController extends Controller
                 ->get();
         }
 
-        return view('customer.cart.index', compact('items', 'total', 'availableTables', 'ordersToday', 'filterDate', 'qrTable'));
+        return view('customer.cart.index', compact('items', 'total', 'availableTables', 'allTables', 'ordersToday', 'filterDate', 'qrTable'));
     }
 
     // ── AJAX: Thêm vào giỏ ───────────────────────────────────────
@@ -525,12 +649,28 @@ class CartController extends Controller
             if ($loaiDonUi === 'dat_ban') {
                 $request->validate([
                     'thoi_gian_den' => 'required|date_format:H:i',
-                    'ban_an_id_dat_ban' => 'nullable|exists:ban_an,id',
+                    'ban_an_id_dat_ban' => 'required|exists:ban_an,id',
+                ], [
+                    'ban_an_id_dat_ban.required' => 'Vui lòng chọn bàn để đặt trước.',
                 ]);
+
+                // Đặt trước thì bàn phải đang TRỐNG.
+                $banDat = BanAn::find($request->ban_an_id_dat_ban);
+                if (! $banDat || $banDat->trang_thai !== 'trống') {
+                    $msg = 'Bàn bạn chọn không còn trống. Vui lòng chọn bàn khác.';
+                    if ($request->ajax()) {
+                        return response()->json(['success' => false, 'message' => $msg], 422);
+                    }
+                    return back()->with('error', $msg);
+                }
 
                 $thoiGianDen = \Carbon\Carbon::createFromFormat('H:i', $request->thoi_gian_den)->setDateFrom(now());
                 if ($thoiGianDen->isPast()) {
-                    return back()->with('error', 'Thời gian đến phải lớn hơn thời gian hiện tại.');
+                    $msg = 'Thời gian đến phải lớn hơn thời gian hiện tại.';
+                    if ($request->ajax()) {
+                        return response()->json(['success' => false, 'message' => $msg], 422);
+                    }
+                    return back()->with('error', $msg);
                 }
 
                 $banId = $request->ban_an_id_dat_ban;
@@ -592,7 +732,20 @@ class CartController extends Controller
             $request->validate([
                 'ban_an_id_goi_mon' => 'required|exists:ban_an,id',
                 'phuong_thuc_thanh_toan_goi_mon' => 'required|string|in:chuyển khoản',
+            ], [
+                'ban_an_id_goi_mon.required' => 'Vui lòng chọn bàn bạn đang ngồi.',
             ]);
+
+            // Sử dụng ngay cho phép chọn bàn đang phục vụ/đã đặt (1 bàn nhiều đợt gọi),
+            // chỉ chặn bàn ngưng sử dụng.
+            $banGoiMon = BanAn::find($request->ban_an_id_goi_mon);
+            if (! $banGoiMon || $banGoiMon->trang_thai === 'ngưng sử dụng') {
+                $msg = 'Bàn bạn chọn không sử dụng được. Vui lòng chọn bàn khác.';
+                if ($request->ajax()) {
+                    return response()->json(['success' => false, 'message' => $msg], 422);
+                }
+                return back()->with('error', $msg);
+            }
 
             $voucherId = null;
             if ($request->filled('voucher_nguoi_dung_id')) {
@@ -627,7 +780,7 @@ class CartController extends Controller
     public function success()
     {
         // Tới được trang xác nhận = đã thanh toán xong → dọn giỏ hàng (an toàn, nếu còn).
-        session()->forget(['cart', 'qr_ban_an_id']);
+        $this->clearCart();
 
         $orderCode = session('order_code') ?: request()->query('order_code');
         $orderCodes = session('order_codes', []);
@@ -762,7 +915,7 @@ class CartController extends Controller
         $order = DonHang::where('ma_don_hang', $orderCode)->firstOrFail();
         
         if ($order->trang_thai_thanh_toan === 'đã thanh toán') {
-            session()->forget(['cart', 'qr_ban_an_id']);
+            $this->clearCart();
             return response()->json(['success' => true, 'status' => 'đã thanh toán']);
         }
 
@@ -801,7 +954,7 @@ class CartController extends Controller
                             \Illuminate\Support\Facades\Mail::to($order->email_khach_hang)->send(new \App\Mail\CustomerOrderPaidMail($order));
                         }
 
-                        session()->forget(['cart', 'qr_ban_an_id']);
+                        $this->clearCart();
                         return response()->json(['success' => true, 'status' => 'đã thanh toán']);
                     }
                     // Khách bấm "Hủy" trên PayOS → link bị huỷ/hết hạn → báo client đóng modal.
@@ -832,7 +985,7 @@ class CartController extends Controller
 
         // Quay về từ PayOS (thành công) → xóa giỏ hàng.
         if ($order->trang_thai_thanh_toan === 'đã thanh toán') {
-            session()->forget(['cart', 'qr_ban_an_id']);
+            $this->clearCart();
         }
 
         if ($source === 'staff' && $order->ban_an_id) {
@@ -956,7 +1109,7 @@ class CartController extends Controller
             }
         }
 
-        session()->forget(['cart', 'qr_ban_an_id']);
+        $this->clearCart();
 
         // Khách hàng thành viên (chủ đơn) → trang chi tiết đơn; khách vãng lai → trang xác nhận.
         if ($order->nguoi_dung_id && auth()->check() && auth()->id() === $order->nguoi_dung_id) {

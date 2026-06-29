@@ -15,8 +15,8 @@
 	<link
 		href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600;700&family=Poppins:wght@400;500;600&family=Dancing+Script:wght@700&display=swap"
 		rel="stylesheet">
-	<link rel="stylesheet" href="{{ asset('css/home.css') }}">
-	<link rel="stylesheet" href="{{ asset('css/chatbot-fab.css') }}">
+	<link rel="stylesheet" href="{{ asset('css/home.css') }}?v={{ filemtime(public_path('css/home.css')) }}">
+	<link rel="stylesheet" href="{{ asset('css/chatbot-fab.css') }}?v={{ filemtime(public_path('css/chatbot-fab.css')) }}">
 	<link rel="stylesheet" href="{{ asset('css/font-override.css') }}?v={{ filemtime(public_path('css/font-override.css')) }}">
 
 	@verbatim

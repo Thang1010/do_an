@@ -217,7 +217,7 @@
 						</div>
 					@endforeach
 				@else
-					<div class="col-span-full text-center text-sm text-[#30261C]/70">Chưa có đánh giá từ khách hàng.</div>
+					<div class="w-full text-center text-sm text-[#30261C]/70">Chưa có đánh giá từ khách hàng.</div>
 				@endif
 			</div>
 

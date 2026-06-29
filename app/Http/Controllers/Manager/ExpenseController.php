@@ -9,7 +9,6 @@ use App\Models\LichSuKho;
 use App\Models\NguyenLieu;
 use App\Traits\NormalizesPayment;
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -26,6 +25,18 @@ class ExpenseController extends Controller
         $filterDate = trim((string) $request->input('ngay_lam', ''));
         $requestedShiftId = $request->input('ca_lam_viec_id');
 
+        // Nếu người dùng đổi ngày lọc khác ngày của ca đang chọn → ưu tiên lọc theo NGÀY,
+        // bỏ qua ca đã chọn (tránh ca auto-select "ghì" mất bộ lọc ngày).
+        if ($requestedShiftId && $filterDate !== '') {
+            $candidateShift = $shiftGroups->firstWhere('id', (int) $requestedShiftId);
+            $candidateDate = $candidateShift && $candidateShift->ngay_lam
+                ? Carbon::parse($candidateShift->ngay_lam)->toDateString()
+                : null;
+            if ($candidateDate !== $filterDate) {
+                $requestedShiftId = null;
+            }
+        }
+
         $selectedShiftId = null;
         $selectedShift = null;
         $allGroupIds = collect();
@@ -41,20 +52,57 @@ class ExpenseController extends Controller
                     ->where('gio_bat_dau', $shift->gio_bat_dau)
                     ->where('gio_ket_thuc', $shift->gio_ket_thuc)
                     ->pluck('id') : collect([$selectedShiftId]);
+
+                // Đồng bộ ngày lọc theo ca đã chọn để ô chọn ca hiển thị đúng nhóm ngày.
+                if ($selectedShift && $selectedShift->ngay_lam) {
+                    $filterDate = Carbon::parse($selectedShift->ngay_lam)->toDateString();
+                }
             }
         } elseif ($filterDate !== '') {
-            $allGroupIds = CaLamViec::whereDate('ngay_lam', $filterDate)->pluck('id');
+            // Lọc đúng ngày hôm nay và đang có ca diễn ra → tự bám ca hiện tại.
+            $currentShift = $filterDate === now()->toDateString()
+                ? $this->resolveSelectedShift($shiftGroups, null)
+                : null;
+
+            if ($currentShift) {
+                $selectedShift = $currentShift;
+                $selectedShiftId = $currentShift->id;
+                $shift = CaLamViec::find($selectedShiftId);
+                $allGroupIds = $shift ? CaLamViec::where('ngay_lam', $shift->ngay_lam)
+                    ->where('ten_ca', $shift->ten_ca)
+                    ->where('gio_bat_dau', $shift->gio_bat_dau)
+                    ->where('gio_ket_thuc', $shift->gio_ket_thuc)
+                    ->pluck('id') : collect([$selectedShiftId]);
+            } else {
+                // Lọc theo ngày nhưng chưa chọn ca cụ thể → không hiển thị chi tiêu.
+                $allGroupIds = collect();
+            }
         } else {
-            // Mặc định khi mới vào trang: lọc theo ngày hiện tại
-            $filterDate = now()->toDateString();
-            $allGroupIds = CaLamViec::whereDate('ngay_lam', $filterDate)->pluck('id');
+            // Mặc định khi mới vào trang: tự bám ca đang diễn ra theo giờ hiện tại.
+            $selectedShift = $this->resolveSelectedShift($shiftGroups, null);
+            $selectedShiftId = $selectedShift?->id;
+
+            if ($selectedShiftId) {
+                $shift = CaLamViec::find($selectedShiftId);
+                $allGroupIds = $shift ? CaLamViec::where('ngay_lam', $shift->ngay_lam)
+                    ->where('ten_ca', $shift->ten_ca)
+                    ->where('gio_bat_dau', $shift->gio_bat_dau)
+                    ->where('gio_ket_thuc', $shift->gio_ket_thuc)
+                    ->pluck('id') : collect([$selectedShiftId]);
+                $filterDate = $shift && $shift->ngay_lam
+                    ? Carbon::parse($shift->ngay_lam)->toDateString()
+                    : now()->toDateString();
+            } else {
+                // Không có ca nào đang chạy → chưa chọn ca: không hiển thị chi tiêu.
+                $filterDate = now()->toDateString();
+                $allGroupIds = collect();
+            }
         }
 
+        // Chưa chọn ca → $allGroupIds rỗng → whereIn rỗng → không trả về dòng nào.
         $expenses = ChiTieu::query()
             ->with(['nguoiTao', 'nguyenLieu', 'lichSuKho'])
-            ->when($allGroupIds->isNotEmpty(), function (Builder $q) use ($allGroupIds) {
-                $q->whereIn('chi_tieu.ca_lam_viec_id', $allGroupIds);
-            })
+            ->whereIn('chi_tieu.ca_lam_viec_id', $allGroupIds)
             ->latest('created_at')
             ->paginate(10)
             ->withQueryString();
@@ -87,12 +135,18 @@ class ExpenseController extends Controller
         // Polling: chỉ trả danh sách chi tiêu + tổng kết của ca đang xem để tự cập nhật.
         if ($request->header('X-Partial')) {
             return response()->json([
-                'html' => view('manager.expenses.partials.data', compact('expenses', 'summary'))->render(),
+                'html' => view('manager.expenses.partials.data', compact('expenses', 'summary', 'selectedShiftId'))->render(),
             ]);
         }
 
+        // Ô chọn ca chỉ liệt kê các ca thuộc ngày đang lọc (nếu có lọc theo ngày).
+        $shiftGroupsForFilter = $filterDate !== ''
+            ? $shiftGroups->filter(fn ($group) => Carbon::parse($group->ngay_lam)->toDateString() === $filterDate)->values()
+            : $shiftGroups;
+
         return view('manager.expenses.index', [
             'shiftGroups' => $shiftGroups,
+            'shiftGroupsForFilter' => $shiftGroupsForFilter,
             'selectedShift' => $selectedShift,
             'selectedShiftId' => $selectedShiftId,
             'filterDate' => $filterDate,
@@ -105,8 +159,10 @@ class ExpenseController extends Controller
     public function create(Request $request)
     {
         $shiftGroups = $this->shiftGroups();
-        $selectedShiftId = request('ca_lam_viec_id');
-        
+
+        // Ưu tiên ca truyền qua URL; nếu không có → tự bám ca đang diễn ra theo giờ hiện tại.
+        $selectedShiftId = $this->resolveSelectedShift($shiftGroups, $request->input('ca_lam_viec_id'))?->id;
+
         return view('manager.expenses.create', [
             'shiftGroups' => $shiftGroups,
             'selectedShiftId' => $selectedShiftId,

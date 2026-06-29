@@ -1088,6 +1088,8 @@ th.col-action-xl { width: 160px; text-align: center; }
     border-radius: 6px;
     padding: 4px 10px;
     font-size: 13px;
+    display: inline-block;
+    white-space: nowrap;   /* mã dài không bị xuống dòng, giữ gọn trên 1 dòng */
 }
 
 /* Discount unit */

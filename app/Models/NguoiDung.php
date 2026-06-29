@@ -6,6 +6,8 @@ use App\Enums\UserRole;
 use App\Enums\UserStatus;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class NguoiDung extends Authenticatable
 {
@@ -45,6 +47,28 @@ class NguoiDung extends Authenticatable
             'email_da_xac_thuc_luc' => 'datetime',
             'mat_khau'              => 'hashed',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // Khi xóa người dùng → dọn luôn ảnh đại diện trên S3 (và bản local fallback)
+        // để tránh file rác. Bọc try/catch để lỗi storage không chặn việc xóa tài khoản.
+        static::deleting(function (NguoiDung $user): void {
+            $avatar = $user->hoSoKhachHang?->anh_dai_dien
+                ?? $user->hoSoNhanVien?->anh_dai_dien
+                ?? $user->hoSoQuanLy?->anh_dai_dien;
+
+            if (! $avatar) {
+                return;
+            }
+
+            try {
+                Storage::disk('s3')->delete($avatar);
+                Storage::disk('public')->delete($avatar);
+            } catch (\Throwable $e) {
+                Log::warning('Không xóa được ảnh đại diện khi xóa người dùng #' . $user->id . ': ' . $e->getMessage());
+            }
+        });
     }
 
     // =====================

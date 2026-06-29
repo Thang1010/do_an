@@ -34,6 +34,62 @@ class ShiftService
     }
 
     /**
+     * Tính số giờ giữa 2 mốc giờ (H:i hoặc H:i:s), tự xử lý ca qua đêm.
+     */
+    public function timeRangeHours(string $startTime, string $endTime): float
+    {
+        $start = Carbon::parse($startTime);
+        $end = Carbon::parse($endTime);
+
+        if ($end->lessThanOrEqualTo($start)) {
+            $end->addDay();
+        }
+
+        return round($start->diffInMinutes($end) / 60, 2);
+    }
+
+    /**
+     * Tổng số giờ đã phân ca trong tuần (Thứ 2 - CN) chứa ngày tham chiếu.
+     * Trả về map [nguoi_dung_id => số giờ].
+     */
+    public function weeklyAssignedHours(
+        Collection $userIds,
+        string $referenceDate,
+        ?Collection $excludeShiftIds = null
+    ): array {
+        $userIds = $userIds->map(fn ($id) => (int) $id)->unique()->values();
+
+        if ($userIds->isEmpty()) {
+            return [];
+        }
+
+        $reference = Carbon::parse($referenceDate);
+        $weekStart = $reference->copy()->startOfWeek(CarbonInterface::MONDAY)->toDateString();
+        $weekEnd = $reference->copy()->endOfWeek(CarbonInterface::SUNDAY)->toDateString();
+
+        $query = CaLamViec::query()
+            ->whereIn('nguoi_dung_id', $userIds)
+            ->whereBetween('ngay_lam', [$weekStart, $weekEnd]);
+
+        if ($excludeShiftIds && $excludeShiftIds->isNotEmpty()) {
+            $query->whereNotIn('id', $excludeShiftIds);
+        }
+
+        $shifts = $query->get(['nguoi_dung_id', 'gio_bat_dau', 'gio_ket_thuc']);
+
+        $totals = [];
+        foreach ($shifts as $shift) {
+            $userId = (int) $shift->nguoi_dung_id;
+            $totals[$userId] = ($totals[$userId] ?? 0) + $this->timeRangeHours(
+                (string) $shift->gio_bat_dau,
+                (string) $shift->gio_ket_thuc
+            );
+        }
+
+        return $totals;
+    }
+
+    /**
      * Tính số giờ thực tế của bản chấm công.
      */
     public function attendanceHours(ChamCong $attendance): float

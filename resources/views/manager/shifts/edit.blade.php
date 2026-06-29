@@ -171,6 +171,13 @@
 .role-group__body { padding: 6px 12px 12px; }
 .available-user-item { display: flex; align-items: center; gap: 10px; padding: 7px 4px; }
 .available-user-item + .available-user-item { border-top: 1px solid #f4f1ec; }
+.available-user-item.has-warn { background: #fff5f5; border-radius: 6px; }
+.au-name { flex: 1; }
+.lh-badge { font-size: 11px; padding: 1px 8px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+.lh-badge.lh-ft { background: #e0edff; color: #1d4ed8; }
+.lh-badge.lh-pt { background: #fff3d6; color: #92660a; }
+.au-week { font-size: 12px; color: #6b7280; white-space: nowrap; }
+.au-week.is-warn { color: #c0392b; font-weight: 600; }
 </style>
 @endpush
 
@@ -213,6 +220,25 @@ document.addEventListener('DOMContentLoaded', function () {
         return String(str ?? '').replace(/[&<>"']/g, (s) => ({
             '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
         }[s]));
+    }
+
+    function fmtH(value) {
+        return String(Math.round((Number(value) || 0) * 100) / 100);
+    }
+
+    function userItemHtml(u, checked) {
+        let badge = '';
+        if (u.loai_hinh === 'bán thời gian') badge = '<span class="lh-badge lh-pt">Bán TG</span>';
+        else if (u.loai_hinh === 'toàn thời gian') badge = '<span class="lh-badge lh-ft">Toàn TG</span>';
+        const weekText = u.canh_bao
+            ? `<span class="au-week is-warn" title="${escapeHtml(u.canh_bao_text)}">⚠ ${escapeHtml(u.canh_bao_text)}</span>`
+            : `<span class="au-week">đã xếp ${fmtH(u.gio_tuan_hien_tai)}h/tuần</span>`;
+        return `<label class="available-user-item${u.canh_bao ? ' has-warn' : ''}">
+            <input type="checkbox" name="selected_user_ids[]" value="${u.id}" ${checked}>
+            <span class="au-name">${escapeHtml(u.ho_ten)}</span>
+            ${badge}
+            ${weekText}
+        </label>`;
     }
 
     async function loadStaff() {
@@ -259,10 +285,7 @@ document.addEventListener('DOMContentLoaded', function () {
         listEl.innerHTML = groups.map((g) => {
             const items = (g.users || []).map((u) => {
                 const checked = keep.has(String(u.id)) ? 'checked' : '';
-                return `<label class="available-user-item">
-                    <input type="checkbox" name="selected_user_ids[]" value="${u.id}" ${checked}>
-                    <span>${escapeHtml(u.ho_ten)}</span>
-                </label>`;
+                return userItemHtml(u, checked);
             }).join('');
 
             return `<details class="role-group" data-loai="${g.loai_order}">

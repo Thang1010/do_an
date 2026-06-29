@@ -90,8 +90,8 @@
 					</svg>
 				</button>
 
-				<!-- Product Grid -->
-				<div id="sellers-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 reveal-stagger">
+				<!-- Product Carousel (coverflow: thẻ giữa nổi bật) -->
+				<div id="sellers-grid">
 					@if(isset($bestSellers) && $bestSellers->count() > 0)
 						@foreach($bestSellers as $product)
 							<div id="product-{{ Str::slug($product->ten_san_pham) }}" class="product-card cursor-pointer"
@@ -182,11 +182,11 @@
 			</div>
 
 			<div
-				class="flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 md:grid md:grid-cols-3 md:overflow-visible md:snap-none reveal-stagger">
+				class="flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 reveal-stagger">
 				@if(isset($testimonials) && $testimonials->count() > 0)
 					@foreach($testimonials as $review)
 						<div id="testimonial-{{ $review->id }}"
-							class="bg-[#E2D9C8]/40 border border-[#30261C]/10 rounded-[20px] p-8 flex flex-col min-w-[280px] snap-start md:min-w-0 {{ $loop->index === 1 ? 'border-2 border-dashed border-[#30261C]/20 transform hover:-translate-y-2 transition duration-300 shadow-md' : '' }}">
+							class="bg-[#E2D9C8]/40 border border-[#30261C]/10 rounded-[20px] p-8 flex flex-col min-w-[280px] snap-start {{ $loop->index === 1 ? 'border-2 border-dashed border-[#30261C]/20 transform hover:-translate-y-2 transition duration-300 shadow-md' : '' }}">
 							<div class="flex items-start justify-between mb-6">
 								<div class="flex items-center gap-4">
 								<img src="{{ optional($review->nguoiDung)->avatar_url ?? 'https://ui-avatars.com/api/?name=' . urlencode($review->nguoiDung?->hoSoKhachHang?->ho_ten ?? 'Khach hang') . '&background=E2D9C8&color=30261C' }}"
@@ -333,12 +333,56 @@ html { scroll-behavior: smooth; }
 
 @push('scripts')
 	<script>
-		function slideCarousel(type, direction) {
-			const grid = document.getElementById(type + '-grid');
+		// ── Carousel coverflow "Top 10 bán chạy": thẻ giữa nổi bật, mũi tên chuyển thẻ ──
+		(function () {
+			const grid = document.getElementById('sellers-grid');
 			if (!grid) return;
-			const scrollAmount = grid.clientWidth || 0;
-			grid.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
-		}
+			const cards = Array.from(grid.querySelectorAll('.product-card'));
+
+			function updateActive() {
+				const center = grid.scrollLeft + grid.clientWidth / 2;
+				let best = 0, bestDist = Infinity;
+				cards.forEach(function (c, i) {
+					const cc = c.offsetLeft + c.clientWidth / 2;
+					const d = Math.abs(cc - center);
+					if (d < bestDist) { bestDist = d; best = i; }
+				});
+				cards.forEach(function (c, i) { c.classList.toggle('is-active', i === best); });
+				return best;
+			}
+
+			function centerCard(i) {
+				if (!cards.length) return;
+				i = Math.max(0, Math.min(cards.length - 1, i));
+				const c = cards[i];
+				grid.scrollTo({ left: c.offsetLeft - (grid.clientWidth - c.clientWidth) / 2, behavior: 'smooth' });
+			}
+
+			// Mũi tên: dịch thẻ đang nổi bật sang trái/phải 1 bước.
+			window.slideCarousel = function (type, direction) {
+				if (type !== 'sellers') {
+					const g = document.getElementById(type + '-grid');
+					if (g) g.scrollBy({ left: (g.clientWidth || 0) * direction, behavior: 'smooth' });
+					return;
+				}
+				centerCard(updateActive() + direction);
+			};
+
+			let raf;
+			grid.addEventListener('scroll', function () {
+				cancelAnimationFrame(raf);
+				raf = requestAnimationFrame(updateActive);
+			}, { passive: true });
+			window.addEventListener('resize', updateActive);
+
+			// Khi vào trang: đưa thẻ thứ 2 ra giữa & làm nổi bật (nếu có ≥ 2 thẻ).
+			if (cards.length) {
+				requestAnimationFrame(function () {
+					centerCard(cards.length > 1 ? 1 : 0);
+					setTimeout(updateActive, 80);
+				});
+			}
+		})();
 
 		var isAuthenticated = {{ auth()->check() ? 'true' : 'false' }};
 

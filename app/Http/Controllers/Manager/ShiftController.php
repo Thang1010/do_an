@@ -37,15 +37,19 @@ class ShiftController extends Controller
     ) {}
     public function index(Request $request)
     {
-        $today = now()->toDateString();
         $validatedFilters = $request->validate([
             'ngay_bat_dau' => ['nullable', 'date'],
             'ngay_ket_thuc' => ['nullable', 'date'],
             'search' => ['nullable', 'string', 'max:150'],
         ]);
 
-        $selectedStartDate = (string) ($validatedFilters['ngay_bat_dau'] ?? $today);
-        $selectedEndDate = (string) ($validatedFilters['ngay_ket_thuc'] ?? $today);
+        // Mặc định lọc theo tuần hiện tại (Thứ 2 - Chủ Nhật) để khớp với nghiệp vụ
+        // xếp lịch theo tuần và cảnh báo giờ làm toàn/bán thời gian.
+        $startOfWeek = now()->startOfWeek(CarbonInterface::MONDAY)->toDateString();
+        $endOfWeek = now()->endOfWeek(CarbonInterface::SUNDAY)->toDateString();
+
+        $selectedStartDate = (string) ($validatedFilters['ngay_bat_dau'] ?? $startOfWeek);
+        $selectedEndDate = (string) ($validatedFilters['ngay_ket_thuc'] ?? $endOfWeek);
 
         if ($selectedEndDate < $selectedStartDate) {
             [$selectedStartDate, $selectedEndDate] = [$selectedEndDate, $selectedStartDate];
@@ -237,22 +241,55 @@ class ShiftController extends Controller
             $excludeShiftIds
         )->all();
 
+        // Ngưỡng giờ theo loại hình làm việc + số giờ của ca đang xếp.
+        $ptMaxWeek = (float) config('shift.gio_toi_da_tuan_part_time', 24);
+        $ftStdWeek = (float) config('shift.gio_chuan_tuan_full_time', 48);
+        $slotHours = $this->shiftService->timeRangeHours(
+            (string) $validated['gio_bat_dau'],
+            (string) $validated['gio_ket_thuc']
+        );
+
+        // Tổng giờ đã phân trong tuần (Thứ 2 - CN) của từng nhân sự rảnh.
+        $weeklyHours = $this->shiftService->weeklyAssignedHours(
+            collect($availableIds),
+            (string) $validated['ngay_lam'],
+            $excludeShiftIds
+        );
+
         // Gom nhân sự rảnh theo chức vụ. loai_order: quản lý (0) → nhân viên (1) → chưa gán (2)
         $groups = [];
         foreach ($candidates->whereIn('id', $availableIds) as $user) {
             $isManager = (string) $user->vai_tro === 'quản lý';
+            $chucVu = $isManager
+                ? $user->hoSoQuanLy?->chucVu
+                : $user->hoSoNhanVien?->chucVu;
 
             if ($isManager) {
-                $tenChucVu = trim((string) ($user->hoSoQuanLy?->chucVu?->ten_chuc_vu ?? '')) ?: 'Quản lý';
+                $tenChucVu = trim((string) ($chucVu?->ten_chuc_vu ?? '')) ?: 'Quản lý';
                 $loaiOrder = 0;
             } else {
-                $tenChucVu = trim((string) ($user->hoSoNhanVien?->chucVu?->ten_chuc_vu ?? ''));
+                $tenChucVu = trim((string) ($chucVu?->ten_chuc_vu ?? ''));
                 if ($tenChucVu !== '') {
                     $loaiOrder = 1;
                 } else {
                     $tenChucVu = 'Chưa gán chức vụ';
                     $loaiOrder = 2;
                 }
+            }
+
+            // Cảnh báo vượt giờ theo loại hình (chỉ cảnh báo, KHÔNG loại khỏi danh sách).
+            $loaiHinh = $chucVu?->loai_hinh_lam_viec;
+            $currentWeekHours = round((float) ($weeklyHours[(int) $user->id] ?? 0), 2);
+            $hoursAfter = round($currentWeekHours + $slotHours, 2);
+
+            $canhBao = false;
+            $canhBaoText = '';
+            if ($loaiHinh === 'bán thời gian' && $hoursAfter > $ptMaxWeek) {
+                $canhBao = true;
+                $canhBaoText = 'Vượt giờ bán thời gian (' . $this->formatHours($hoursAfter) . '/' . $this->formatHours($ptMaxWeek) . 'h tuần)';
+            } elseif ($loaiHinh === 'toàn thời gian' && $hoursAfter > $ftStdWeek) {
+                $canhBao = true;
+                $canhBaoText = 'OT - vượt giờ chuẩn (' . $this->formatHours($hoursAfter) . '/' . $this->formatHours($ftStdWeek) . 'h tuần)';
             }
 
             $key = $loaiOrder . '|' . $tenChucVu;
@@ -267,6 +304,11 @@ class ShiftController extends Controller
             $groups[$key]['users'][] = [
                 'id' => (int) $user->id,
                 'ho_ten' => $user->ho_ten ?? ('Người dùng #' . $user->id),
+                'loai_hinh' => $loaiHinh,
+                'gio_tuan_hien_tai' => $currentWeekHours,
+                'gio_sau_khi_them' => $hoursAfter,
+                'canh_bao' => $canhBao,
+                'canh_bao_text' => $canhBaoText,
             ];
         }
 
@@ -285,6 +327,14 @@ class ShiftController extends Controller
             ->values();
 
         return response()->json(['groups' => $orderedGroups]);
+    }
+
+    /**
+     * Format số giờ gọn: 24.00 -> "24", 7.50 -> "7.5".
+     */
+    private function formatHours(float $hours): string
+    {
+        return rtrim(rtrim(number_format($hours, 2, '.', ''), '0'), '.');
     }
 
     public function update(Request $request, int $id)

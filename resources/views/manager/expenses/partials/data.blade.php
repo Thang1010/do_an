@@ -1,4 +1,13 @@
-{{-- Danh sách chi tiêu + tổng kết (tự cập nhật qua polling). Cần: $expenses (paginator), $summary (array). --}}
+{{-- Danh sách chi tiêu + tổng kết. Cần: $expenses, $summary, $selectedShiftId. --}}
+@if(empty($selectedShiftId))
+    <div class="card">
+        <div class="card-body">
+            <div class="empty-state" style="padding: 28px 0; text-align: center;">
+                Vui lòng <strong>chọn ca làm việc</strong> ở trên để xem và ghi nhận chi tiêu của ca đó.
+            </div>
+        </div>
+    </div>
+@else
 <div class="card mb-20">
     <div class="card-header">
         <span class="card-title">Danh sách chi tiêu</span>
@@ -65,3 +74,4 @@
         <div class="stat-value" style="font-size: 20px;">{{ number_format($summary['tong_chi'] ?? 0, 0, ',', '.') }}đ</div>
     </div>
 </div>
+@endif

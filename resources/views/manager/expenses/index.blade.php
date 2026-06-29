@@ -34,7 +34,7 @@
             <form method="GET" action="{{ route('manager.expenses.index') }}" class="filter-bar mb-0">
                 <select name="ca_lam_viec_id" class="form-control" style="width: auto;">
                     <option value="">-- Tất cả ca --</option>
-                    @foreach($shiftGroups as $group)
+                    @foreach($shiftGroupsForFilter as $group)
                         <option value="{{ $group->id }}" {{ (string) $selectedShiftId === (string) $group->id ? 'selected' : '' }}>
                             {{ $group->ngay_lam }} • {{ $group->ten_ca }} ({{ $group->gio_bat_dau }} - {{ $group->gio_ket_thuc }})
                         </option>

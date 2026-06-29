@@ -85,6 +85,45 @@ body {
 	border-radius: 12px;
 }
 
+/* ===== Top 10 bán chạy: carousel coverflow — 3 thẻ, thẻ giữa nổi bật ===== */
+#sellers-grid {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: 24px;
+	overflow-x: auto;
+	scroll-snap-type: x mandatory;
+	scroll-behavior: smooth;
+	align-items: center;
+	padding: 28px 0 18px;        /* chừa chỗ để thẻ giữa phóng to không bị cắt */
+	scrollbar-width: none;       /* Firefox: ẩn thanh cuộn */
+	-ms-overflow-style: none;    /* IE/Edge: ẩn thanh cuộn */
+}
+#sellers-grid::-webkit-scrollbar { display: none; } /* Chrome/Safari: ẩn thanh cuộn */
+
+#sellers-grid > .product-card {
+	flex: 0 0 auto;
+	width: calc((100% - 48px) / 3);   /* 3 thẻ vừa khung (2 khoảng cách × 24px) */
+	scroll-snap-align: center;
+	transform: scale(0.84);
+	opacity: 0.55;
+	transition: transform .45s ease, opacity .45s ease;
+}
+/* Thẻ ở giữa (đang xem) phóng to & rõ; 2 thẻ bên cạnh nhỏ & mờ để làm nổi bật */
+#sellers-grid > .product-card.is-active {
+	transform: scale(1);
+	opacity: 1;
+	z-index: 2;
+}
+
+@media (max-width: 1023px) {
+	#sellers-grid > .product-card { width: calc((100% - 24px) / 2); transform: scale(0.9); } /* 2 thẻ */
+	#sellers-grid > .product-card.is-active { transform: scale(1); }
+}
+@media (max-width: 639px) {
+	#sellers-grid > .product-card { width: 86%; transform: scale(0.94); } /* 1 thẻ + ló thẻ kế */
+	#sellers-grid > .product-card.is-active { transform: scale(1); }
+}
+
 /* Hero text */
 .hero-title-xin {
 	font-family: 'Outfit', sans-serif;

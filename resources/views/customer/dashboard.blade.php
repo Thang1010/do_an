@@ -333,56 +333,13 @@ html { scroll-behavior: smooth; }
 
 @push('scripts')
 	<script>
-		// ── Carousel coverflow "Top 10 bán chạy": thẻ giữa nổi bật, mũi tên chuyển thẻ ──
-		(function () {
-			const grid = document.getElementById('sellers-grid');
+		// ── Mũi tên trái/phải: cuộn ngang danh sách sản phẩm ──
+		function slideCarousel(type, direction) {
+			const grid = document.getElementById(type + '-grid');
 			if (!grid) return;
-			const cards = Array.from(grid.querySelectorAll('.product-card'));
-
-			function updateActive() {
-				const center = grid.scrollLeft + grid.clientWidth / 2;
-				let best = 0, bestDist = Infinity;
-				cards.forEach(function (c, i) {
-					const cc = c.offsetLeft + c.clientWidth / 2;
-					const d = Math.abs(cc - center);
-					if (d < bestDist) { bestDist = d; best = i; }
-				});
-				cards.forEach(function (c, i) { c.classList.toggle('is-active', i === best); });
-				return best;
-			}
-
-			function centerCard(i) {
-				if (!cards.length) return;
-				i = Math.max(0, Math.min(cards.length - 1, i));
-				const c = cards[i];
-				grid.scrollTo({ left: c.offsetLeft - (grid.clientWidth - c.clientWidth) / 2, behavior: 'smooth' });
-			}
-
-			// Mũi tên: dịch thẻ đang nổi bật sang trái/phải 1 bước.
-			window.slideCarousel = function (type, direction) {
-				if (type !== 'sellers') {
-					const g = document.getElementById(type + '-grid');
-					if (g) g.scrollBy({ left: (g.clientWidth || 0) * direction, behavior: 'smooth' });
-					return;
-				}
-				centerCard(updateActive() + direction);
-			};
-
-			let raf;
-			grid.addEventListener('scroll', function () {
-				cancelAnimationFrame(raf);
-				raf = requestAnimationFrame(updateActive);
-			}, { passive: true });
-			window.addEventListener('resize', updateActive);
-
-			// Khi vào trang: đưa thẻ thứ 2 ra giữa & làm nổi bật (nếu có ≥ 2 thẻ).
-			if (cards.length) {
-				requestAnimationFrame(function () {
-					centerCard(cards.length > 1 ? 1 : 0);
-					setTimeout(updateActive, 80);
-				});
-			}
-		})();
+			const scrollAmount = grid.clientWidth || 0;
+			grid.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
+		}
 
 		var isAuthenticated = {{ auth()->check() ? 'true' : 'false' }};
 

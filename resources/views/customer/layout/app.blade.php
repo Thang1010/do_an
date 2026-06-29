@@ -17,6 +17,7 @@
 		rel="stylesheet">
 	<link rel="stylesheet" href="{{ asset('css/home.css') }}">
 	<link rel="stylesheet" href="{{ asset('css/chatbot-fab.css') }}">
+	<link rel="stylesheet" href="{{ asset('css/font-override.css') }}?v={{ filemtime(public_path('css/font-override.css')) }}">
 
 	@verbatim
 	<style>

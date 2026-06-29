@@ -17,6 +17,7 @@
 
     <link rel="stylesheet"
         href="{{ asset('css/manager-layout.css') }}?v={{ filemtime(public_path('css/manager-layout.css')) }}">
+    <link rel="stylesheet" href="{{ asset('css/font-override.css') }}?v={{ filemtime(public_path('css/font-override.css')) }}">
 
     @stack('styles')
 </head>

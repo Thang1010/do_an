@@ -1,0 +1,26 @@
+/* =========================================================================
+   ĐỒNG BỘ PHÔNG CHỮ TOÀN SITE → Be Vietnam Pro
+   - Font thiết kế riêng cho tiếng Việt: dấu chuẩn, hiện đại, dễ đọc.
+   - Thay cho Playfair Display / Outfit / Poppins / Roboto đang dùng lẫn lộn.
+   - Nạp SAU các CSS khác + dùng !important để phủ mọi khai báo cũ
+     (kể cả class Tailwind font-outfit / font-poppins) → KHÔNG cần build lại.
+   ========================================================================= */
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
+
+:root {
+	--font-primary: 'Be Vietnam Pro', sans-serif;
+	--font-secondary: 'Be Vietnam Pro', sans-serif;
+}
+
+body,
+button, input, select, textarea,
+.font-outfit, .font-poppins, .font-playfair {
+	font-family: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif !important;
+}
+
+h1, h2, h3, h4, h5, h6,
+[class*="-title"],
+.product-name, .voucher-code, .card-title, .page-title, .section-title,
+.hero-title-xin, .testimonial-title, .newsletter-title {
+	font-family: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif !important;
+}

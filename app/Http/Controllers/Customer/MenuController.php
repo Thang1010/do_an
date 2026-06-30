@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
+use App\Models\BanAn;
 use App\Models\ChiTietDonHang;
 use App\Models\DanhGiaSanPham;
 use App\Models\DanhMuc;
@@ -79,13 +80,17 @@ class MenuController extends Controller
 
         $products = $productsQuery->orderByDesc('noi_bat')->orderByDesc('created_at')->paginate(12)->withQueryString();
 
+        // Bàn gắn từ QR (nếu khách vào menu bằng cách quét QR tại bàn).
+        $qrTable = session('qr_ban_an_id') ? BanAn::find(session('qr_ban_an_id')) : null;
+
         return view('customer.menu.index', compact(
             'categories',
             'categorySlugs',
             'categoryImages',
             'activeCategory',
             'products',
-            'search'
+            'search',
+            'qrTable'
         ));
     }
 

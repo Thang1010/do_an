@@ -11,7 +11,7 @@
         <p class="page-subtitle">Quản lý số bàn phục vụ cho gọi món và đặt bàn</p>
     </div>
     <div class="page-actions">
-        <button type="button" class="btn btn-secondary" onclick="openModal('qr-print-modal')">In QR gọi món</button>
+        <button type="button" class="btn btn-secondary" onclick="openModal('qr-print-modal')">In QR tất cả các bàn</button>
         <button class="btn btn-primary" onclick="openModal('create-table-modal')">Thêm bàn ăn</button>
     </div>
 </div>
@@ -125,7 +125,7 @@
 <div class="modal-backdrop" id="qr-print-modal">
     <div class="modal-box" id="qr-print-box" style="max-width: 1000px; width: calc(100% - 32px);">
         <div class="modal-header">
-            <span class="modal-title">In QR gọi món tại bàn ({{ ($qrTables ?? collect())->count() }} bàn)</span>
+            <span class="modal-title">In QR bàn({{ ($qrTables ?? collect())->count() }} bàn)</span>
             <button class="modal-close" onclick="closeModal('qr-print-modal')">&#x2715;</button>
         </div>
         <div class="modal-body" id="qr-print-area">

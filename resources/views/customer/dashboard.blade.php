@@ -189,22 +189,22 @@
 					<div class="t-stage" id="t-stage">
 					@foreach($testimonials as $review)
 						<article id="testimonial-{{ $review->id }}" data-index="{{ $loop->index }}" class="t-card {{ $loop->index === 0 ? 'is-active' : ($loop->index === 1 ? 'is-right' : '') }}">
-							<div class="flex items-start justify-between mb-6">
-								<div class="flex items-center gap-4">
+							<div class="flex items-start justify-between gap-3 mb-6">
+								<div class="flex items-center gap-4 min-w-0">
 								<img src="{{ optional($review->nguoiDung)->avatar_url ?? 'https://ui-avatars.com/api/?name=' . urlencode($review->nguoiDung?->hoSoKhachHang?->ho_ten ?? 'Khach hang') . '&background=E2D9C8&color=30261C' }}"
-									class="w-14 h-14 rounded-full object-cover shadow-sm"
+									class="w-12 h-12 rounded-full object-cover shadow-sm flex-shrink-0"
 									alt="{{ $review->nguoiDung?->hoSoKhachHang?->ho_ten ?? 'Khách hàng' }} Avatar" />
-								<div>
-									<h4 class="text-[#30261C] text-lg font-bold font-outfit">
+								<div class="min-w-0">
+									<h4 class="text-[#30261C] text-base font-bold font-outfit truncate">
 										{{ $review->nguoiDung?->hoSoKhachHang?->ho_ten ?? $review->nguoiDung?->email ?? 'Khách hàng' }}
 										</h4>
-										<p class="text-[#30261C]/80 text-sm font-medium font-poppins">
+										<p class="text-[#30261C]/80 text-sm font-medium font-poppins truncate">
 											{{ optional($review->sanPham)->ten_san_pham ?? '—' }}
 										</p>
 									</div>
 								</div>
 								<!-- Stars -->
-								<div class="flex items-center gap-0.5">
+								<div class="flex items-center gap-0.5 flex-shrink-0">
 									@for($i = 0; $i < 5; $i++)
 										<svg class="w-5 h-5 {{ $i < ($review->so_sao ?? 0) ? 'text-yellow-500' : 'text-gray-300' }}"
 											fill="currentColor" viewBox="0 0 20 20">
@@ -367,13 +367,14 @@ html { scroll-behavior: smooth; }
 
 /* Thẻ giữa: lớn hơn ~20%, nét, nổi bóng, đè lên 2 thẻ bên */
 .t-card.is-active {
-	transform: scale(1.18);
+	order: 2;
+	transform: scale(1.16);
 	z-index: 5;
 	opacity: 1;
 	filter: none;
 	background: rgba(226, 217, 200, 0.72);
 	box-shadow: 0 30px 70px rgba(48, 38, 28, 0.38);
-	margin: 0 -1.75rem;
+	margin: 0 -1.5rem;
 }
 /* Hai thẻ bên: nhỏ hơn ~22%, mờ 70%, giảm bão hoà, lùi ra sau */
 .t-card.is-left,
@@ -382,8 +383,9 @@ html { scroll-behavior: smooth; }
 	filter: saturate(0.65);
 	z-index: 1;
 }
-.t-card.is-left  { transform: scale(0.78) translateX(1.75rem); }
-.t-card.is-right { transform: scale(0.78) translateX(-1.75rem); }
+/* order: xếp lại trái | giữa | phải bất kể thứ tự trong DOM */
+.t-card.is-left  { order: 1; transform: scale(0.8) translateX(1.25rem); }
+.t-card.is-right { order: 3; transform: scale(0.8) translateX(-1.25rem); }
 
 .t-arrow {
 	flex: 0 0 auto;

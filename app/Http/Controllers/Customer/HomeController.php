@@ -40,7 +40,11 @@ class HomeController extends Controller
 
         session(['qr_ban_an_id' => $banAn->id]);
 
-        return view('customer.menu.index', ['tableNumber' => $banAn->so_ban]);
+        // Chuyển hướng sang trang menu để MenuController nạp đủ dữ liệu (danh mục,
+        // sản phẩm...). Trước đây render thẳng view menu nhưng thiếu các biến này
+        // nên bị lỗi 500 khi quét QR. Bàn đã được lưu trong session để giỏ hàng dùng.
+        return redirect()->route('menu.index')
+            ->with('success', 'Bạn đang gọi món tại bàn ' . $banAn->so_ban . '.');
     }
 
     public function index()

@@ -126,7 +126,7 @@
                 @endif
                 @if($canCheckout)
                     <form method="POST" action="{{ route('staff.shifts.checkout') }}" style="display:inline;" class="js-geo-form"
-                          onsubmit="return confirm('Xác nhận chấm công ra?')">
+                          data-confirm="Xác nhận chấm công ra?">
                         @csrf
                         <input type="hidden" name="attendance_id" value="{{ $attendance->id }}">
                         <input type="hidden" name="latitude">

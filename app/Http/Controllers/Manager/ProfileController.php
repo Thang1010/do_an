@@ -115,6 +115,30 @@ class ProfileController extends Controller
             Storage::disk('s3')->put($filename, (string) $image->encodeUsingFileExtension('jpg', 80));
         }
 
+        // Chủ cửa hàng đổi địa chỉ quán: bắt buộc địa chỉ phải lấy được toạ độ GPS
+        // (geocode thành công) thì mới cho lưu, để chấm công GPS hoạt động. Chỉ
+        // enforce khi địa chỉ THỰC SỰ thay đổi để không khoá các lần lưu khác.
+        if ($user->vai_tro === 'chủ cửa hàng' && config('attendance.geo.enabled')) {
+            $storeAddress = $this->normalizeNullable($validated['cua_hang_dia_chi'] ?? null);
+            $currentStore = CuaHang::query()
+                ->when($user->cua_hang_id, fn($q) => $q->where('id', $user->cua_hang_id))
+                ->when(!$user->cua_hang_id, fn($q) => $q->whereHas('chuCuaHang', fn($sq) => $sq->where('id', $user->id)))
+                ->first() ?? CuaHang::first();
+
+            if ($storeAddress !== null
+                && $storeAddress !== ($currentStore?->dia_chi)
+                && $geocoding->geocode($storeAddress) === null) {
+                return back()
+                    ->withInput()
+                    ->withErrors([
+                        'cua_hang_dia_chi' => 'Chưa lấy được toạ độ từ địa chỉ này nên không thể lưu. '
+                            . 'Vui lòng nhập địa chỉ chi tiết hơn (số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố).'
+                            . 'Có thể nhập  toạ độ lat,lng (vd 21.0142, 105.5402),
+                                    hoặc Plus Code từ Google Maps (vd 2G7R+M3P Hòa Lạc, Hà Nội).',
+                    ]);
+            }
+        }
+
         DB::transaction(function () use ($user, $validated, $filename) {
             $emailUpdate = $this->normalizeNullable($validated['email'] ?? null);
             if ($emailUpdate) {

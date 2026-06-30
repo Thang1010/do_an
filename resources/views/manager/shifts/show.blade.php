@@ -99,13 +99,13 @@
                                     @if(isset($isShiftActive) && $isShiftActive)
                                         @if($member['can_force_checkin'] ?? false)
                                             <form method="POST" action="{{ route('manager.shifts.force-checkin', ['id' => $shift->id, 'userId' => $member['nguoi_dung_id']]) }}"
-                                                  onsubmit="return confirmDelete(this, 'Xác nhận chấm công vào hộ cho nhân sự này?')">
+                                                  onsubmit="return confirmSubmit(this, 'Xác nhận chấm công vào hộ cho nhân sự này?', { title: 'Chấm công vào hộ', okText: 'Chấm công vào' })">
                                                 @csrf
                                                 <button type="submit" class="btn btn-primary btn-sm">Chấm công vào</button>
                                             </form>
                                         @elseif($member['can_force_checkout'] ?? false)
                                             <form method="POST" action="{{ route('manager.shifts.force-checkout', ['id' => $shift->id, 'userId' => $member['nguoi_dung_id']]) }}"
-                                                  onsubmit="return confirmDelete(this, 'Xác nhận kết thúc ca hộ cho nhân sự này?')">
+                                                  onsubmit="return confirmSubmit(this, 'Xác nhận kết thúc ca hộ cho nhân sự này?', { title: 'Chấm công ra hộ', okText: 'Chấm công ra' })">
                                                 @csrf
                                                 <button type="submit" class="btn btn-warning btn-sm">Chấm công ra</button>
                                             </form>

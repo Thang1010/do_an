@@ -54,9 +54,14 @@ class AttendanceService
 
     /**
      * Toạ độ quán suy ra từ địa chỉ (geocode + cache). Null nếu không tra được.
+     *
+     * Fallback về cửa hàng duy nhất khi user chưa gắn cua_hang_id (hệ thống đang
+     * dùng 1 quán) — nhất quán với cách Manager\ProfileController resolve quán.
      */
     public function storeCoords(?CuaHang $store): ?array
     {
+        $store = $store ?? CuaHang::first();
+
         return $store ? $this->geocodingService->geocode($store->dia_chi) : null;
     }
 
@@ -91,9 +96,20 @@ class AttendanceService
      */
     public function assertWithinStore(?CuaHang $store, ?float $lat, ?float $lng): void
     {
-        $coords = $this->geoEnforced($store) ? $this->storeCoords($store) : null;
-        if ($coords === null) {
+        // Geo tắt hoàn toàn → không ràng buộc vị trí.
+        if (! config('attendance.geo.enabled')) {
             return;
+        }
+
+        // Fail closed: đã bật geo nhưng không xác định được vị trí quán (địa chỉ
+        // không geocode được) → CHẶN thay vì cho qua, để tránh chấm công từ xa.
+        $coords = $this->storeCoords($store);
+        if ($coords === null) {
+            throw new AttendanceException(
+                'Hệ thống chưa xác định được vị trí quán nên chưa thể chấm công. '
+                . 'Vui lòng liên hệ quản lý cập nhật địa chỉ quán đầy đủ (số nhà, đường, '
+                . 'phường/xã, quận/huyện, tỉnh/thành phố) trong cấu hình cửa hàng.'
+            );
         }
 
         if ($lat === null || $lng === null) {

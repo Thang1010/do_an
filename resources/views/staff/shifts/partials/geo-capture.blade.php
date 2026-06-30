@@ -12,19 +12,21 @@
 
     <style>
         .geo-backdrop {
-            position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none;
-            align-items: center; justify-content: center; padding: 16px; z-index: 1000;
+            position: fixed; inset: 0; background: rgba(18,12,8,0.72); backdrop-filter: blur(2px);
+            display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10002;
         }
         .geo-backdrop.open { display: flex; }
         .geo-modal {
-            width: 100%; max-width: 380px; background: #fff; border-radius: 14px; padding: 22px;
-            box-shadow: 0 12px 40px rgba(0,0,0,.25);
+            width: 100%; max-width: 400px; background: rgba(30,17,6,0.92);
+            border: 1px solid rgba(240,221,184,0.16); backdrop-filter: blur(14px);
+            border-radius: 18px; padding: 26px; box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+            color: #f1f0ee; font-family: 'Outfit', sans-serif; text-align: center;
         }
-        .geo-modal h2 { font-size: 17px; margin: 0 0 8px; }
-        .geo-modal p { font-size: 13px; color: #555; line-height: 1.6; margin: 0 0 16px; }
+        .geo-modal h2 { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: #F0DDB8; margin: 0 0 10px; }
+        .geo-modal p { font-size: 13px; color: rgba(241,240,238,0.82); line-height: 1.6; margin: 0 0 16px; }
         .geo-icon { font-size: 34px; text-align: center; margin-bottom: 6px; }
         .geo-status { font-size: 13px; margin-bottom: 14px; padding: 10px 12px; border-radius: 10px;
-            background: #fde8e8; color: #b42318; line-height: 1.5; }
+            background: rgba(217,45,32,0.15); border: 1px solid rgba(217,45,32,0.4); color: #ffd6d6; line-height: 1.5; }
     </style>
 
     @push('scripts')
@@ -43,14 +45,25 @@
                 function openModal() { modalStatus.style.display = 'none'; modal.classList.add('open'); }
                 function closeModal() { modal.classList.remove('open'); }
 
-                // Chặn submit các form chấm công để xin vị trí trước.
+                // Chặn submit các form chấm công để (xác nhận nếu cần →) xin vị trí trước.
                 document.querySelectorAll('form.js-geo-form').forEach(function (form) {
                     form.addEventListener('submit', function (e) {
                         if (form.dataset.geoReady === '1') { return; } // đã có toạ độ → cho gửi
                         e.preventDefault();
-                        pendingForm = form;
-                        allowBtn.disabled = false;
-                        openModal();
+
+                        var startCapture = function () {
+                            pendingForm = form;
+                            allowBtn.disabled = false;
+                            openModal();
+                        };
+
+                        // Form có data-confirm → hỏi xác nhận bằng modal chung trước.
+                        // Bấm Hủy thì dừng hẳn (không mở modal xin vị trí).
+                        if (form.dataset.confirm && typeof window.showConfirm === 'function') {
+                            window.showConfirm(form.dataset.confirm, startCapture, { title: 'Xác nhận', okText: 'Xác nhận' });
+                        } else {
+                            startCapture();
+                        }
                     });
                 });
 

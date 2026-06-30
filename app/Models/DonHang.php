@@ -231,4 +231,13 @@ class DonHang extends Model
             ->whereHas('chiTietDonHang', fn($q) => $q->where('loai_don', 'mang về')
                 ->where('trang_thai_thanh_toan', 'đã thanh toán'));
     }
+
+    /**
+     * Bàn "rung": đơn khách tự gọi tại bàn (có gắn bàn), đã thanh toán và chưa
+     * được nhân viên xem/phục vụ → bàn đang cần chú ý.
+     */
+    public function scopeBanRung($query)
+    {
+        return $query->khachChuaPhucVu()->whereNotNull('ban_an_id');
+    }
 }

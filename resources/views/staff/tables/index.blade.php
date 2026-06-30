@@ -19,18 +19,22 @@ Nhân viên / <strong>Bàn</strong>
     <div class="staff-info-right">
         <div class="staff-datetime" id="staff-live-clock">Đang tải...</div>
         @if($currentAttendance && !$currentAttendance->cham_cong_ra)
-            <form method="POST" action="{{ route('staff.shifts.checkout') }}" style="display:inline;">
+            <form method="POST" action="{{ route('staff.shifts.checkout') }}" style="display:inline;" class="js-geo-form"
+                  data-confirm="Xác nhận chấm công ra?">
                 @csrf
                 <input type="hidden" name="attendance_id" value="{{ $currentAttendance->id }}">
-                <button type="submit" class="shift-badge shift-badge--checkout"
-                        onclick="return confirmSubmit(this.form, 'Xác nhận chấm công ra?')">
+                <input type="hidden" name="latitude">
+                <input type="hidden" name="longitude">
+                <button type="submit" class="shift-badge shift-badge--checkout">
                     Chấm công ra
                 </button>
             </form>
         @elseif($currentShift && !$currentAttendance)
-            <form method="POST" action="{{ route('staff.shifts.checkin') }}" style="display:inline;">
+            <form method="POST" action="{{ route('staff.shifts.checkin') }}" style="display:inline;" class="js-geo-form">
                 @csrf
                 <input type="hidden" name="ca_lam_viec_id" value="{{ $currentShift->id }}">
+                <input type="hidden" name="latitude">
+                <input type="hidden" name="longitude">
                 <button type="submit" class="shift-badge shift-badge--checkin">
                     Chấm công vào
                 </button>
@@ -53,6 +57,8 @@ Nhân viên / <strong>Bàn</strong>
         @include('staff.tables.partials.detail-panel')
     </div>
 </div>
+
+@include('staff.shifts.partials.geo-capture')
 
 @endsection
 

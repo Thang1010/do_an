@@ -125,7 +125,7 @@ class ShiftController extends Controller
             return back()->with($e->level === 'info' ? 'warning' : 'error', $e->getMessage());
         }
 
-        return back()->with('success', 'Check-in thành công!');
+        return back()->with('success', 'Chấm công vào thành công!');
     }
 
     public function checkout(Request $request)
@@ -154,7 +154,7 @@ class ShiftController extends Controller
             return back()->with($e->level === 'info' ? 'warning' : 'error', $e->getMessage());
         }
 
-        return back()->with('success', 'Check-out thành công!');
+        return back()->with('success', 'Chấm công ra thành công!');
     }
 
     public function startCash(Request $request)

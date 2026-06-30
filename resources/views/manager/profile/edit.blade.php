@@ -129,8 +129,9 @@
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Địa chỉ cửa hàng</label>
-                                <input type="text" name="cua_hang_dia_chi" class="form-control"
+                                <input type="text" name="cua_hang_dia_chi" class="form-control @error('cua_hang_dia_chi') is-invalid @enderror"
                                     value="{{ old('cua_hang_dia_chi', $storeProfile?->dia_chi) }}">
+                                @error('cua_hang_dia_chi')<div class="form-error">{{ $message }}</div>@enderror
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Giờ mở cửa</label>

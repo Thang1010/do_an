@@ -29,9 +29,10 @@ return [
     |--------------------------------------------------------------------------
     | Geofencing (chống chấm công từ xa bằng GPS)
     |--------------------------------------------------------------------------
-    | Chỉ thực sự bắt buộc khi enabled = true VÀ quán có địa chỉ geocode được.
-    | Toạ độ quán được suy ra từ địa chỉ (cua_hang.dia_chi) qua Google Geocoding
-    | rồi cache lại — không lưu cột toạ độ riêng.
+    | Khi enabled = true: toạ độ quán suy ra từ địa chỉ (cua_hang.dia_chi) qua
+    | OpenStreetMap Nominatim rồi cache lại — không lưu cột toạ độ riêng.
+    | Nếu địa chỉ KHÔNG geocode được, việc chấm công sẽ bị CHẶN (fail closed) và
+    | yêu cầu quản lý cập nhật địa chỉ đầy đủ, thay vì cho qua như trước.
     | radius_meters: bán kính mặc định cho phép quanh quán.
     */
     'geo' => [

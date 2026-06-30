@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Http\Controllers\Controller;
+use App\Models\DonHang;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
 
@@ -80,6 +81,8 @@ class NotificationController extends Controller
         return response()->json([
             'count' => $count,
             'html' => $html,
+            'takeawayCount' => DonHang::takeawayQueue()->count(),
+            'banRungCount' => DonHang::banRung()->distinct('ban_an_id')->count('ban_an_id'),
         ]);
     }
 }

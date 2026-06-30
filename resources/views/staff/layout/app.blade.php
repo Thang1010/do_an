@@ -42,8 +42,14 @@
         <nav class="sidebar-nav">
             <div class="nav-section-label">Quản lý</div>
 
-            <a href="/staff/tables" class="nav-item {{ request()->routeIs('staff.tables*') ? 'active' : '' }}">
+            @php
+                $banRungCount = auth()->check()
+                    ? \App\Models\DonHang::banRung()->distinct('ban_an_id')->count('ban_an_id')
+                    : 0;
+            @endphp
+            <a href="/staff/tables" id="tables-nav-item" class="nav-item {{ request()->routeIs('staff.tables*') ? 'active' : '' }}">
                 Bàn
+                <span id="ban-rung-badge" class="badge" style="background:#ea580c;color:#fff;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700;margin-left:6px;{{ $banRungCount > 0 ? '' : 'display:none;' }}">{{ min($banRungCount, 99) }}</span>
             </a>
 
             @php
@@ -51,11 +57,9 @@
                     ? \App\Models\DonHang::takeawayQueue()->count()
                     : 0;
             @endphp
-            <a href="/staff/takeaway" class="nav-item {{ request()->routeIs('staff.takeaway*') ? 'active' : '' }}">
+            <a href="/staff/takeaway" id="takeaway-nav-item" class="nav-item {{ request()->routeIs('staff.takeaway*') ? 'active' : '' }}">
                 Đơn mang về
-                @if($takeawayQueueCount > 0)
-                    <span class="badge" style="background:#ea580c;color:#fff;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700;margin-left:6px;">{{ min($takeawayQueueCount, 99) }}</span>
-                @endif
+                <span id="takeaway-badge" class="badge" style="background:#ea580c;color:#fff;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700;margin-left:6px;{{ $takeawayQueueCount > 0 ? '' : 'display:none;' }}">{{ min($takeawayQueueCount, 99) }}</span>
             </a>
 
             <a href="/staff/orders" class="nav-item {{ request()->routeIs('staff.orders*') ? 'active' : '' }}">
@@ -320,10 +324,10 @@
     <!-- =============== GLOBAL SIZE MODAL =============== -->
     <div id="global-size-modal"
         style="position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 10001; padding: 20px;">
-        <div style="position: absolute; inset: 0; background: rgba(18, 12, 8, 0.75); backdrop-filter: blur(2px);"
+        <div style="position: absolute; inset: 0; background: rgba(18, 12, 8, 0.72); backdrop-filter: blur(2px);"
             onclick="closeGlobalSizeModal()"></div>
         <div
-            style="position: relative; width: min(460px, 92vw); background: #1f1710; border: 1px solid rgba(141, 93, 93, 0.5); border-radius: 18px; padding: 28px 26px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45); color: #f1f0ee; font-family: 'Outfit', sans-serif;">
+            style="position: relative; width: min(460px, 92vw); background: rgba(30, 17, 6, 0.92); border: 1px solid rgba(240, 221, 184, 0.16); border-radius: 18px; padding: 28px 26px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45); backdrop-filter: blur(14px); color: #f1f0ee; font-family: 'Outfit', sans-serif;">
             <button type="button" onclick="closeGlobalSizeModal()"
                 style="position: absolute; right: 16px; top: 12px; background: none; border: none; color: #f1f0ee; font-size: 24px; cursor: pointer;">&times;</button>
             <div id="global-size-modal-title"
@@ -615,6 +619,30 @@
                 }
             }
 
+            // Cập nhật badge "Đơn mang về" ở sidebar (số đơn mang về đang chờ giao).
+            function updateTakeawayBadge(count) {
+                var badge = document.getElementById('takeaway-badge');
+                if (!badge) return;
+                if (count > 0) {
+                    badge.textContent = count > 99 ? 99 : count;
+                    badge.style.display = '';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+
+            // Cập nhật badge "Bàn" ở sidebar (số bàn đang rung — khách gọi món mới chưa phục vụ).
+            function updateBanRungBadge(count) {
+                var badge = document.getElementById('ban-rung-badge');
+                if (!badge) return;
+                if (count > 0) {
+                    badge.textContent = count > 99 ? 99 : count;
+                    badge.style.display = '';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+
             function poll() {
                 if (inFlight || document.hidden) return;
                 // Không cập nhật khi dropdown đang mở để tránh giật nội dung đang đọc
@@ -627,6 +655,8 @@
                     .then(function (data) {
                         if (!data) return;
                         updateBadge(data.count || 0);
+                        updateTakeawayBadge(data.takeawayCount || 0);
+                        updateBanRungBadge(data.banRungCount || 0);
                         var list = document.querySelector('#notif-dropdown .notification-dropdown-list');
                         if (list && typeof data.html === 'string') list.innerHTML = data.html;
                     })

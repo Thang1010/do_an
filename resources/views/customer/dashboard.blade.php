@@ -181,12 +181,14 @@
 				<h2 class="testimonial-title">Khách hàng yêu quý của chúng tôi</h2>
 			</div>
 
-			<div
-				class="flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 reveal-stagger">
+			<div class="testimonial-carousel reveal" id="testimonial-carousel">
 				@if(isset($testimonials) && $testimonials->count() > 0)
+					<button type="button" class="t-arrow t-arrow--prev" aria-label="Đánh giá trước" onclick="testimonialMove(-1)">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+					</button>
+					<div class="t-stage" id="t-stage">
 					@foreach($testimonials as $review)
-						<div id="testimonial-{{ $review->id }}"
-							class="bg-[#E2D9C8]/40 border border-[#30261C]/10 rounded-[20px] p-8 flex flex-col min-w-[280px] snap-start {{ $loop->index === 1 ? 'border-2 border-dashed border-[#30261C]/20 transform hover:-translate-y-2 transition duration-300 shadow-md' : '' }}">
+						<article id="testimonial-{{ $review->id }}" data-index="{{ $loop->index }}" class="t-card {{ $loop->index === 0 ? 'is-active' : ($loop->index === 1 ? 'is-right' : '') }}">
 							<div class="flex items-start justify-between mb-6">
 								<div class="flex items-center gap-4">
 								<img src="{{ optional($review->nguoiDung)->avatar_url ?? 'https://ui-avatars.com/api/?name=' . urlencode($review->nguoiDung?->hoSoKhachHang?->ho_ten ?? 'Khach hang') . '&background=E2D9C8&color=30261C' }}"
@@ -214,26 +216,24 @@
 							</div>
 							<p class="text-[#30261C] text-base leading-relaxed flex-1 font-outfit">{{ $review->noi_dung ?? '' }}
 							</p>
-						</div>
+						</article>
 					@endforeach
+					</div>
+					<button type="button" class="t-arrow t-arrow--next" aria-label="Đánh giá sau" onclick="testimonialMove(1)">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+					</button>
 				@else
 					<div class="w-full text-center text-sm text-[#30261C]/70">Chưa có đánh giá từ khách hàng.</div>
 				@endif
 			</div>
 
-			@if(isset($testimonials) && $testimonials->count() > 0)
-				@php
-					$testimonialCount = $testimonials->count();
-					$dotCount = (int) ceil($testimonialCount / 3);
-				@endphp
-				@if($dotCount > 0)
-					<!-- Dot indicators -->
-					<div class="dot-row mt-8">
-						@for($i = 0; $i < $dotCount; $i++)
-							<div class="dot {{ $i === 0 ? 'active' : '' }}"></div>
-						@endfor
-					</div>
-				@endif
+			@if(isset($testimonials) && $testimonials->count() > 1)
+				<!-- Dot indicators -->
+				<div class="dot-row mt-10" id="t-dots">
+					@foreach($testimonials as $review)
+						<div class="dot {{ $loop->first ? 'active' : '' }}" data-dot="{{ $loop->index }}"></div>
+					@endforeach
+				</div>
 			@endif
 		</section>
 
@@ -327,6 +327,91 @@ html { scroll-behavior: smooth; }
 		transform: none !important;
 		transition: none !important;
 	}
+}
+
+/* ===== Carousel đánh giá: tập trung vào thẻ giữa ===== */
+.testimonial-carousel {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 340px;
+	padding: 30px 0;
+}
+.t-stage {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 1 1 auto;
+	gap: 0;
+	overflow: visible;
+}
+.t-card {
+	display: none;
+	flex-direction: column;
+	box-sizing: border-box;
+	width: min(440px, 86vw);
+	flex: 0 0 auto;
+	background: rgba(226, 217, 200, 0.45);
+	border: 1px solid rgba(48, 38, 28, 0.10);
+	border-radius: 20px;
+	padding: 32px;
+	box-shadow: 0 8px 24px rgba(48, 38, 28, 0.10);
+	transition: transform .45s cubic-bezier(.22,.61,.36,1), opacity .45s ease, filter .45s ease, box-shadow .45s ease;
+	will-change: transform, opacity;
+}
+.t-card.is-active,
+.t-card.is-left,
+.t-card.is-right { display: flex; }
+
+/* Thẻ giữa: lớn hơn ~20%, nét, nổi bóng, đè lên 2 thẻ bên */
+.t-card.is-active {
+	transform: scale(1.18);
+	z-index: 5;
+	opacity: 1;
+	filter: none;
+	background: rgba(226, 217, 200, 0.72);
+	box-shadow: 0 30px 70px rgba(48, 38, 28, 0.38);
+	margin: 0 -1.75rem;
+}
+/* Hai thẻ bên: nhỏ hơn ~22%, mờ 70%, giảm bão hoà, lùi ra sau */
+.t-card.is-left,
+.t-card.is-right {
+	opacity: 0.7;
+	filter: saturate(0.65);
+	z-index: 1;
+}
+.t-card.is-left  { transform: scale(0.78) translateX(1.75rem); }
+.t-card.is-right { transform: scale(0.78) translateX(-1.75rem); }
+
+.t-arrow {
+	flex: 0 0 auto;
+	width: 48px;
+	height: 48px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 999px;
+	border: 1px solid rgba(48, 38, 28, 0.15);
+	background: #F1F0EE;
+	color: #30261C;
+	cursor: pointer;
+	box-shadow: 0 6px 18px rgba(48, 38, 28, 0.12);
+	transition: background .2s, color .2s, transform .2s, opacity .2s;
+	z-index: 6;
+}
+.t-arrow:hover { background: #30261C; color: #F1F0EE; transform: scale(1.06); }
+.t-arrow:disabled { opacity: .35; cursor: default; }
+.t-arrow:disabled:hover { background: #F1F0EE; color: #30261C; transform: none; }
+.t-arrow svg { width: 22px; height: 22px; }
+
+@media (max-width: 768px) {
+	.testimonial-carousel { gap: 4px; min-height: 300px; }
+	.t-card.is-left,
+	.t-card.is-right { display: none; }
+	.t-card.is-active { transform: scale(1); margin: 0; }
+	.t-card { width: min(440px, 88vw); padding: 26px; }
 }
 </style>
 @endpush
@@ -475,6 +560,46 @@ html { scroll-behavior: smooth; }
 			}, { threshold: 0.15, rootMargin: '0px 0px -10% 0px' });
 
 			els.forEach(function (el) { observer.observe(el); });
+		})();
+
+		// ── Carousel đánh giá: tập trung vào thẻ giữa ──────
+		(function () {
+			var stage = document.getElementById('t-stage');
+			if (!stage) return;
+			var cards = Array.prototype.slice.call(stage.querySelectorAll('.t-card'));
+			var n = cards.length;
+			if (!n) return;
+			var dotsWrap = document.getElementById('t-dots');
+			var dots = dotsWrap ? Array.prototype.slice.call(dotsWrap.querySelectorAll('.dot')) : [];
+			var prevBtn = document.querySelector('.t-arrow--prev');
+			var nextBtn = document.querySelector('.t-arrow--next');
+			var idx = 0;
+
+			function render() {
+				var left = (idx - 1 + n) % n;
+				var right = (idx + 1) % n;
+				cards.forEach(function (c, i) {
+					c.classList.remove('is-active', 'is-left', 'is-right');
+					if (i === idx) c.classList.add('is-active');
+					else if (n >= 3 && i === left) c.classList.add('is-left');
+					else if (n >= 2 && i === right && right !== idx) c.classList.add('is-right');
+				});
+				dots.forEach(function (d, i) { d.classList.toggle('active', i === idx); });
+				if (prevBtn) prevBtn.disabled = (n < 2);
+				if (nextBtn) nextBtn.disabled = (n < 2);
+			}
+
+			window.testimonialMove = function (dir) {
+				idx = (idx + dir + n) % n;
+				render();
+			};
+
+			dots.forEach(function (d, i) {
+				d.style.cursor = 'pointer';
+				d.addEventListener('click', function () { idx = i; render(); });
+			});
+
+			render();
 		})();
 	</script>
 @endpush

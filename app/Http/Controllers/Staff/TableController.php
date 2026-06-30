@@ -38,6 +38,7 @@ class TableController extends Controller
     public function __construct(
         private readonly PaymentService $paymentService,
         private readonly OrderInventoryService $inventoryService,
+        private readonly \App\Services\AttendanceService $attendanceService,
     ) {}
     public function index(Request $request)
     {
@@ -53,6 +54,9 @@ class TableController extends Controller
 
         // Current shift & attendance
         [$currentShift, $currentAttendance] = $this->resolveCurrentShift($user);
+
+        // Có cần lấy GPS khi chấm công ở trang này không (geo bật + quán có toạ độ).
+        $geoRequired = $this->attendanceService->geoEnforced($user->cuaHang);
 
         // Ingredients for expense form
         $ingredients = NguyenLieu::orderBy('ten_nguyen_lieu')->get();
@@ -213,7 +217,8 @@ class TableController extends Controller
             'tables', 'currentShift', 'currentAttendance', 'ingredients',
             'selectedTable', 'selectedOrder', 'selectedItems', 'store', 'menuCategories',
             'menuProducts', 'selectedCategoryId', 'selectedProductId', 'selectedVoucherId',
-            'availableVouchers', 'assignOrder', 'selectedTableHasUnpaid', 'displayTotal', 'newPaidOrders'
+            'availableVouchers', 'assignOrder', 'selectedTableHasUnpaid', 'displayTotal', 'newPaidOrders',
+            'geoRequired'
         ));
     }
 

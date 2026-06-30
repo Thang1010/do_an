@@ -409,9 +409,15 @@ class CartController extends Controller
 
                 // Nhiệt độ: tôn trọng các nhiệt độ mà sản phẩm hỗ trợ.
                 $productTemps = array_values(array_filter(array_map('trim', explode(',', (string) $product->nhiet_do))));
-                $nhietDo = $requestedNhietDo;
-                if (! empty($productTemps) && ! in_array($nhietDo, $productTemps, true)) {
-                    $nhietDo = in_array('lạnh', $productTemps, true) ? 'lạnh' : $productTemps[0];
+                if (empty($productTemps)) {
+                    // Món KHÔNG có thuộc tính nhiệt độ (vd: bánh ngọt) → không gán nhiệt độ,
+                    // tránh chèn nhầm "(lạnh)" vào hoá đơn.
+                    $nhietDo = '';
+                } else {
+                    $nhietDo = $requestedNhietDo;
+                    if (! in_array($nhietDo, $productTemps, true)) {
+                        $nhietDo = in_array('lạnh', $productTemps, true) ? 'lạnh' : $productTemps[0];
+                    }
                 }
 
                 // Lưu vào giỏ hàng: CỘNG DỒN nếu đã có món giống hệt

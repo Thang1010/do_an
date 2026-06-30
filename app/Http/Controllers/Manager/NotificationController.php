@@ -39,10 +39,11 @@ class NotificationController extends Controller
 
     public function open(Request $request, string $id)
     {
+        // Bảng thong_bao dùng khóa chính `ma_thong_bao` (cột `id` chỉ là accessor ảo),
+        // nên phải tìm theo khóa của model thay vì where('id', ...) → tránh lỗi SQL.
         $notification = $request->user()
             ->notifications()
-            ->where('id', $id)
-            ->firstOrFail();
+            ->findOrFail($id);
 
         if ($notification->read_at === null) {
             $notification->markAsRead();

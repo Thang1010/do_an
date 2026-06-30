@@ -9,6 +9,7 @@ use App\Models\DanhGiaSanPham;
 use App\Models\DanhMuc;
 use App\Models\SanPham;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 class MenuController extends Controller
@@ -63,9 +64,9 @@ class MenuController extends Controller
         $productsQuery = SanPham::with(['danhMuc', 'kichCo'])
             ->whereIn('trang_thai_ban', ['dang_ban', 'đang bán']);
 
-        if (auth()->check()) {
+        if (Auth::check()) {
             $productsQuery->withExists(['nguoiDungYeuThich as is_favorite' => function ($q) {
-                $q->where('nguoi_dung_id', auth()->id());
+                $q->where('nguoi_dung_id', Auth::id());
             }])->orderByDesc('is_favorite');
         }
 
@@ -101,13 +102,13 @@ class MenuController extends Controller
         $avgRating = $product->danhGiaSanPham->avg('so_sao') ?? 0;
 
         // Khách chỉ được đánh giá nếu đã mua (đã thanh toán) sản phẩm này VÀ còn trong ngày mua.
-        $hasBought = auth()->check()
-            && $this->latestPaidOrderDetail(auth()->id(), $product->id) !== null;
+        $hasBought = Auth::check()
+            && $this->latestPaidOrderDetail(Auth::id(), $product->id) !== null;
 
         // Đã từng mua nhưng đã qua ngày mua → hết hạn đánh giá (để hiển thị thông báo phù hợp).
-        $reviewExpired = auth()->check()
+        $reviewExpired = Auth::check()
             && ! $hasBought
-            && $this->hasEverBoughtProduct(auth()->id(), $product->id);
+            && $this->hasEverBoughtProduct(Auth::id(), $product->id);
 
         $related = SanPham::where('danh_muc_id', $product->danh_muc_id)
             ->where('id', '!=', $product->id)
@@ -121,7 +122,7 @@ class MenuController extends Controller
 
     public function storeReview(Request $request, int $id)
     {
-        if (!auth()->check()) {
+        if (!Auth::check()) {
             return redirect()->route('auth.login')->with('error', 'Bạn cần đăng nhập để đánh giá sản phẩm.');
         }
 
@@ -133,10 +134,10 @@ class MenuController extends Controller
         $product = SanPham::findOrFail($id);
 
         // Chỉ cho phép đánh giá khi khách đã mua (đã thanh toán) VÀ còn trong ngày mua hàng.
-        $chiTiet = $this->latestPaidOrderDetail(auth()->id(), $product->id);
+        $chiTiet = $this->latestPaidOrderDetail(Auth::id(), $product->id);
 
         if (!$chiTiet) {
-            $message = $this->hasEverBoughtProduct(auth()->id(), $product->id)
+            $message = $this->hasEverBoughtProduct(Auth::id(), $product->id)
                 ? 'Đã quá thời hạn đánh giá. Bạn chỉ có thể đánh giá sản phẩm trong ngày mua hàng.'
                 : 'Bạn cần mua sản phẩm này trước khi đánh giá.';
 
@@ -146,7 +147,7 @@ class MenuController extends Controller
         // 1 đánh giá / khách / sản phẩm — mua lại & đánh giá tiếp sẽ ghi đè cái cũ,
         // đồng thời cập nhật đơn hàng gần nhất mà khách đã mua món này.
         DanhGiaSanPham::updateOrCreate(
-            ['nguoi_dung_id' => auth()->id(), 'san_pham_id' => $product->id],
+            ['nguoi_dung_id' => Auth::id(), 'san_pham_id' => $product->id],
             [
                 'so_sao' => $request->so_sao,
                 'noi_dung' => $request->noi_dung,
@@ -186,11 +187,11 @@ class MenuController extends Controller
 
     public function toggleFavorite(Request $request, $id)
     {
-        if (!auth()->check()) {
+        if (!Auth::check()) {
             return response()->json(['success' => false, 'message' => 'Bạn cần đăng nhập để thực hiện chức năng này.'], 401);
         }
 
-        $user = auth()->user();
+        $user = \App\Models\NguoiDung::findOrFail(Auth::id());
         $product = SanPham::findOrFail($id);
 
         $isFavorite = $user->sanPhamYeuThich()->where('san_pham_id', $product->id)->exists();

@@ -21,6 +21,8 @@
 @endsection
 
 @section('content')
+	{{-- Cờ trạng thái cho JS đọc qua data-* (tránh nhúng Blade trong <script>). --}}
+	<span id="dashboard-flags" data-authenticated="{{ \Illuminate\Support\Facades\Auth::check() ? '1' : '0' }}" hidden></span>
 	<script>document.documentElement.classList.add('reveal-on');</script>
 	<main class="py-16">
 
@@ -428,7 +430,7 @@ html { scroll-behavior: smooth; }
 			grid.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
 		}
 
-		var isAuthenticated = {{ auth()->check() ? 'true' : 'false' }};
+		var isAuthenticated = document.getElementById('dashboard-flags')?.dataset.authenticated === '1';
 
 		document.querySelectorAll('.heart-btn').forEach(function(btn) {
 			btn.addEventListener('click', function(e) {

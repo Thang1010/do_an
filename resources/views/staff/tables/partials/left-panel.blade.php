@@ -23,15 +23,6 @@
             </div>
         </div>
 
-        @if($selectedOrder && $selectedOrder->trang_thai_thanh_toan === 'đã thanh toán')
-            <div style="padding: 60px 20px; text-align: center; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                <div style="width: 72px; height: 72px; border-radius: 50%; background: #dcfce7; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
-                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                </div>
-                <h3 style="font-size: 20px; font-weight: 700; color: #1a0a00; margin-bottom: 12px;">Đơn hàng đã thanh toán</h3>
-                <p style="color: #5f544a; font-size: 15px; max-width: 320px; line-height: 1.5;">Bàn này đã hoàn tất thanh toán. Không thể gọi thêm món. Vui lòng ấn <strong>Trả bàn</strong> để có thể phục vụ lượt khách mới.</p>
-            </div>
-        @else
             <div class="menu-layout">
                 <div class="menu-sidebar">
                     <div class="menu-section-title">Danh mục</div>
@@ -78,7 +69,6 @@
                     </div>
                 </div>
             </div>
-        @endif
     </div>
 @else
     @if(isset($assignOrder))

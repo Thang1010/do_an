@@ -80,23 +80,6 @@
                             </select>
                         </div>
                         <div class="form-group form-group-flat">
-                            <label class="form-label">Nhiệt độ (Tùy chọn)</label>
-                            @php
-                                $nhietDoArr = old('nhiet_do', isset($product) ? (isset($product->nhiet_do) && $product->nhiet_do ? explode(',', $product->nhiet_do) : []) : ['lạnh']);
-                            @endphp
-                            <div style="display: flex; gap: 16px; margin-top: 8px;">
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" name="nhiet_do[]" value="nóng" {{ in_array('nóng', $nhietDoArr) ? 'checked' : '' }}>
-                                    Nóng
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                    <input type="checkbox" name="nhiet_do[]" value="lạnh" {{ in_array('lạnh', $nhietDoArr) ? 'checked' : '' }}>
-                                    Lạnh
-                                </label>
-                            </div>
-                            @error('nhiet_do')<div class="form-error">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="form-group form-group-flat">
                             <label class="form-label">Sản phẩm nổi bật</label>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 8px;">
                                 <input type="checkbox" name="noi_bat" value="1" {{ old('noi_bat', $product->noi_bat ?? 0) ? 'checked' : '' }}>
@@ -118,6 +101,28 @@
                             </label>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            {{-- Nhiệt độ (chỉ áp dụng cho đồ pha chế) --}}
+            <div class="card" id="nhietdo-group" style="display: {{ $coCongThuc ? 'block' : 'none' }}">
+                <div class="card-header"><span class="card-title">Nhiệt độ phục vụ</span></div>
+                <div class="card-body">
+                    @php
+                        $nhietDoArr = old('nhiet_do', isset($product) ? (isset($product->nhiet_do) && $product->nhiet_do ? explode(',', $product->nhiet_do) : []) : ['lạnh']);
+                    @endphp
+                    <div style="display: flex; gap: 16px;">
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="checkbox" name="nhiet_do[]" value="nóng" {{ in_array('nóng', $nhietDoArr) ? 'checked' : '' }}>
+                            Nóng
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="checkbox" name="nhiet_do[]" value="lạnh" {{ in_array('lạnh', $nhietDoArr) ? 'checked' : '' }}>
+                            Lạnh
+                        </label>
+                    </div>
+                    <div class="form-hint mt-8">Cho phép khách chọn nóng hoặc lạnh khi đặt món.</div>
+                    @error('nhiet_do')<div class="form-error">{{ $message }}</div>@enderror
                 </div>
             </div>
 
@@ -513,7 +518,15 @@ function toggleRecipeSection() {
     
     const sizesCard = document.getElementById('sizes-card');
     const recipesCard = document.getElementById('recipes-card');
-    
+    const nhietDoGroup = document.getElementById('nhietdo-group');
+
+    // Nhiệt độ (nóng/lạnh) chỉ áp dụng cho đồ pha chế. Hàng bán lẻ (đóng gói) ẩn đi
+    // và disable checkbox để không gửi nhiet_do lên server.
+    if (nhietDoGroup) {
+        nhietDoGroup.style.display = on ? '' : 'none';
+        nhietDoGroup.querySelectorAll('input[name="nhiet_do[]"]').forEach((el) => { el.disabled = !on; });
+    }
+
     if (sizesCard) {
         sizesCard.style.display = on ? 'block' : 'none';
         sizesCard.querySelectorAll('select, input, button').forEach((el) => { el.disabled = !on; });

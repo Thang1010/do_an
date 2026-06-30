@@ -240,4 +240,26 @@ class DonHang extends Model
     {
         return $query->khachChuaPhucVu()->whereNotNull('ban_an_id');
     }
+
+    /**
+     * Đơn "đang hoạt động" để GỘP hiển thị/tính tiền cho một bàn:
+     * - Đơn của NHÂN VIÊN còn dòng chưa thanh toán (tạm tính tại quầy), HOẶC
+     * - Đơn bất kỳ đã có dòng ĐÃ thanh toán (khách QR / NV) — chỉ khi bàn đang
+     *   phục vụ / đã đặt.
+     * KHÔNG tính đơn khách QR còn dở (nhan_vien_id null + chưa thanh toán) để
+     * tránh "đơn ma" hiện lên cửa hàng trước khi khách trả tiền.
+     */
+    public function scopeActiveForTable($query, bool $servingOrReserved)
+    {
+        return $query->where(function ($q) use ($servingOrReserved) {
+            $q->where(function ($q2) {
+                $q2->whereNotNull('nhan_vien_id')
+                    ->whereHas('chiTietDonHang', fn($s) => $s->where('trang_thai_thanh_toan', 'chưa thanh toán'));
+            });
+
+            if ($servingOrReserved) {
+                $q->orWhereHas('chiTietDonHang', fn($s) => $s->where('trang_thai_thanh_toan', 'đã thanh toán'));
+            }
+        });
+    }
 }

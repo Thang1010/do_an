@@ -67,7 +67,7 @@
                                     <img class="menu-product-card__image" src="{{ $product->image_url }}" alt="{{ $product->ten_san_pham }}"
                                          onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($product->ten_san_pham) }}&background=E2D9C8&color=30261C&size=120'">
                                     <div class="menu-product-card__name">{{ $product->ten_san_pham }}</div>
-                                    <div class="menu-product-card__price">{{ number_format($product->gia_goc, 0, ',', '.') }}đ</div>
+                                    <div class="menu-product-card__price">{{ number_format($product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc, 0, ',', '.') }}đ</div>
                                 </button>
                             </form>
                         @empty
@@ -106,7 +106,7 @@
                     'đang chờ duyệt' => 'Đã đặt',
                     default => 'Bàn trống',
                 };
-                $latestOrder = $table->donHang
+                $tableActiveOrders = $table->donHang
                     ->filter(function($q) use ($table) {
                         if ($q->trang_thai_thanh_toan === 'chưa thanh toán' && $q->nhan_vien_id !== null) {
                             return true;
@@ -115,9 +115,10 @@
                             return true;
                         }
                         return false;
-                    })
-                    ->sortByDesc('created_at')
-                    ->first();
+                    });
+                // Ưu tiên đơn CHƯA thanh toán để badge bàn không hiện "Đã TT" khi vẫn còn món chưa thu.
+                $latestOrder = $tableActiveOrders->first(fn($o) => $o->trang_thai_thanh_toan === 'chưa thanh toán')
+                    ?? $tableActiveOrders->sortByDesc('created_at')->first();
                 $customerName = $latestOrder?->nguoiDung?->hoSoKhachHang?->ho_ten ?? $latestOrder?->nguoiDung?->email ?? null;
                 $customerAvatar = $latestOrder?->nguoiDung?->avatar_url ?? null;
                 $orderAmount = $latestOrder?->tong_tien ?? 0;

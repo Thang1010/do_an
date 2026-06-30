@@ -63,6 +63,24 @@ class TableStatusService
             return;
         }
 
+        // Khách tự gọi tại bàn (QR/tài khoản) ĐÃ thanh toán hôm nay nhưng chưa được trả bàn:
+        // khách vẫn đang ngồi → KHÔNG tự đưa bàn về trống. Nếu trả bàn lúc này, các món đã
+        // thanh toán sẽ bị "biến mất" khỏi chi tiết bàn (do scope activeForTable chỉ hiện món
+        // đã thanh toán khi bàn đang phục vụ). Bàn chỉ được giải phóng khi nhân viên bấm "Trả bàn".
+        $hasPaidCustomerToday = DonHang::query()
+            ->where('ban_an_id', $tableId)
+            ->whereNull('nhan_vien_id')
+            ->whereDate('created_at', today())
+            ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'đã thanh toán'))
+            ->exists();
+
+        if ($hasPaidCustomerToday) {
+            if ($table->trang_thai !== TableStatus::DANG_PHUC_VU->value && $table->trang_thai !== TableStatus::DA_DAT->value) {
+                $table->update(['trang_thai' => TableStatus::DANG_PHUC_VU->value]);
+            }
+            return;
+        }
+
         // Bàn không có đơn hàng nào có món -> trống
         if ($table->trang_thai !== TableStatus::TRONG->value) {
             $table->update(['trang_thai' => TableStatus::TRONG->value]);

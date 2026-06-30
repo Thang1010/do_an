@@ -39,16 +39,19 @@ class TableController extends Controller
         private readonly PaymentService $paymentService,
         private readonly OrderInventoryService $inventoryService,
         private readonly \App\Services\AttendanceService $attendanceService,
-    ) {}
+    ) {
+    }
     public function index(Request $request)
     {
         $user = Auth::user();
         $selectedTableId = $request->filled('table') ? (int) $request->table : null;
 
         $tables = BanAn::query()
-            ->with(['donHang' => function ($q) {
-                $q->with(['nguoiDung', 'nhanVien', 'chiTietDonHang']);
-            }])
+            ->with([
+                'donHang' => function ($q) {
+                    $q->with(['nguoiDung', 'nhanVien', 'chiTietDonHang']);
+                }
+            ])
             ->orderBy('so_ban')
             ->get();
 
@@ -82,29 +85,33 @@ class TableController extends Controller
             $selectedTable = BanAn::find($request->table);
 
             if ($selectedTable) {
+                // "Còn nợ" = đơn của NHÂN VIÊN còn dòng chưa thanh toán (đơn khách QR
+                // còn dở chưa trả tiền không tính, tránh chặn trả bàn vô lý).
                 $selectedTableHasUnpaid = $selectedTable->donHang()
+                    ->whereNotNull('nhan_vien_id')
                     ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
                     ->exists();
 
-                $selectedOrder = $selectedTable->donHang()
-                    ->where(function ($query) use ($selectedTable) {
-                        $query->where(function ($q) {
-                            $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'chưa thanh toán'));
-                        })
-                        ->orWhere(function ($q) use ($selectedTable) {
-                            if (in_array($selectedTable->trang_thai, ['đang phục vụ', 'đã đặt'])) {
-                                $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'đã thanh toán'));
-                            } else {
-                                $q->whereRaw('1 = 0');
-                            }
-                        });
-                    })
+                // Một bàn có thể có NHIỀU đơn cùng lúc (đơn nhân viên tạm tính +
+                // đơn khách QR đã thanh toán). Lấy TẤT CẢ đơn đang hoạt động của bàn
+                // rồi GỘP món để hiển thị, tránh "mất" món của đơn không được chọn.
+                $activeOrders = $selectedTable->donHang()
+                    ->activeForTable(in_array($selectedTable->trang_thai, ['đang phục vụ', 'đã đặt']))
+                    ->with('chiTietDonHang')
                     ->latest()
-                    ->first();
+                    ->get();
 
-                if ($selectedOrder) {
-                    $selectedItems = ChiTietDonHang::where('don_hang_id', $selectedOrder->id)
+                // Đơn mục tiêu cho form tạm tính/thanh toán & gắn món mới: LẤY TỪ
+                // $activeOrders (đã loại đơn khách QR còn dở), ưu tiên đơn còn dòng
+                // CHƯA thanh toán. Nếu query riêng sẽ dính phải đơn ma → hiển thị sai.
+                $selectedOrder = $activeOrders->first(fn($o) => $o->trang_thai_thanh_toan === 'chưa thanh toán')
+                    ?? $activeOrders->first();
+
+                if ($activeOrders->isNotEmpty()) {
+                    $selectedItems = ChiTietDonHang::whereIn('don_hang_id', $activeOrders->pluck('id'))
                         ->with(['sanPham', 'kichCo'])
+                        ->orderBy('don_hang_id')
+                        ->orderBy('id')
                         ->get();
                 }
             }
@@ -130,20 +137,32 @@ class TableController extends Controller
                 $obj->kichCo->ma_kich_co = $sItem['ma_kich_co'];
                 $obj->kichCo->ten_kich_co = $sItem['ten_kich_co'];
                 $obj->is_session = true; // flag to know it's not in DB
-                
+
                 $selectedItems->push($obj);
             }
         }
 
-        // Calculate total including session items
-        $calcTotal = 0;
+        // Tính tiền: tách phần ĐÃ thanh toán (đơn khách QR đã trả trước) ra khỏi phần
+        // CÒN PHẢI THU, để "Tổng cộng" chỉ phản ánh số tiền còn lại và hiển thị thêm
+        // dòng "Đã thanh toán: -..." cho minh bạch.
+        $paidTotal = 0;       // các món đã thanh toán (đơn khách đã trả trước)
+        $unpaidSubtotal = 0;  // các món chưa thanh toán (đơn nháp DB + giỏ tạm session)
         foreach ($selectedItems as $item) {
-            $calcTotal += ($item->don_gia ?? 0) * ($item->so_luong ?? 1);
+            $lineTotal = ($item->don_gia ?? 0) * ($item->so_luong ?? 1);
+            if (($item->trang_thai_thanh_toan ?? null) === 'đã thanh toán') {
+                $paidTotal += $lineTotal;
+            } else {
+                $unpaidSubtotal += $lineTotal;
+            }
         }
-        
-        $discountAmount = $selectedOrder ? $selectedOrder->so_tien_giam : 0;
-        // If there are session items, the raw subtotal increases, so the final total is raw subtotal - discount
-        $displayTotal = max(0, $calcTotal - $discountAmount);
+
+        // Chiết khấu chỉ áp dụng cho ĐƠN CHƯA thanh toán đang chọn (đơn đã trả đã chốt tong_tien).
+        $discountAmount = ($selectedOrder && $selectedOrder->trang_thai_thanh_toan === 'chưa thanh toán')
+            ? (float) $selectedOrder->so_tien_giam
+            : 0;
+
+        // Tổng cộng = số tiền CÒN PHẢI THU (đã loại phần khách trả trước & trừ chiết khấu).
+        $displayTotal = max(0, $unpaidSubtotal - $discountAmount);
 
         // Đơn khách tự gọi (QR/tài khoản) đã thanh toán nhưng chưa được đánh dấu phục vụ
         // → hiển thị riêng phần "Món khách vừa gọi" nổi bật trong chi tiết bàn.
@@ -156,68 +175,104 @@ class TableController extends Controller
                 ->get();
         }
 
-                // Store info for payment
-                $storeId = $user->cua_hang_id;
-                $store = CuaHang::query()
-                    ->with('chuCuaHang')
-                    ->when($storeId, fn($q) => $q->where('id', $storeId))
-                    ->first();
+        // Store info for payment
+        $storeId = $user->cua_hang_id;
+        $store = CuaHang::query()
+            ->with('chuCuaHang')
+            ->when($storeId, fn($q) => $q->where('id', $storeId))
+            ->first();
 
-                if (!$store) {
-                    $store = CuaHang::query()
-                        ->with('chuCuaHang')
-                        ->first();
+        if (!$store) {
+            $store = CuaHang::query()
+                ->with('chuCuaHang')
+                ->first();
+        }
+
+        $menuCategories = DanhMuc::query()
+            ->where('trang_thai', 'đang dùng')
+            ->orderBy('ten_danh_muc')
+            ->with([
+                'sanPham' => function ($q) {
+                    $q->where('trang_thai_ban', 'đang bán')
+                        ->orderBy('ten_san_pham');
                 }
+            ])
+            ->get();
 
-                $menuCategories = DanhMuc::query()
-                    ->where('trang_thai', 'đang dùng')
-                    ->orderBy('ten_danh_muc')
-                    ->with(['sanPham' => function ($q) {
-                        $q->where('trang_thai_ban', 'đang bán')
-                            ->orderBy('ten_san_pham');
-                    }])
-                    ->get();
+        $now = now();
+        $availableVouchers = Voucher::query()
+            ->where('trang_thai', 'đang hoạt động')
+            ->where(function ($q) use ($now) {
+                $q->whereNull('ngay_bat_dau')->orWhere('ngay_bat_dau', '<=', $now);
+            })
+            ->where(function ($q) use ($now) {
+                $q->whereNull('ngay_ket_thuc')->orWhere('ngay_ket_thuc', '>=', $now);
+            })
+            ->orderBy('ma_voucher')
+            ->get();
 
-                $now = now();
-                $availableVouchers = Voucher::query()
-                    ->where('trang_thai', 'đang hoạt động')
-                    ->where(function ($q) use ($now) {
-                        $q->whereNull('ngay_bat_dau')->orWhere('ngay_bat_dau', '<=', $now);
-                    })
-                    ->where(function ($q) use ($now) {
-                        $q->whereNull('ngay_ket_thuc')->orWhere('ngay_ket_thuc', '>=', $now);
-                    })
-                    ->orderBy('ma_voucher')
-                    ->get();
+        if (!$selectedCategoryId && $menuCategories->isNotEmpty()) {
+            $selectedCategoryId = $menuCategories->first()->id;
+        }
 
-                if (!$selectedCategoryId && $menuCategories->isNotEmpty()) {
-                    $selectedCategoryId = $menuCategories->first()->id;
-                }
-
-                $menuProducts = $menuCategories
-                    ->firstWhere('id', (int) $selectedCategoryId)?->sanPham
-                    ?? collect();
+        $menuProducts = $menuCategories
+            ->firstWhere('id', (int) $selectedCategoryId)?->sanPham
+            ?? collect();
 
         if ($request->ajax() && $request->boolean('partial')) {
             return response()->json([
                 'left' => view('staff.tables.partials.left-panel', compact(
-                    'tables', 'currentShift', 'currentAttendance', 'ingredients',
-                    'selectedTable', 'selectedOrder', 'selectedItems', 'store', 'menuCategories',
-                    'menuProducts', 'selectedCategoryId', 'selectedProductId', 'selectedVoucherId',
-                    'availableVouchers', 'assignOrder'
+                    'tables',
+                    'currentShift',
+                    'currentAttendance',
+                    'ingredients',
+                    'selectedTable',
+                    'selectedOrder',
+                    'selectedItems',
+                    'store',
+                    'menuCategories',
+                    'menuProducts',
+                    'selectedCategoryId',
+                    'selectedProductId',
+                    'selectedVoucherId',
+                    'availableVouchers',
+                    'assignOrder'
                 ))->render(),
                 'detail' => view('staff.tables.partials.detail-panel', compact(
-                    'selectedTable', 'selectedOrder', 'selectedItems', 'store', 'availableVouchers', 'selectedVoucherId',
-                    'selectedTableHasUnpaid', 'displayTotal', 'newPaidOrders'
+                    'selectedTable',
+                    'selectedOrder',
+                    'selectedItems',
+                    'store',
+                    'availableVouchers',
+                    'selectedVoucherId',
+                    'selectedTableHasUnpaid',
+                    'displayTotal',
+                    'paidTotal',
+                    'newPaidOrders'
                 ))->render(),
             ]);
         }
 
         return view('staff.tables.index', compact(
-            'tables', 'currentShift', 'currentAttendance', 'ingredients',
-            'selectedTable', 'selectedOrder', 'selectedItems', 'store', 'menuCategories',
-            'menuProducts', 'selectedCategoryId', 'selectedProductId', 'selectedVoucherId',
-            'availableVouchers', 'assignOrder', 'selectedTableHasUnpaid', 'displayTotal', 'newPaidOrders',
+            'tables',
+            'currentShift',
+            'currentAttendance',
+            'ingredients',
+            'selectedTable',
+            'selectedOrder',
+            'selectedItems',
+            'store',
+            'menuCategories',
+            'menuProducts',
+            'selectedCategoryId',
+            'selectedProductId',
+            'selectedVoucherId',
+            'availableVouchers',
+            'assignOrder',
+            'selectedTableHasUnpaid',
+            'displayTotal',
+            'paidTotal',
+            'newPaidOrders',
             'geoRequired'
         ));
     }
@@ -244,7 +299,10 @@ class TableController extends Controller
         // Trả bàn = khách đã rời đi → chỉ đưa bàn về trống.
         // KHÔNG xóa đơn. Còn đơn chưa thanh toán thì phải thanh toán (hoặc
         // dùng "Xóa thông tin bàn") trước, nên ở đây chặn lại.
+        // Chỉ đơn của NHÂN VIÊN còn nợ mới chặn trả bàn; đơn khách QR còn dở
+        // (chưa trả tiền) không tính — tránh kẹt vì khách bỏ ngang giữa chừng.
         $hasUnpaid = DonHang::where('ban_an_id', $table->id)
+            ->whereNotNull('nhan_vien_id')
             ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
             ->exists();
 
@@ -265,23 +323,23 @@ class TableController extends Controller
     {
         $request->validate(['order_id' => 'required|exists:don_hang,id']);
         $table = BanAn::findOrFail($tableId);
-        
-           if (!in_array($table->trang_thai, ['trống'], true)) {
-             return back()->with('error', 'Bàn này đã có người ngồi, vui lòng chọn bàn trống.');
+
+        if (!in_array($table->trang_thai, ['trống'], true)) {
+            return back()->with('error', 'Bàn này đã có người ngồi, vui lòng chọn bàn trống.');
         }
 
         $order = DonHang::findOrFail($request->order_id);
         $order->update([
-             'ban_an_id' => $table->id,
+            'ban_an_id' => $table->id,
         ]);
         $order->chiTietDonHang()->update([
-             'loai_don' => 'sử dụng ngay',
+            'loai_don' => 'sử dụng ngay',
         ]);
-        
+
         $table->update(['trang_thai' => 'đang phục vụ']);
 
         return redirect()->route('staff.tables.index', ['table' => $table->id])
-                         ->with('success', 'Đã gán đơn hàng vào bàn thành công.');
+            ->with('success', 'Đã gán đơn hàng vào bàn thành công.');
     }
 
     public function show(int $id)
@@ -296,7 +354,7 @@ class TableController extends Controller
                 if ($table->trang_thai === 'đang phục vụ') {
                     $q->orWhere(function ($q3) {
                         $q3->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'đã thanh toán'))
-                           ->whereDate('created_at', today());
+                            ->whereDate('created_at', today());
                     });
                 }
             })
@@ -310,14 +368,14 @@ class TableController extends Controller
                 $query->where(function ($q) {
                     $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'chưa thanh toán'));
                 })
-                ->orWhere(function ($q) use ($table) {
-                    if ($table->trang_thai === 'đang phục vụ') {
-                        $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'đã thanh toán'))
-                          ->whereDate('created_at', today());
-                    } else {
-                        $q->whereRaw('1 = 0');
-                    }
-                });
+                    ->orWhere(function ($q) use ($table) {
+                        if ($table->trang_thai === 'đang phục vụ') {
+                            $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'đã thanh toán'))
+                                ->whereDate('created_at', today());
+                        } else {
+                            $q->whereRaw('1 = 0');
+                        }
+                    });
             })
             ->with(['nguoiDung', 'nhanVien'])
             ->latest()
@@ -379,11 +437,46 @@ class TableController extends Controller
             if ($paymentStatus === 'đã thanh toán') {
                 $order = $order->fresh();
                 $this->paymentService->applyTableStatusAfterPayment($order);
-                
-                if ($order->email_khach_hang) {
-                    \Illuminate\Support\Facades\Mail::to($order->email_khach_hang)->queue(new \App\Mail\CustomerOrderPaidMail($order));
-                } elseif ($order->nguoiDung && $order->nguoiDung->email) {
-                    \Illuminate\Support\Facades\Mail::to($order->nguoiDung->email)->queue(new \App\Mail\CustomerOrderPaidMail($order));
+
+                // Hoá đơn TỔNG cả bàn: gồm phần khách QR đã trả trước + phần vừa thu,
+                // gửi về EMAIL NHÂN VIÊN NHẬP (không gửi về email khách QR).
+                $staffEmail = $request->input('email_khach_hang');
+                if ($staffEmail) {
+                    $paidOrders = DonHang::where('ban_an_id', $table->id)
+                        ->wherePayStatus('đã thanh toán')
+                        ->with('chiTietDonHang.kichCo')
+                        ->get();
+
+                    $lines = [];
+                    foreach ($paidOrders as $po) {
+                        foreach ($po->chiTietDonHang as $ct) {
+                            if ($ct->trang_thai_thanh_toan !== 'đã thanh toán') {
+                                continue;
+                            }
+                            $lines[] = [
+                                'ten' => $ct->ten_san_pham,
+                                'size' => $ct->ten_kich_co ?: optional($ct->kichCo)->ten_kich_co,
+                                'sl' => (int) $ct->so_luong,
+                                'thanh_tien' => (float) $ct->thanh_tien,
+                                'ghi_chu' => $ct->ghi_chu_mon,
+                                'paid_now' => $po->id === $order->id,
+                            ];
+                        }
+                    }
+
+                    $payNow = (float) $order->tong_tien;
+                    $grandTotal = (float) $paidOrders->sum('tong_tien');
+                    $paidBefore = max(0, $grandTotal - $payNow);
+
+                    \Illuminate\Support\Facades\Mail::to($staffEmail)->queue(new \App\Mail\TableInvoiceMail(
+                        soBan: (string) $table->so_ban,
+                        lines: $lines,
+                        paidBefore: $paidBefore,
+                        payNow: $payNow,
+                        grandTotal: $grandTotal,
+                        method: $paymentMethod,
+                        thoiGian: now()->format('H:i d/m/Y'),
+                    ));
                 }
             }
         });
@@ -434,10 +527,12 @@ class TableController extends Controller
 
         $mergeKey = null;
         foreach ($cart as $k => $i) {
-            if ($i['san_pham_id'] == $product->id &&
+            if (
+                $i['san_pham_id'] == $product->id &&
                 $i['kich_co_id'] == $sizeId &&
                 ($i['nhiet_do'] ?? null) == $nhietDo &&
-                $i['ghi_chu_mon'] == $ghiChuMon) {
+                $i['ghi_chu_mon'] == $ghiChuMon
+            ) {
                 $mergeKey = $k;
                 break;
             }
@@ -488,7 +583,7 @@ class TableController extends Controller
         ]);
 
         $table = BanAn::findOrFail($tableId);
-        
+
         $sessionKey = 'staff_cart_' . $table->id;
         $cart = session()->get($sessionKey, []);
 
@@ -497,7 +592,7 @@ class TableController extends Controller
             $order = DonHang::where('id', (int) $request->order_id)
                 ->where('ban_an_id', $table->id)
                 ->firstOrFail();
-            
+
             if ($order->trang_thai_thanh_toan === 'đã thanh toán') {
                 if (empty($cart)) {
                     return redirect()
@@ -549,7 +644,7 @@ class TableController extends Controller
                         ->where('ten_san_pham', $item['ten_san_pham'])
                         ->where('ghi_chu_mon', $item['ghi_chu_mon'])
                         ->first();
-                    
+
                     if ($existing) {
                         $existing->update([
                             'so_luong' => $existing->so_luong + $item['so_luong'],
@@ -662,7 +757,7 @@ class TableController extends Controller
 
         // KHÓA SỬA ĐƠN ĐÃ THANH TOÁN: món thuộc đơn đã thanh toán (vd đơn khách đặt & trả tiền
         // online rồi gửi lên bếp) thì nhân viên KHÔNG được sửa ghi chú / số lượng — chỉ phục vụ.
-        if (! Str::startsWith($itemId, 's_')) {
+        if (!Str::startsWith($itemId, 's_')) {
             $lockedItem = ChiTietDonHang::find((int) $itemId);
             if ($lockedItem && $lockedItem->trang_thai_thanh_toan === 'đã thanh toán') {
                 $msg = 'Đơn đã thanh toán, không thể chỉnh sửa.';
@@ -735,7 +830,7 @@ class TableController extends Controller
                 if ($order) {
                     $newUsage = $this->inventoryService->ingredientUsageForOrder($order->id);
                     $this->inventoryService->applyIngredientDelta($oldUsage, $newUsage, $order->id);
-                    
+
                     if ($order->chiTietDonHang()->count() === 0) {
                         \App\Models\ThanhToan::where('don_hang_id', $order->id)->delete();
                         $order->delete();
@@ -888,7 +983,7 @@ class TableController extends Controller
                 ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
                 ->exists();
 
-            if (! $hasRemaining) {
+            if (!$hasRemaining) {
                 $table->update(['trang_thai' => 'trống']);
             }
         });

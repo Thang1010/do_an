@@ -124,48 +124,46 @@ class TableController extends Controller
     {
         $table = BanAn::withCount([
             'donHang as so_don_chua_thanh_toan' => function ($q) {
-                $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'chưa thanh toán'));
+                $q->whereNotNull('nhan_vien_id')
+                    ->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'chưa thanh toán'));
             },
             'donHang as so_don_da_thanh_toan' => function ($q) {
                 $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'đã thanh toán'));
             },
         ])->findOrFail($id);
 
-        $latestOrder = $table->donHang()
-            ->where(function ($query) use ($table) {
-                $query->where(function ($q) {
-                    $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'chưa thanh toán'));
-                })
-                ->orWhere(function ($q) use ($table) {
-                    if (in_array($table->trang_thai, ['đang phục vụ', 'đã đặt'])) {
-                        $q->whereHas('chiTietDonHang', fn($sq) => $sq->where('trang_thai_thanh_toan', 'đã thanh toán'));
-                    } else {
-                        $q->whereRaw('1 = 0');
-                    }
-                });
-            })
+        // Một bàn có thể có NHIỀU đơn cùng lúc (đơn nhân viên + đơn khách QR).
+        // Lấy TẤT CẢ đơn đang hoạt động rồi GỘP món để hiển thị, tránh "mất" món.
+        $activeOrders = $table->donHang()
+            ->activeForTable(in_array($table->trang_thai, ['đang phục vụ', 'đã đặt']))
             ->with(['nguoiDung', 'nhanVien'])
             ->latest()
-            ->first();
+            ->get();
+
+        // Đơn mục tiêu (thêm món / thanh toán): ưu tiên đơn còn dòng chưa thanh toán.
+        $latestOrder = $activeOrders->first(fn($o) => $o->trang_thai_thanh_toan === 'chưa thanh toán')
+            ?? $activeOrders->first();
 
         $dishItems = collect();
         $totalDishQty = 0;
         $totalDiscount = 0;
         $totalPayable = 0;
         $voucherSummary = 'Không dùng voucher';
-        $tableHasUnpaid = false;
+        $tableHasUnpaid = (int) ($table->so_don_chua_thanh_toan ?? 0) > 0;
 
-        if ($latestOrder) {
-            $dishQuery = $latestOrder->chiTietDonHang()->with('kichCo')->latest('created_at');
-            $dishItems = $dishQuery->get();
-            
-            $totalDishQty = (clone $dishQuery)->sum('so_luong');
-            $totalDiscount = $latestOrder->so_tien_giam;
-            $totalPayable = $latestOrder->tong_tien;
+        if ($activeOrders->isNotEmpty()) {
+            $dishItems = \App\Models\ChiTietDonHang::whereIn('don_hang_id', $activeOrders->pluck('id'))
+                ->with('kichCo')
+                ->orderBy('don_hang_id')
+                ->orderBy('id')
+                ->get();
 
-            $tableHasUnpaid = $latestOrder->trang_thai_thanh_toan === 'chưa thanh toán';
-            
-            if ($latestOrder->voucher_nguoi_dung_id) {
+            $totalDishQty = (int) $dishItems->sum('so_luong');
+            // Tổng phải trả của toàn bàn (gộp các đơn đang hoạt động).
+            $totalPayable = (float) $activeOrders->sum('tong_tien');
+            $totalDiscount = (float) $activeOrders->sum('so_tien_giam');
+
+            if ($latestOrder && $latestOrder->voucher_nguoi_dung_id) {
                 $vu = \App\Models\VoucherNguoiDung::with('voucher')->find($latestOrder->voucher_nguoi_dung_id);
                 if ($vu && $vu->voucher) {
                     $voucherSummary = $vu->voucher->ma_voucher;
@@ -311,11 +309,45 @@ class TableController extends Controller
             if ($paymentStatus === 'đã thanh toán') {
                 $order = $order->fresh();
                 $this->paymentService->applyTableStatusAfterPayment($order);
-                
-                if ($order->email_khach_hang) {
-                    \Illuminate\Support\Facades\Mail::to($order->email_khach_hang)->queue(new \App\Mail\CustomerOrderPaidMail($order));
-                } elseif ($order->nguoiDung && $order->nguoiDung->email) {
-                    \Illuminate\Support\Facades\Mail::to($order->nguoiDung->email)->queue(new \App\Mail\CustomerOrderPaidMail($order));
+
+                // Hoá đơn TỔNG cả bàn (gồm phần đã trả trước + phần vừa thu) → email người nhập.
+                $invoiceEmail = $request->input('email_khach_hang');
+                if ($invoiceEmail) {
+                    $paidOrders = DonHang::where('ban_an_id', $table->id)
+                        ->wherePayStatus('đã thanh toán')
+                        ->with('chiTietDonHang.kichCo')
+                        ->get();
+
+                    $lines = [];
+                    foreach ($paidOrders as $po) {
+                        foreach ($po->chiTietDonHang as $ct) {
+                            if ($ct->trang_thai_thanh_toan !== 'đã thanh toán') {
+                                continue;
+                            }
+                            $lines[] = [
+                                'ten' => $ct->ten_san_pham,
+                                'size' => $ct->ten_kich_co ?: optional($ct->kichCo)->ten_kich_co,
+                                'sl' => (int) $ct->so_luong,
+                                'thanh_tien' => (float) $ct->thanh_tien,
+                                'ghi_chu' => $ct->ghi_chu_mon,
+                                'paid_now' => $po->id === $order->id,
+                            ];
+                        }
+                    }
+
+                    $payNow = (float) $order->tong_tien;
+                    $grandTotal = (float) $paidOrders->sum('tong_tien');
+                    $paidBefore = max(0, $grandTotal - $payNow);
+
+                    \Illuminate\Support\Facades\Mail::to($invoiceEmail)->queue(new \App\Mail\TableInvoiceMail(
+                        soBan: (string) $table->so_ban,
+                        lines: $lines,
+                        paidBefore: $paidBefore,
+                        payNow: $payNow,
+                        grandTotal: $grandTotal,
+                        method: $paymentMethod,
+                        thoiGian: now()->format('H:i d/m/Y'),
+                    ));
                 }
             }
         });

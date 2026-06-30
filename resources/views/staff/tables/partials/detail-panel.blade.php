@@ -133,6 +133,15 @@
         <input type="hidden" name="auto_voucher" id="auto-voucher-flag" value="0">
 
         @php
+            // Có món NV có thể tính/sửa: món trong giỏ tạm (session) HOẶC dòng chưa thanh toán.
+            // Dùng để vẫn cho thêm món/tạm tính/thanh toán dù bàn đã có đơn khách đã trả.
+            $hasEditable = false;
+            foreach ($selectedItems ?? [] as $it) {
+                if (!empty($it->is_session) || (($it->trang_thai_thanh_toan ?? 'chưa thanh toán') === 'chưa thanh toán')) {
+                    $hasEditable = true;
+                    break;
+                }
+            }
             $hasItemsForDiscount = $selectedOrder || (isset($selectedItems) && count($selectedItems) > 0);
             $hasCustomerVoucher = $selectedOrder && $selectedOrder->voucher_nguoi_dung_id;
             $appliedDiscount = $selectedOrder ? (float) $selectedOrder->so_tien_giam : 0;
@@ -149,14 +158,20 @@
         <input type="hidden" name="chiet_khau_loai" id="chiet-khau-loai" value="{{ $manualDiscount > 0 ? 'tiền' : '' }}">
         <input type="hidden" name="chiet_khau_gia_tri" id="chiet-khau-gia-tri" value="{{ $manualDiscount > 0 ? number_format($manualDiscount, 0, '.', '') : '0' }}">
 
-        @if(isset($selectedOrder) && $appliedDiscount > 0)
+        @if(isset($selectedOrder) && $appliedDiscount > 0 && $selectedOrder->trang_thai_thanh_toan === 'chưa thanh toán')
             <div class="order-total" style="color: #10b981; font-size: 14px; border-top: none; padding-top: 0; padding-bottom: 8px;">
                 <span class="order-total__label" style="color: #10b981;">{{ $hasCustomerVoucher ? 'Đã giảm giá (Khách đặt):' : 'Chiết khấu:' }}</span>
                 <span class="order-total__value">-{{ number_format($appliedDiscount, 0, ',', '.') }}đ</span>
             </div>
         @endif
+        @if(($paidTotal ?? 0) > 0)
+            <div class="order-total" style="color: #16a34a; font-size: 14px; border-top: none; padding-top: 0; padding-bottom: 8px;">
+                <span class="order-total__label" style="color: #16a34a;">Đã thanh toán:</span>
+                <span class="order-total__value">-{{ number_format($paidTotal, 0, ',', '.') }}đ</span>
+            </div>
+        @endif
         <div class="order-total">
-            <span class="order-total__label">Tổng cộng:</span>
+            <span class="order-total__label">{{ ($paidTotal ?? 0) > 0 ? 'Còn phải thu:' : 'Tổng cộng:' }}</span>
             <span class="order-total__value">{{ number_format($displayTotal ?? 0, 0, ',', '.') }}đ</span>
         </div>
 
@@ -165,23 +180,23 @@
                 <div style="color: #d97706; text-align: center; font-size: 0.9rem; padding: 10px; background: #fef3c7; border-radius: 8px; width: 100%;">
                     Vui lòng chọn bàn ở danh sách bên trái để gán đơn hàng.
                 </div>
-            @elseif($selectedOrder && $selectedOrder->trang_thai_thanh_toan === 'đã thanh toán')
+            @elseif(!$hasEditable && $selectedOrder && $selectedOrder->trang_thai_thanh_toan === 'đã thanh toán')
                 <div style="color: #16a34a; text-align: center; font-size: 0.9rem; padding: 10px; background: #dcfce7; border-radius: 8px; width: 100%; font-weight: 600;">
-                    Đơn hàng đã thanh toán. Vui lòng trả bàn.
+                    Khách đã thanh toán. Có thể thêm món mới, hoặc ấn Trả bàn khi xong.
                 </div>
             @else
                 <button type="submit" name="action" value="draft" class="btn btn-secondary w-full"
-                    style="justify-content:center;" {{ count($selectedItems ?? []) === 0 ? 'disabled' : '' }}>Tạm tính</button>
+                    style="justify-content:center;" {{ !$hasEditable ? 'disabled' : '' }}>Tạm tính</button>
                 @if(!$hasCustomerVoucher)
                     <button type="button" id="discount-trigger" class="btn w-full"
                         style="justify-content:center; background:#8a6d3b; color:#fff; border:none;"
                         onclick="openDiscountModal()"
                         data-subtotal="{{ $discountSubtotal }}"
                         data-current="{{ $manualDiscount > 0 ? number_format($manualDiscount, 0, '.', '') : '0' }}"
-                        {{ count($selectedItems ?? []) === 0 ? 'disabled' : '' }}>Chiết khấu</button>
+                        {{ !$hasEditable ? 'disabled' : '' }}>Chiết khấu</button>
                 @endif
                 <button type="submit" name="action" value="payment" class="btn btn-primary w-full"
-                    style="justify-content:center;" {{ count($selectedItems ?? []) === 0 ? 'disabled' : '' }}>Thanh toán</button>
+                    style="justify-content:center;" {{ !$hasEditable ? 'disabled' : '' }}>Thanh toán</button>
             @endif
         </div>
     </form>
@@ -257,8 +272,14 @@
                                 <div class="detail-empty__text">Chưa có món nào</div>
                             @endforelse
                         </div>
+                        @if(($paidTotal ?? 0) > 0)
+                            <div class="payment-modal__total" style="border-top:none; color:#16a34a; font-size:14px;">
+                                <span>Đã thanh toán:</span>
+                                <span class="payment-modal__total-value">-{{ number_format($paidTotal, 0, ',', '.') }}đ</span>
+                            </div>
+                        @endif
                         <div class="payment-modal__total">
-                            <span>Tổng cộng:</span>
+                            <span>{{ ($paidTotal ?? 0) > 0 ? 'Còn phải thu:' : 'Tổng cộng:' }}</span>
                             <span class="payment-modal__total-value">{{ number_format($selectedOrder->tong_tien ?? 0, 0, ',', '.') }}đ</span>
                         </div>
                     </div>

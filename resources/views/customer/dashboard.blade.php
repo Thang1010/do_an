@@ -137,7 +137,7 @@
 							</div>
 						@endforeach
 					@else
-						<div class="col-span-full text-center text-sm text-[#30261C]/70">Chưa có sản phẩm bán chạy.</div>
+						<div class="col-span-full w-full text-center text-sm text-[#30261C]/70 py-10">Chưa có sản phẩm bán chạy.</div>
 					@endif
 				</div>
 
@@ -190,7 +190,9 @@
 					</button>
 					<div class="t-stage" id="t-stage">
 					@foreach($testimonials as $review)
-						<article id="testimonial-{{ $review->id }}" data-index="{{ $loop->index }}" class="t-card {{ $loop->index === 0 ? 'is-active' : ($loop->index === 1 ? 'is-right' : '') }}">
+						<article id="testimonial-{{ $review->id }}" data-index="{{ $loop->index }}" 
+								class="t-card {{ $loop->index === 0 ? 'is-active' : ($loop->index === 1 ? 'is-right' : '') }}"
+								@if($review->san_pham_id) onclick="window.location.href='{{ route('menu.show', $review->san_pham_id) }}#reviews'" style="cursor:pointer;" @endif>
 							<div class="flex items-start justify-between gap-3 mb-6">
 								<div class="flex items-center gap-4 min-w-0">
 								<img src="{{ optional($review->nguoiDung)->avatar_url ?? 'https://ui-avatars.com/api/?name=' . urlencode($review->nguoiDung?->hoSoKhachHang?->ho_ten ?? 'Khach hang') . '&background=E2D9C8&color=30261C' }}"
@@ -338,8 +340,8 @@ html { scroll-behavior: smooth; }
 	align-items: center;
 	justify-content: center;
 	gap: 8px;
-	min-height: 340px;
-	padding: 30px 0;
+	min-height: 240px;
+	padding: 20px 0;
 }
 .t-stage {
 	display: flex;
@@ -353,12 +355,12 @@ html { scroll-behavior: smooth; }
 	display: none;
 	flex-direction: column;
 	box-sizing: border-box;
-	width: min(440px, 86vw);
+	width: min(380px, 80vw);
 	flex: 0 0 auto;
 	background: rgba(226, 217, 200, 0.45);
 	border: 1px solid rgba(48, 38, 28, 0.10);
-	border-radius: 20px;
-	padding: 32px;
+	border-radius: 16px;
+	padding: 24px;
 	box-shadow: 0 8px 24px rgba(48, 38, 28, 0.10);
 	transition: transform .45s cubic-bezier(.22,.61,.36,1), opacity .45s ease, filter .45s ease, box-shadow .45s ease;
 	will-change: transform, opacity;
@@ -370,13 +372,13 @@ html { scroll-behavior: smooth; }
 /* Thẻ giữa: lớn hơn ~20%, nét, nổi bóng, đè lên 2 thẻ bên */
 .t-card.is-active {
 	order: 2;
-	transform: scale(1.16);
+	transform: scale(1.1);
 	z-index: 5;
 	opacity: 1;
 	filter: none;
 	background: rgba(226, 217, 200, 0.72);
-	box-shadow: 0 30px 70px rgba(48, 38, 28, 0.38);
-	margin: 0 -1.5rem;
+	box-shadow: 0 20px 50px rgba(48, 38, 28, 0.38);
+	margin: 0 -1rem;
 }
 /* Hai thẻ bên: nhỏ hơn ~22%, mờ 70%, giảm bão hoà, lùi ra sau */
 .t-card.is-left,
@@ -411,11 +413,11 @@ html { scroll-behavior: smooth; }
 .t-arrow svg { width: 22px; height: 22px; }
 
 @media (max-width: 768px) {
-	.testimonial-carousel { gap: 4px; min-height: 300px; }
+	.testimonial-carousel { gap: 4px; min-height: 220px; }
 	.t-card.is-left,
 	.t-card.is-right { display: none; }
 	.t-card.is-active { transform: scale(1); margin: 0; }
-	.t-card { width: min(440px, 88vw); padding: 26px; }
+	.t-card { width: min(380px, 88vw); padding: 20px; }
 }
 </style>
 @endpush

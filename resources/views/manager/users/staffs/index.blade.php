@@ -37,7 +37,7 @@
 					<th>STT</th>
 					<th>Họ tên</th>
 					<th>Email / SĐT</th>
-					<th>Vai trò</th>
+					<th>Chức vụ</th>
 					<th>Loại hình</th>
 					<th>Trạng thái</th>
 					<th class="col-action-lg">Thao tác</th>
@@ -63,7 +63,7 @@
 						<div class="text-13">{{ $user->email ?? '—' }}</div>
 						<div class="text-12 text-muted">{{ $user->so_dien_thoai ?? '—' }}</div>
 					</td>
-					<td><span class="badge badge-outline">{{ ucfirst($user->vai_tro) }}</span></td>
+					<td><span class="badge badge-outline">{{ $user->hoSoNhanVien?->chucVu?->ten_chuc_vu ?? 'Chưa gán' }}</span></td>
 					<td><span class="badge badge-outline">{{ ucfirst($user->hoSoNhanVien?->loai_hinh_lam_viec ?? 'Toàn thời gian') }}</span></td>
 					<td>
 						<span class="badge {{ $user->trang_thai === 'hoạt động' ? 'badge-active' : 'badge-inactive' }}">

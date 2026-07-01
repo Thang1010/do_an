@@ -12,6 +12,8 @@
     };
     $showStaffFields = old('vai_tro', $user->vai_tro) === 'nhân viên';
     $showAdminFields = old('vai_tro', $user->vai_tro) === 'quản lý';
+    $positionsStaff = $positionsStaff ?? ($positions ?? collect());
+    $positionsManager = $positionsManager ?? ($positions ?? collect());
 @endphp
 <div class="page-header">
     <div>
@@ -84,9 +86,9 @@
                     <label class="form-label" for="chuc_vu_id">Chức vụ</label>
                     <select id="chuc_vu_id" name="chuc_vu_id" class="form-control">
                         <option value="">-- Chọn chức vụ --</option>
-                        @foreach($positions ?? [] as $position)
+                        @foreach($positionsStaff as $position)
                             <option value="{{ $position->id }}" {{ (string) old('chuc_vu_id', $user->hoSoNhanVien?->chuc_vu_id) === (string) $position->id ? 'selected' : '' }}>
-                                {{ $position->ten_chuc_vu }}
+                                {{ $position->ten_chuc_vu }} ({{ ucfirst($position->loai_hinh_lam_viec ?? 'toàn thời gian') }})
                             </option>
                         @endforeach
                     </select>
@@ -95,35 +97,18 @@
                     @enderror
                 </div>
 
-                <div class="form-grid-2">
-                    <div class="form-group">
-                        <label class="form-label" for="luong_co_ban">Lương cơ bản</label>
-                        <input
-                            id="luong_co_ban"
-                            type="text"
-                            name="luong_co_ban"
-                            class="form-control format-money"
-                            value="{{ old('luong_co_ban', $user->hoSoNhanVien?->luong_co_ban) }}"
-                            placeholder="Nhập lương cơ bản"
-                        >
-                        @error('luong_co_ban')
-                            <div class="form-error">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label" for="ngay_vao_lam">Ngày vào làm</label>
-                        <input
-                            id="ngay_vao_lam"
-                            type="date"
-                            name="ngay_vao_lam"
-                            class="form-control"
-                            value="{{ old('ngay_vao_lam', optional($user->hoSoNhanVien?->ngay_vao_lam)->format('Y-m-d')) }}"
-                        >
-                        @error('ngay_vao_lam')
-                            <div class="form-error">{{ $message }}</div>
-                        @enderror
-                    </div>
+                <div class="form-group mt-3">
+                    <label class="form-label" for="ngay_vao_lam">Ngày vào làm</label>
+                    <input
+                        id="ngay_vao_lam"
+                        type="date"
+                        name="ngay_vao_lam"
+                        class="form-control"
+                        value="{{ old('ngay_vao_lam', optional($user->hoSoNhanVien?->ngay_vao_lam)->format('Y-m-d') ?? date('Y-m-d')) }}"
+                    >
+                    @error('ngay_vao_lam')
+                        <div class="form-error">{{ $message }}</div>
+                    @enderror
                 </div>
             </div>
 
@@ -134,9 +119,9 @@
                     <label class="form-label" for="admin_chuc_vu_id">Chức vụ quản lý</label>
                     <select id="admin_chuc_vu_id" name="chuc_vu_id" class="form-control">
                         <option value="">-- Chọn chức vụ --</option>
-                        @foreach($positions ?? [] as $position)
+                        @foreach($positionsManager as $position)
                             <option value="{{ $position->id }}" {{ (string) old('chuc_vu_id', $user->hoSoQuanLy?->chuc_vu_id) === (string) $position->id ? 'selected' : '' }}>
-                                {{ $position->ten_chuc_vu }}
+                                {{ $position->ten_chuc_vu }} ({{ ucfirst($position->loai_hinh_lam_viec ?? 'toàn thời gian') }})
                             </option>
                         @endforeach
                     </select>
@@ -152,7 +137,7 @@
                         type="date"
                         name="ngay_vao_lam"
                         class="form-control"
-                        value="{{ old('ngay_vao_lam', optional($user->hoSoQuanLy?->ngay_vao_lam)->format('Y-m-d')) }}"
+                        value="{{ old('ngay_vao_lam', optional($user->hoSoQuanLy?->ngay_vao_lam)->format('Y-m-d') ?? date('Y-m-d')) }}"
                     >
                     @error('ngay_vao_lam')
                         <div class="form-error">{{ $message }}</div>

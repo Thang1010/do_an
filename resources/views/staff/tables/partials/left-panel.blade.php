@@ -14,12 +14,6 @@
                 @endif
             </div>
             <div class="menu-panel__meta">
-                <div class="menu-panel__time">{{ now()->locale('vi')->translatedFormat('l, d/m/Y | H:i:s') }}</div>
-                @if($currentAttendance && !$currentAttendance->cham_cong_ra)
-                    <span class="shift-badge shift-badge--checkin">Đang làm việc</span>
-                @else
-                    <span class="shift-badge shift-badge--none">Không có ca</span>
-                @endif
             </div>
         </div>
 

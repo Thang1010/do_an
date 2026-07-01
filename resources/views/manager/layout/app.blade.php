@@ -907,12 +907,96 @@
 
             // Strip commas on form submit
             document.querySelectorAll('form').forEach(form => {
-                form.addEventListener('submit', function () {
+                form.addEventListener('submit', function (e) {
+                    var invalidInputs = this.querySelectorAll('[data-invalid="true"]');
+                    if (invalidInputs.length > 0) {
+                        e.preventDefault();
+                        invalidInputs[0].focus();
+                        var originalBg = invalidInputs[0].style.backgroundColor;
+                        invalidInputs[0].style.backgroundColor = '#fecaca';
+                        setTimeout(() => { invalidInputs[0].style.backgroundColor = originalBg; }, 300);
+                        return false;
+                    }
                     this.querySelectorAll('.format-money').forEach(input => {
                         input.value = input.value.replace(/,/g, '');
                     });
                 });
             });
+
+            // Global Inline Validation cho mọi form thêm, sửa
+            document.addEventListener('input', function(e) {
+                var input = e.target;
+                if (input.tagName !== 'INPUT' && input.tagName !== 'TEXTAREA') return;
+                if (['hidden', 'checkbox', 'radio', 'submit', 'button', 'file'].includes(input.type)) return;
+
+                var rawValue = input.value;
+                var isValid = true;
+                var errorMsg = '';
+
+                if (rawValue !== '') {
+                    // Nhận diện loại trường
+                    var isMoney = input.classList.contains('format-money');
+                    var isNumberType = input.type === 'number';
+                    var isNumericName = ['gia_', 'so_luong', 'chi_phi', 'chiet_khau', 'he_so_gia', 'so_ban', 'so_tien'].some(n => input.name && input.name.includes(n));
+                    
+                    var isPhoneField = input.type === 'tel' || (input.name && input.name.includes('dien_thoai'));
+                    var isPersonName = input.name === 'ho_ten' || input.name === 'ten_nhan_vien' || input.name === 'ten_khach_hang';
+                    var isEmailField = input.type === 'email' || input.name === 'email';
+
+                    if (isPhoneField) {
+                        var hasLettersPhone = /[^0-9\s\+\-\(\)]/.test(rawValue);
+                        if (hasLettersPhone) {
+                            isValid = false;
+                            errorMsg = 'Số điện thoại chỉ được chứa các chữ số!';
+                        }
+                    } else if (isPersonName) {
+                        var hasNumbersOrSpecial = /[0-9!@#$%^&*()_+={}\[\]:;"'<>,.?\\|]/g.test(rawValue);
+                        if (hasNumbersOrSpecial) {
+                            isValid = false;
+                            errorMsg = 'Tên người không được chứa số hay ký tự đặc biệt!';
+                        }
+                    } else if (isEmailField) {
+                        var hasSpacesOrAccents = /[ \u00C0-\u024F\u1E00-\u1EFF]/.test(rawValue);
+                        if (hasSpacesOrAccents) {
+                            isValid = false;
+                            errorMsg = 'Email không được chứa khoảng trắng hoặc có dấu Tiếng Việt!';
+                        }
+                    } else if (isNumberType || isMoney || isNumericName) {
+                        var hasLetters = /[^0-9.,]/.test(rawValue);
+                        if (hasLetters) {
+                            isValid = false;
+                            errorMsg = 'Trường này chỉ được nhập số, không nhập chữ cái!';
+                        }
+                    }
+                }
+
+                if (!isValid) {
+                    input.style.borderColor = '#d92d20';
+                    input.style.backgroundColor = '#fef2f2';
+                    input.dataset.invalid = "true";
+                    
+                    var errEl = input.nextElementSibling;
+                    if (!errEl || !errEl.classList.contains('global-inline-error')) {
+                        errEl = document.createElement('div');
+                        errEl.className = 'global-inline-error form-error';
+                        errEl.style.fontSize = '12px';
+                        errEl.style.color = '#d92d20';
+                        errEl.style.marginTop = '4px';
+                        errEl.style.fontWeight = '500';
+                        input.parentNode.insertBefore(errEl, input.nextSibling);
+                    }
+                    errEl.textContent = errorMsg;
+                    errEl.style.display = 'block';
+                } else {
+                    input.style.borderColor = '';
+                    input.style.backgroundColor = '';
+                    delete input.dataset.invalid;
+                    var errEl = input.nextElementSibling;
+                    if (errEl && errEl.classList.contains('global-inline-error')) {
+                        errEl.style.display = 'none';
+                    }
+                }
+            }, true); // use capture phase so we can catch it before format-money modifies it!
         });
     </script>
 

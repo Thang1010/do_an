@@ -88,7 +88,7 @@
                         <option value="">-- Chọn chức vụ --</option>
                         @foreach($positionsStaff as $position)
                             <option value="{{ $position->id }}" {{ (string) old('chuc_vu_id', $user->hoSoNhanVien?->chuc_vu_id) === (string) $position->id ? 'selected' : '' }}>
-                                {{ $position->ten_chuc_vu }}
+                                {{ $position->ten_chuc_vu }} ({{ ucfirst($position->loai_hinh_lam_viec ?? 'toàn thời gian') }})
                             </option>
                         @endforeach
                     </select>
@@ -104,7 +104,7 @@
                         type="date"
                         name="ngay_vao_lam"
                         class="form-control"
-                        value="{{ old('ngay_vao_lam', optional($user->hoSoNhanVien?->ngay_vao_lam)->format('Y-m-d')) }}"
+                        value="{{ old('ngay_vao_lam', optional($user->hoSoNhanVien?->ngay_vao_lam)->format('Y-m-d') ?? date('Y-m-d')) }}"
                     >
                     @error('ngay_vao_lam')
                         <div class="form-error">{{ $message }}</div>
@@ -121,7 +121,7 @@
                         <option value="">-- Chọn chức vụ --</option>
                         @foreach($positionsManager as $position)
                             <option value="{{ $position->id }}" {{ (string) old('chuc_vu_id', $user->hoSoQuanLy?->chuc_vu_id) === (string) $position->id ? 'selected' : '' }}>
-                                {{ $position->ten_chuc_vu }}
+                                {{ $position->ten_chuc_vu }} ({{ ucfirst($position->loai_hinh_lam_viec ?? 'toàn thời gian') }})
                             </option>
                         @endforeach
                     </select>
@@ -137,7 +137,7 @@
                         type="date"
                         name="ngay_vao_lam"
                         class="form-control"
-                        value="{{ old('ngay_vao_lam', optional($user->hoSoQuanLy?->ngay_vao_lam)->format('Y-m-d')) }}"
+                        value="{{ old('ngay_vao_lam', optional($user->hoSoQuanLy?->ngay_vao_lam)->format('Y-m-d') ?? date('Y-m-d')) }}"
                     >
                     @error('ngay_vao_lam')
                         <div class="form-error">{{ $message }}</div>

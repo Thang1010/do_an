@@ -19,7 +19,7 @@
 }
 
 body {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Roboto', sans-serif;
     background: var(--bg-page);
     color: var(--text-dark);
     -webkit-font-smoothing: antialiased;
@@ -88,6 +88,7 @@ body {
     display: block;
     padding: 10px 20px;
     color: rgba(255,255,255,0.65);
+    font-family: 'Inter', sans-serif;
     font-size: 14px; font-weight: 500;
     text-decoration: none;
     border-left: 3px solid transparent;
@@ -269,7 +270,7 @@ body {
     border: 1.5px solid var(--border);
     border-radius: 8px;
     padding: 8px 16px 8px 16px;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 13px; color: var(--text-dark);
     outline: none; width: 220px;
     transition: border-color 0.2s;
@@ -280,7 +281,7 @@ body {
 .header-btn {
     background: none; border: 1.5px solid var(--border);
     border-radius: 8px; padding: 8px 14px;
-    font-family: 'Outfit', sans-serif; font-size: 13px;
+    font-family: 'Inter', sans-serif; font-size: 13px;
     color: var(--text-dark); cursor: pointer;
     transition: all 0.2s; white-space: nowrap;
 }
@@ -412,7 +413,7 @@ body {
    BUTTONS
    ============================== */
 .btn {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 13px; font-weight: 600;
     padding: 9px 18px; border-radius: 8px;
     border: none; cursor: pointer;
@@ -486,7 +487,7 @@ body {
     letter-spacing: 0.08em; margin-bottom: 8px;
 }
 .stat-value {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Roboto', sans-serif;
     font-size: 28px; font-weight: 700;
     color: var(--text-dark); line-height: 1;
 }
@@ -575,7 +576,7 @@ tbody tr:last-child td { border-bottom: none; }
     background: var(--bg-white);
     border: 1.5px solid var(--border);
     border-radius: 8px; padding: 10px 14px;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 14px; color: var(--text-dark);
     outline: none; transition: border-color 0.2s;
 }
@@ -618,7 +619,7 @@ textarea.form-control { resize: vertical; min-height: 100px; }
     width: 34px; height: 34px;
     display: flex; align-items: center; justify-content: center;
     border: 1.5px solid var(--border); border-radius: 7px;
-    font-size: 13px; font-weight: 500; font-family: 'Outfit', sans-serif;
+    font-size: 13px; font-weight: 500; font-family: 'Inter', sans-serif;
     color: var(--text-dark); cursor: pointer; background: var(--bg-white);
     transition: all 0.15s; text-decoration: none;
 }
@@ -677,7 +678,7 @@ textarea.form-control { resize: vertical; min-height: 100px; }
     border-radius: 18px; width: 100%;
     box-shadow: 0 24px 60px rgba(0,0,0,0.45);
     color: #f1f0ee;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     overflow: hidden; animation: modalIn 0.2s ease;
 }
 .modal-sm  { max-width: 400px; }
@@ -917,10 +918,10 @@ textarea.form-control { resize: vertical; min-height: 100px; }
 .text-uppercase { text-transform: uppercase; }
 .font-600 { font-weight: 600; }
 .font-700 { font-weight: 700; }
-.font-poppins { font-family: 'Poppins', sans-serif; }
-.price-text { font-weight: 700; font-family: 'Poppins', sans-serif; }
-.stat-value-large { font-size: 22px; font-weight: 700; color: var(--text-dark); font-family: 'Poppins', sans-serif; }
-.stat-value-xl { font-size: 28px; font-weight: 700; color: var(--text-dark); font-family: 'Poppins', sans-serif; }
+.font-poppins { font-family: 'Roboto', sans-serif; }
+.price-text { font-weight: 700; font-family: 'Roboto', sans-serif; }
+.stat-value-large { font-size: 22px; font-weight: 700; color: var(--text-dark); font-family: 'Roboto', sans-serif; }
+.stat-value-xl { font-size: 28px; font-weight: 700; color: var(--text-dark); font-family: 'Roboto', sans-serif; }
 .letter-spacing-06 { letter-spacing: 0.06em; }
 
 /* Widths */
@@ -998,7 +999,7 @@ th.col-action-xl { width: 160px; text-align: center; }
     align-items: center;
     gap: 4px;
 }
-.chart-label { font-size: 10px; color: var(--text-muted); font-family: 'Poppins', sans-serif; }
+.chart-label { font-size: 10px; color: var(--text-muted); font-family: 'Roboto', sans-serif; }
 .chart-day-label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
 .chart-date-label { font-size: 10px; color: var(--text-muted); }
 .chart-hour-label { font-size: 9px; color: var(--text-muted); }
@@ -1080,7 +1081,7 @@ th.col-action-xl { width: 160px; text-align: center; }
 
 /* Voucher code badge */
 .voucher-code {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Roboto', sans-serif;
     font-weight: 700;
     letter-spacing: 0.06em;
     background: var(--bg-page);

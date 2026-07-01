@@ -90,9 +90,9 @@ Route::prefix('manager')->name('manager.')->middleware(['auth', 'role:quản lý
     // ── Positions ─────────────────────────────────────────────────────
     // Quản lý: chỉ xem
     Route::get('/positions', [PositionController::class, 'index'])->name('positions.index');
-    Route::get('/positions/{id}', [PositionController::class, 'show'])->name('positions.show');
     // Chủ cửa hàng: toàn quyền tạo/sửa/xóa/gán nhân viên
     Route::get('/positions/create', [PositionController::class, 'create'])->middleware('role:chủ cửa hàng')->name('positions.create');
+    Route::get('/positions/{id}', [PositionController::class, 'show'])->name('positions.show');
     Route::post('/positions', [PositionController::class, 'store'])->middleware('role:chủ cửa hàng')->name('positions.store');
     Route::get('/positions/{id}/edit', [PositionController::class, 'edit'])->middleware('role:chủ cửa hàng')->name('positions.edit');
     Route::put('/positions/{id}', [PositionController::class, 'update'])->middleware('role:chủ cửa hàng')->name('positions.update');

@@ -155,8 +155,23 @@
             $manualDiscount = (!$hasCustomerVoucher && $appliedDiscount > 0) ? $appliedDiscount : 0;
         @endphp
 
-        <input type="hidden" name="chiet_khau_loai" id="chiet-khau-loai" value="{{ $manualDiscount > 0 ? 'tiền' : '' }}">
-        <input type="hidden" name="chiet_khau_gia_tri" id="chiet-khau-gia-tri" value="{{ $manualDiscount > 0 ? number_format($manualDiscount, 0, '.', '') : '0' }}">
+        @php
+            // Lấy lại giá trị chiết khấu từ session để UI hiển thị đúng kiểu (% hay tiền)
+            $savedChietKhauLoai = isset($selectedTable) ? session('chiet_khau_loai_'.$selectedTable->id, '') : '';
+            $savedChietKhauGiaTri = isset($selectedTable) ? session('chiet_khau_gia_tri_'.$selectedTable->id, 0) : 0;
+            // Nếu đơn hàng không còn chiết khấu (VD: bỏ chiết khấu), reset lại
+            if ($manualDiscount <= 0) {
+                $savedChietKhauLoai = '';
+                $savedChietKhauGiaTri = 0;
+            } elseif (!$savedChietKhauLoai) {
+                // Fallback nếu có manualDiscount nhưng không có session (VD mới vào lại trang)
+                $savedChietKhauLoai = 'tiền';
+                $savedChietKhauGiaTri = $manualDiscount;
+            }
+        @endphp
+
+        <input type="hidden" name="chiet_khau_loai" id="chiet-khau-loai" value="{{ $savedChietKhauLoai }}">
+        <input type="hidden" name="chiet_khau_gia_tri" id="chiet-khau-gia-tri" value="{{ $savedChietKhauGiaTri > 0 ? number_format($savedChietKhauGiaTri, 2, '.', '') : '0' }}">
 
         @if(isset($selectedOrder) && $appliedDiscount > 0 && $selectedOrder->trang_thai_thanh_toan === 'chưa thanh toán')
             <div class="order-total" style="color: #10b981; font-size: 14px; border-top: none; padding-top: 0; padding-bottom: 8px;">
@@ -192,7 +207,8 @@
                         style="justify-content:center; background:#8a6d3b; color:#fff; border:none;"
                         onclick="openDiscountModal()"
                         data-subtotal="{{ $discountSubtotal }}"
-                        data-current="{{ $manualDiscount > 0 ? number_format($manualDiscount, 0, '.', '') : '0' }}"
+                        data-type="{{ $savedChietKhauLoai }}"
+                        data-value="{{ $savedChietKhauGiaTri > 0 ? number_format($savedChietKhauGiaTri, 2, '.', '') : '0' }}"
                         {{ !$hasEditable ? 'disabled' : '' }}>Chiết khấu</button>
                 @endif
                 <button type="submit" name="action" value="payment" class="btn btn-primary w-full"
@@ -235,8 +251,10 @@
                 </div>
                 <div class="form-group" style="margin-top:14px;">
                     <label class="form-label" id="discount-value-label" style="color:#F0DDB8;">Phần trăm giảm (%)</label>
-                    <input type="number" min="0" step="0.01" id="discount-value-input" class="form-control"
-                           placeholder="Nhập giá trị" oninput="updateDiscountPreview()">
+                    <input type="text" inputmode="decimal" id="discount-value-input" class="form-control"
+                           placeholder="Nhập giá trị" 
+                           oninput="updateDiscountPreview()">
+                    <p id="discount-error" style="font-size:12px; color:#d92d20; margin-top:6px; display:none; font-weight:600;">Vui lòng chỉ nhập số, không nhập chữ cái hay ký tự đặc biệt!</p>
                     <p id="discount-hint" style="font-size:12px; color:#9b8e77; margin-top:6px;">—</p>
                 </div>
             </div>

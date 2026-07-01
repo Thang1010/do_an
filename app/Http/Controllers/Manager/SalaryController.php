@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ChamCong;
 use App\Models\NguoiDung;
 use App\Models\ThanhToan;
+use App\Models\CaLamViec;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -35,14 +36,16 @@ class SalaryController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $totalRevenue = $this->totalRevenue($periodStart, $periodEnd);
-
         $roleMap = $users->pluck('vai_tro', 'id')->toArray();
         $minutesMap = $this->calculateMinutesMap($roleMap, $periodStart, $periodEnd);
+        
+        $managerIds = collect($roleMap)->filter(fn($r) => $r === 'quản lý')->keys()->toArray();
+        $revenueMap = $this->calculateManagerRevenueMap($managerIds, $periodStart, $periodEnd);
 
-        $salaryData = $users->through(function (NguoiDung $user) use ($periodStart, $periodEnd, $totalRevenue, $minutesMap) {
+        $salaryData = $users->through(function (NguoiDung $user) use ($periodStart, $periodEnd, $revenueMap, $minutesMap) {
             $mins = $minutesMap[$user->id] ?? 0;
-            return $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $totalRevenue, $mins);
+            $userRevenue = $revenueMap[$user->id] ?? 0;
+            return $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $userRevenue, $mins);
         });
 
         return view('manager.salary.index', [
@@ -65,15 +68,19 @@ class SalaryController extends Controller
         $nam = (int) ($request->input('nam') ?: now()->year);
 
         [$periodStart, $periodEnd] = $this->salaryPeriod($thang, $nam);
-        $totalRevenue = $this->totalRevenue($periodStart, $periodEnd);
+        
+        $managerIds = $user->vai_tro === 'quản lý' ? [$user->id] : [];
+        $revenueMap = $this->calculateManagerRevenueMap($managerIds, $periodStart, $periodEnd);
+        $userRevenue = $revenueMap[$user->id] ?? 0;
+        
         $mins = $this->calculateMinutesMap([$user->id => $user->vai_tro], $periodStart, $periodEnd)[$user->id] ?? 0;
-        $salaryRow = $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $totalRevenue, $mins);
+        $salaryRow = $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $userRevenue, $mins);
 
         $attendances = collect();
         $managerShifts = collect();
 
         if ($user->vai_tro === 'quản lý') {
-            $managerShifts = \App\Models\CaLamViec::query()
+            $managerShifts = CaLamViec::query()
                 ->where('nguoi_dung_id', $user->id)
                 ->whereBetween('ngay_lam', [$periodStart->toDateString(), $periodEnd->toDateString()])
                 ->orderBy('ngay_lam')
@@ -110,7 +117,6 @@ class SalaryController extends Controller
         $nam = (int) ($request->input('nam') ?: now()->year);
 
         [$periodStart, $periodEnd] = $this->salaryPeriod($thang, $nam);
-        $totalRevenue = $this->totalRevenue($periodStart, $periodEnd);
 
         $users = NguoiDung::query()
             ->whereIn('vai_tro', ['nhân viên', 'quản lý'])
@@ -121,8 +127,11 @@ class SalaryController extends Controller
 
         $roleMap = $users->pluck('vai_tro', 'id')->toArray();
         $minutesMap = $this->calculateMinutesMap($roleMap, $periodStart, $periodEnd);
+        
+        $managerIds = collect($roleMap)->filter(fn($r) => $r === 'quản lý')->keys()->toArray();
+        $revenueMap = $this->calculateManagerRevenueMap($managerIds, $periodStart, $periodEnd);
 
-        $rows = $users->map(fn(NguoiDung $user) => $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $totalRevenue, $minutesMap[$user->id] ?? 0));
+        $rows = $users->map(fn(NguoiDung $user) => $this->buildUserSalaryRow($user, $periodStart, $periodEnd, $revenueMap[$user->id] ?? 0, $minutesMap[$user->id] ?? 0));
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
@@ -179,15 +188,51 @@ class SalaryController extends Controller
     }
 
     /**
-     * Tổng doanh thu đã thanh toán trong kỳ.
+     * Tính tổng doanh thu phát sinh trong các ca làm việc của từng quản lý.
+     * Giải quyết bài toán: Chỉ thưởng doanh thu cho quản lý dựa trên ca trực của họ.
      */
-    private function totalRevenue(Carbon $start, Carbon $end): float
+    private function calculateManagerRevenueMap(array $managerIds, Carbon $start, Carbon $end): array
     {
-        return (float) ThanhToan::query()
+        if (empty($managerIds)) return [];
+        
+        // 1. Lấy toàn bộ giao dịch thanh toán trong kỳ để lọc trong bộ nhớ (giảm thiểu query)
+        $payments = ThanhToan::query()
             ->where('trang_thai', 'đã thanh toán')
             ->whereNotNull('thanh_toan_luc')
             ->whereBetween('thanh_toan_luc', [$start, $end])
-            ->sum('so_tien');
+            ->get(['thanh_toan_luc', 'so_tien'])
+            ->map(function ($p) {
+                $p->parsed_time = Carbon::parse($p->thanh_toan_luc);
+                return $p;
+            });
+            
+        // 2. Lấy toàn bộ ca làm việc của các quản lý trong kỳ
+        $shifts = CaLamViec::query()
+            ->whereIn('nguoi_dung_id', $managerIds)
+            ->whereBetween('ngay_lam', [$start->toDateString(), $end->toDateString()])
+            ->get(['nguoi_dung_id', 'ngay_lam', 'gio_bat_dau', 'gio_ket_thuc']);
+            
+        $map = [];
+        foreach ($shifts as $shift) {
+            // Lấy ra định dạng Y-m-d để tránh lỗi Double time specification khi nối chuỗi
+            $ngayLamStr = Carbon::parse($shift->ngay_lam)->format('Y-m-d');
+            $startDateTime = Carbon::parse($ngayLamStr . ' ' . $shift->gio_bat_dau);
+            $endDateTime = Carbon::parse($ngayLamStr . ' ' . $shift->gio_ket_thuc);
+
+            // Nếu ca làm việc qua đêm
+            if ($endDateTime < $startDateTime) {
+                $endDateTime->addDay();
+            }
+            
+            // Tính tổng tiền các giao dịch diễn ra trong khoảng thời gian của ca này
+            $shiftRevenue = $payments->filter(function($p) use ($startDateTime, $endDateTime) {
+                return $p->parsed_time->between($startDateTime, $endDateTime);
+            })->sum('so_tien');
+            
+            $map[$shift->nguoi_dung_id] = ($map[$shift->nguoi_dung_id] ?? 0) + $shiftRevenue;
+        }
+        
+        return $map;
     }
 
     /**
@@ -198,7 +243,8 @@ class SalaryController extends Controller
      */
     private function calculateMinutesMap(array $userRoles, Carbon $start, Carbon $end): array
     {
-        if (empty($userRoles)) return [];
+        if (empty($userRoles))
+            return [];
 
         $userIds = array_keys($userRoles);
 
@@ -206,7 +252,7 @@ class SalaryController extends Controller
         $managerIds = collect($userRoles)->filter(fn($r) => $r === 'quản lý')->keys()->toArray();
         $managerMinutes = [];
         if (!empty($managerIds)) {
-            $managerMinutes = \App\Models\CaLamViec::query()
+            $managerMinutes = CaLamViec::query()
                 ->whereIn('nguoi_dung_id', $managerIds)
                 ->whereBetween('ngay_lam', [$start->toDateString(), $end->toDateString()])
                 ->select('nguoi_dung_id')
@@ -240,9 +286,9 @@ class SalaryController extends Controller
         foreach ($userIds as $id) {
             $role = $userRoles[$id] ?? 'nhân viên';
             if ($role === 'quản lý') {
-                $map[$id] = (float)($managerMinutes[$id] ?? 0);
+                $map[$id] = (float) ($managerMinutes[$id] ?? 0);
             } else {
-                $map[$id] = (float)($staffMinutes[$id] ?? 0);
+                $map[$id] = (float) ($staffMinutes[$id] ?? 0);
             }
         }
 
@@ -266,16 +312,23 @@ class SalaryController extends Controller
     /**
      * Tính lương cho 1 user.
      */
-    private function calculateSalary(NguoiDung $user, string $loaiHinh, ?float $luongCoBan, ?float $luongTheoGio, float $totalMinutes, float $totalRevenue): float
+    private function calculateSalary(NguoiDung $user, string $loaiHinh, ?float $luongCoBan, ?float $luongTheoGio, float $totalMinutes, float $userRevenue): float
     {
         $base = $luongCoBan ?? 0;
-        return $base + (($totalMinutes / 60) * ($luongTheoGio ?? 0));
+        $totalSalary = $base + (($totalMinutes / 60) * ($luongTheoGio ?? 0));
+        
+        // Thưởng 0.5% doanh thu sinh ra trong các ca trực của quản lý đó
+        if ($user->vai_tro === 'quản lý') {
+            $totalSalary += ($userRevenue * 0.005);
+        }
+
+        return $totalSalary;
     }
 
     /**
      * Build 1 hàng dữ liệu lương cho user.
      */
-    private function buildUserSalaryRow(NguoiDung $user, Carbon $periodStart, Carbon $periodEnd, float $totalRevenue, float $totalMinutes): array
+    private function buildUserSalaryRow(NguoiDung $user, Carbon $periodStart, Carbon $periodEnd, float $userRevenue, float $totalMinutes): array
     {
         $isNhanVien = $user->isNhanVien();
         $profile = $isNhanVien ? $user->hoSoNhanVien : $user->hoSoQuanLy;
@@ -285,7 +338,7 @@ class SalaryController extends Controller
         $luongTheoGio = $profile?->chucVu?->luong_theo_gio ?? 0;
         $chucVu = $profile?->chucVu?->ten_chuc_vu ?? '—';
 
-        $totalSalary = $this->calculateSalary($user, $loaiHinh, $luongCoBan, $luongTheoGio, $totalMinutes, $totalRevenue);
+        $totalSalary = $this->calculateSalary($user, $loaiHinh, $luongCoBan, $luongTheoGio, $totalMinutes, $userRevenue);
 
         return [
             'id' => $user->id,

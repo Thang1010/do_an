@@ -75,6 +75,10 @@ function bindModalClose(modal) {
 }
 
 var discountType = 'phần trăm';
+var savedDiscountInputs = {
+    'phần trăm': '',
+    'tiền': ''
+};
 
 function getDiscountSubtotal() {
     var trigger = document.getElementById('discount-trigger');
@@ -96,7 +100,7 @@ function setDiscountType(type) {
     if (label) label.textContent = type === 'phần trăm' ? 'Phần trăm giảm (%)' : 'Số tiền giảm (đ)';
     if (input) {
         input.max = type === 'phần trăm' ? '100' : String(getDiscountSubtotal());
-        input.value = '';
+        input.value = savedDiscountInputs[type] || '';
     }
     updateDiscountPreview();
 }
@@ -104,15 +108,43 @@ function setDiscountType(type) {
 function updateDiscountPreview() {
     var input = document.getElementById('discount-value-input');
     var hint = document.getElementById('discount-hint');
+    var error = document.getElementById('discount-error');
     if (!input || !hint) return;
+    
+    var rawText = input.value;
+    // Kiểm tra xem có chứa chữ cái hoặc ký tự đặc biệt không (ngoại trừ số và tối đa 1 dấu chấm)
+    var hasLetters = /[^0-9.]/.test(rawText) || (rawText.match(/\./g) || []).length > 1;
+    
+    if (hasLetters && rawText !== '') {
+        input.style.borderColor = '#d92d20';
+        input.style.backgroundColor = '#fef2f2';
+        if (error) error.style.display = 'block';
+        hint.textContent = '—';
+        return; // Dừng lại, không cập nhật preview hay lưu session
+    } else {
+        input.style.borderColor = '';
+        input.style.backgroundColor = '';
+        if (error) error.style.display = 'none';
+    }
+
     var subtotal = getDiscountSubtotal();
-    var val = parseFloat(input.value || '0');
+    var val = parseFloat(rawText || '0');
+    
+    // Ràng buộc giá trị hiển thị không vượt quá 100%
+    if (discountType === 'phần trăm' && val > 100) {
+        val = 100;
+        input.value = 100;
+    }
+    
+    // Lưu lại giá trị người dùng vừa nhập để khi chuyển tab không bị mất
+    savedDiscountInputs[discountType] = input.value;
+    
     if (isNaN(val) || val <= 0) {
         hint.textContent = 'Tạm tính: ' + formatVnd(subtotal);
         return;
     }
     var discount = discountType === 'phần trăm'
-        ? subtotal * Math.min(val, 100) / 100
+        ? subtotal * val / 100
         : Math.min(val, subtotal);
     hint.textContent = 'Giảm ' + formatVnd(discount) + ' → còn ' + formatVnd(Math.max(0, subtotal - discount));
 }
@@ -121,16 +153,21 @@ function openDiscountModal() {
     var modal = document.getElementById('discount-modal');
     if (!modal) return;
     var trigger = document.getElementById('discount-trigger');
-    var current = trigger ? (parseFloat(trigger.dataset.current || '0') || 0) : 0;
-    if (current > 0) {
-        // Đã có chiết khấu trước đó → nạp lại theo số tiền
-        setDiscountType('tiền');
-        var input = document.getElementById('discount-value-input');
-        if (input) input.value = current;
-        updateDiscountPreview();
-    } else {
-        setDiscountType('phần trăm');
+    
+    var savedType = trigger ? (trigger.dataset.type || 'phần trăm') : 'phần trăm';
+    var savedVal = trigger ? (parseFloat(trigger.dataset.value || '0') || 0) : 0;
+    
+    // Reset state mỗi lần mở lại modal
+    savedDiscountInputs = {
+        'phần trăm': '',
+        'tiền': ''
+    };
+    if (savedVal > 0) {
+        savedDiscountInputs[savedType] = savedVal;
     }
+    
+    setDiscountType(savedType);
+    
     modal.classList.add('modal--open');
 }
 
@@ -158,7 +195,16 @@ function submitDiscount(loai, giaTri) {
 
 function applyDiscount() {
     var input = document.getElementById('discount-value-input');
-    var val = input ? parseFloat(input.value || '0') : 0;
+    var rawText = input ? input.value : '';
+    
+    // Nếu đang có lỗi nhập chữ, hiển thị cảnh báo và không cho áp dụng
+    var hasLetters = /[^0-9.]/.test(rawText) || (rawText.match(/\./g) || []).length > 1;
+    if (hasLetters && rawText !== '') {
+        updateDiscountPreview(); // Gọi lại để kích hoạt UI lỗi
+        return;
+    }
+    
+    var val = parseFloat(rawText || '0');
     if (isNaN(val) || val <= 0) {
         closeDiscountModal();
         return;

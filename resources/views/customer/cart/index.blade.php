@@ -126,9 +126,16 @@
                                             <span class="icon-toggle" style="font-size: 12px; opacity: 0.7;">▼</span>
                                         </summary>
                                         <div class="voucher-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 16px;">
+                                            <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255, 255, 255, 0.04); border-radius: 8px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05);">
+                                                <input type="radio" name="vouchers_radio" value="" class="voucher-radio"
+                                                    style="width: 18px; height: 18px; accent-color: #059669;" onchange="applyVoucher()" checked>
+                                                <div style="flex: 1;">
+                                                    <div style="font-weight: 600; color: #fff;">Không dùng voucher</div>
+                                                </div>
+                                            </label>
                                             @foreach($myVouchers as $uv)
                                                 <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255, 255, 255, 0.04); border-radius: 8px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05);">
-                                                    <input type="checkbox" name="vouchers_checkbox[]" value="{{ $uv->id }}" class="voucher-checkbox"
+                                                    <input type="radio" name="vouchers_radio" value="{{ $uv->id }}" class="voucher-radio"
                                                         data-type="{{ $uv->voucher->loai_giam }}"
                                                         data-value="{{ $uv->voucher->gia_tri_giam }}"
                                                         data-min="{{ $uv->voucher->don_toi_thieu }}"
@@ -565,46 +572,39 @@ document.addEventListener('click', (event) => {
 
 /* ── Voucher ─────────────────────────────────────────────── */
 function applyVoucher() {
-    const checkboxes = document.querySelectorAll('.voucher-checkbox:checked');
+    const selectedRadio = document.querySelector('.voucher-radio:checked');
     const voucherRow  = document.getElementById('voucher-row');
     const voucherAmt  = document.getElementById('voucher-discount-amount');
     const hiddenInput = document.getElementById('selected-voucher-id');
 
-    if (checkboxes.length === 0) {
+    if (!selectedRadio || !selectedRadio.value) {
         discountAmount = 0;
         if (voucherRow)  voucherRow.style.display = 'none';
         if (hiddenInput) hiddenInput.value = '';
         recalcTotal(); return;
     }
 
-    let totalDiscount = 0;
-    let selectedIds = [];
+    const type  = selectedRadio.dataset.type;
+    const value = parseFloat(selectedRadio.dataset.value);
+    const min   = parseFloat(selectedRadio.dataset.min);
+    const max   = parseFloat(selectedRadio.dataset.max);
 
-    checkboxes.forEach(chk => {
-        const type  = chk.dataset.type;
-        const value = parseFloat(chk.dataset.value);
-        const min   = parseFloat(chk.dataset.min);
-        const max   = parseFloat(chk.dataset.max);
+    let disc = 0;
+    if (rawTotal >= min) {
+        disc = type === 'phần trăm'
+            ? (max > 0 ? Math.min(rawTotal * value / 100, max) : rawTotal * value / 100)
+            : value;
+    } else {
+        showNotice(`Đơn chưa đạt tối thiểu ${formatVND(min)} để áp dụng voucher. Vui lòng chọn voucher khác.`);
+        const noVoucherRadio = document.querySelector('.voucher-radio[value=""]');
+        if (noVoucherRadio) noVoucherRadio.checked = true;
+        applyVoucher();
+        return;
+    }
 
-        // Calculate theoretical discount if this was the only voucher.
-        // If they select multiple, we'll just sum them up for now, but ensure it doesn't exceed total.
-        let disc = 0;
-        if (rawTotal >= min) {
-            disc = type === 'phần trăm'
-                ? (max > 0 ? Math.min(rawTotal * value / 100, max) : rawTotal * value / 100)
-                : value;
-        } else {
-            showNotice(`Đơn chưa đạt tối thiểu ${formatVND(min)} để áp dụng voucher ${chk.nextElementSibling.querySelector('div').innerText.split('—')[0].trim()}. Vui lòng bỏ chọn.`);
-            chk.checked = false;
-        }
-        totalDiscount += disc;
-        selectedIds.push(chk.value);
-    });
+    discountAmount = Math.min(disc, rawTotal);
 
-    discountAmount = Math.min(totalDiscount, rawTotal);
-
-    // Save as comma-separated IDs (note: backend will need updates to process this properly, but we satisfy UI requirement)
-    if (hiddenInput) hiddenInput.value = selectedIds.join(',');
+    if (hiddenInput) hiddenInput.value = selectedRadio.value;
     if (voucherRow)  voucherRow.style.display = '';
     if (voucherAmt)  voucherAmt.textContent  = '−' + formatVND(discountAmount);
     recalcTotal();

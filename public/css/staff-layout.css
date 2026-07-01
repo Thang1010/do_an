@@ -69,7 +69,7 @@
     transition: all 0.2s;
     text-decoration: none;
     border: none;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 .shift-badge--checkin {
     background: #F0FDF4; color: #166534; border: 1.5px solid #BBF7D0;
@@ -275,7 +275,7 @@
 .menu-product-card__price {
     font-size: 12px;
     color: var(--text-muted);
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Roboto', sans-serif;
 }
 .menu-empty {
     font-size: 12px;
@@ -379,7 +379,7 @@
     text-overflow: ellipsis;
 }
 .table-card__amount {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Roboto', sans-serif;
     font-size: 14px;
     font-weight: 700;
     color: var(--text-dark);
@@ -449,16 +449,16 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 16px; font-weight: 600;
     transition: all 0.15s;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 .qty-btn:hover { border-color: var(--accent-dark); background: var(--accent); }
 .qty-value {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Roboto', sans-serif;
     font-size: 14px; font-weight: 700;
     min-width: 24px; text-align: center;
 }
 .order-detail-item__price {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Roboto', sans-serif;
     font-size: 13px; font-weight: 600;
     color: var(--text-dark);
     white-space: nowrap;
@@ -478,7 +478,7 @@
     color: var(--text-dark);
 }
 .order-total__value {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Roboto', sans-serif;
     font-size: 18px;
     font-weight: 700;
     color: var(--text-dark);
@@ -543,7 +543,7 @@
     border: 1px solid rgba(240,221,184,0.16);
     backdrop-filter: blur(14px);
     box-shadow: 0 24px 60px rgba(0,0,0,0.45);
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     width: min(860px, 96vw);
     max-height: 90vh;
     overflow: hidden;
@@ -641,7 +641,7 @@
 .payment-modal__item-name { font-weight: 600; color: #fff; }
 .payment-modal__item-qty { color: rgba(255,255,255,0.5); }
 .payment-modal__item-price {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Roboto', sans-serif;
     font-weight: 600;
     color: #fff;
 }
@@ -655,7 +655,7 @@
     color: #fff;
 }
 .payment-modal__total-value {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Roboto', sans-serif;
     font-size: 18px;
     color: #F0DDB8;
 }
@@ -813,7 +813,7 @@
     font-size: 13px; font-weight: 600;
     cursor: pointer;
     transition: all 0.18s;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     margin-top: 12px;
 }
 .add-item-btn:hover {
@@ -881,7 +881,7 @@
     font-size: 14px; font-weight: 600; color: var(--text-dark);
 }
 .payment-total-value {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Roboto', sans-serif;
     font-size: 22px; font-weight: 700;
     color: var(--text-dark);
 }
@@ -960,7 +960,7 @@
 }
 .product-grid-item__price {
     font-size: 11px; color: var(--text-muted);
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Roboto', sans-serif;
 }
 
 /* ==============================
@@ -974,7 +974,7 @@
     border-radius: 6px;
     font-size: 12px;
     font-weight: 700;
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Roboto', sans-serif;
     background: #FEF2F2;
     color: #991B1B;
     border: 1px solid #FECACA;

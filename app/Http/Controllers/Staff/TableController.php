@@ -704,6 +704,12 @@ class TableController extends Controller
             } else {
                 $discount = $chietKhauGiaTri;
             }
+            // Lưu session để UI hiển thị lại đúng loại và giá trị
+            session(['chiet_khau_loai_'.$table->id => $chietKhauLoai]);
+            session(['chiet_khau_gia_tri_'.$table->id => $chietKhauGiaTri]);
+        } else {
+            session()->forget('chiet_khau_loai_'.$table->id);
+            session()->forget('chiet_khau_gia_tri_'.$table->id);
         }
 
         $discount = max(0, round(min($discount, $subtotal), 2));

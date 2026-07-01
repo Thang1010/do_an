@@ -13,11 +13,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600;700&family=Poppins:wght@400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@500;600;700&family=Roboto:wght@300;400;500;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('css/manager-layout.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff-layout.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/font-override.css') }}?v={{ filemtime(public_path('css/font-override.css')) }}">
     @stack('styles')
 </head>
 
@@ -142,7 +141,7 @@
             </button>
 
             <div class="header-breadcrumb"
-                style="flex: 1; display: flex; justify-content: center; font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 800; color: #30261C; letter-spacing: 0.05em; text-transform: uppercase;">
+                style="flex: 1; display: flex; justify-content: center; font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 700; color: #1a120c; letter-spacing: 0.02em; text-transform: uppercase;">
                 Nhân viên
             </div>
 

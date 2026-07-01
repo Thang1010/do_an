@@ -94,41 +94,58 @@ body {
 	scroll-snap-type: x mandatory;
 	scroll-behavior: smooth;
 	padding-bottom: 8px;
-	scrollbar-width: none;       /* Firefox: ẩn thanh cuộn */
-	-ms-overflow-style: none;    /* IE/Edge: ẩn thanh cuộn */
+	scrollbar-width: none;
+	/* Firefox: ẩn thanh cuộn */
+	-ms-overflow-style: none;
+	/* IE/Edge: ẩn thanh cuộn */
 }
-#sellers-grid::-webkit-scrollbar { display: none; } /* Chrome/Safari: ẩn thanh cuộn */
 
-#sellers-grid > .product-card {
+#sellers-grid::-webkit-scrollbar {
+	display: none;
+}
+
+/* Chrome/Safari: ẩn thanh cuộn */
+
+#sellers-grid>.product-card {
 	flex: 0 0 auto;
-	width: calc((100% - 60px) / 4); /* 4 thẻ vừa khung (3 khoảng cách × 20px) */
+	width: calc((100% - 60px) / 4);
+	/* 4 thẻ vừa khung (3 khoảng cách × 20px) */
 	scroll-snap-align: start;
 }
 
 @media (max-width: 1023px) {
-	#sellers-grid > .product-card { width: calc((100% - 20px) / 2); } /* 2 thẻ/màn hình */
+	#sellers-grid>.product-card {
+		width: calc((100% - 20px) / 2);
+	}
+
+	/* 2 thẻ/màn hình */
 }
+
 @media (max-width: 639px) {
-	#sellers-grid > .product-card { width: 80%; } /* 1 thẻ + ló thẻ kế để gợi ý cuộn */
+	#sellers-grid>.product-card {
+		width: 80%;
+	}
+
+	/* 1 thẻ + ló thẻ kế để gợi ý cuộn */
 }
 
 /* Hero text */
 .hero-title-xin {
-	font-family: 'Outfit', sans-serif;
-	font-weight: 500;
-	font-size: clamp(40px, 5.5vw, 72px);
+	font-family: 'Playfair Display', serif;
+	font-weight: 700;
+	font-size: clamp(48px, 6vw, 82px);
 	text-transform: uppercase;
-	letter-spacing: 0.2em;
+	letter-spacing: 0;
 	color: white;
 	line-height: 1;
 }
 
 .hero-title-main {
-	font-family: 'Be Vietnam Pro', sans-serif;
-	font-weight: 800;
+	font-family: 'Outfit', sans-serif;
+	font-weight: 400;
 	font-size: clamp(28px, 4vw, 52px);
-	line-height: 1.2;
-	letter-spacing: -0.01em;
+	line-height: 1.25;
+	letter-spacing: 0;
 	color: white;
 }
 
@@ -148,10 +165,10 @@ body {
 
 .hero-desc {
 	font-family: 'Outfit', sans-serif;
-	font-weight: 400;
-	font-size: 18px;
-	line-height: 26px;
-	color: white;
+	font-weight: 300;
+	font-size: 16px;
+	line-height: 1.6;
+	color: rgba(255, 255, 255, 0.95);
 }
 
 /* Section title */

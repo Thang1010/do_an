@@ -11,7 +11,6 @@
     </div>
     <div class="page-actions">
         <a href="{{ route('manager.ingredients.create') }}" class="btn btn-primary">{{ $isStoreOwner ? 'Thêm trực tiếp' : 'Tạo yêu cầu mới' }}</a>
-        <a href="{{ route('manager.ingredients.index') }}" class="btn btn-secondary">Về danh mục nguyên liệu</a>
     </div>
 </div>
 

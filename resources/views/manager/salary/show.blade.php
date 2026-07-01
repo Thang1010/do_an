@@ -67,8 +67,9 @@
                 @if($user->vai_tro === 'quản lý')
                     @forelse($managerShifts as $shift)
                         @php
-                            $start = \Carbon\Carbon::parse($shift->ngay_lam . ' ' . $shift->gio_bat_dau);
-                            $end = \Carbon\Carbon::parse($shift->ngay_lam . ' ' . $shift->gio_ket_thuc);
+                            $ngayLamStr = \Carbon\Carbon::parse($shift->ngay_lam)->format('Y-m-d');
+                            $start = \Carbon\Carbon::parse($ngayLamStr . ' ' . $shift->gio_bat_dau);
+                            $end = \Carbon\Carbon::parse($ngayLamStr . ' ' . $shift->gio_ket_thuc);
                             if ($end->lessThanOrEqualTo($start)) {
                                 $end->addDay();
                             }

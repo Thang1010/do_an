@@ -361,7 +361,16 @@
 
                     <div class="notification-dropdown" id="notif-dropdown">
                         <div class="notification-dropdown-header">
-                            <span>Thông báo gần đây</span>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span>Thông báo gần đây</span>
+                                <button type="button" onclick="reloadNotificationDropdown(event)" title="Làm mới" style="background: none; border: none; cursor: pointer; padding: 2px; display: flex; align-items: center; color: var(--text-muted); transition: color 0.2s;" onmouseenter="this.style.color='var(--text-dark)'" onmouseleave="this.style.color='var(--text-muted)'">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M23 4v6h-6"></path>
+                                        <path d="M1 20v-6h6"></path>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                    </svg>
+                                </button>
+                            </div>
                             <form method="POST" action="{{ route('manager.notifications.read-all') }}">
                                 @csrf
                                 <button type="submit" class="notif-mark-all">Đọc tất cả</button>
@@ -376,15 +385,12 @@
                         </div>
 
                         <div class="notification-dropdown-footer">
-                            <a href="{{ route('manager.notifications.index') }}">Xem tất cả thông báo</a>
+                            <a href="#" class="view-all-notifs-btn" onclick="loadAllNotifications(event)">Xem tất cả thông báo</a>
                         </div>
                     </div>
                 </div>
 
-                <!-- View site -->
-                <a href="{{ route('home') }}" target="_blank" class="header-btn">
-                    Xem trang web
-                </a>
+
             </div>
         </header>
 
@@ -727,6 +733,91 @@
             menu.classList.toggle('open');
         }
 
+        window.isShowingAllNotifications = false;
+        function loadAllNotifications(event) {
+            event.preventDefault();
+            var list = document.querySelector('#notif-dropdown .notification-dropdown-list');
+            if (!list) return;
+
+            list.innerHTML = '<div class="notification-empty">Đang tải tất cả thông báo...</div>';
+
+            var url = '{{ route('manager.notifications.poll') }}?all=1';
+            fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (!data) return;
+                    var btn = document.getElementById('notif-btn');
+                    if (btn) {
+                        var badge = btn.querySelector('.badge');
+                        if (data.count > 0) {
+                            if (!badge) {
+                                badge = document.createElement('span');
+                                badge.className = 'badge';
+                                btn.appendChild(badge);
+                            }
+                            badge.textContent = data.count > 99 ? 99 : data.count;
+                        } else if (badge) {
+                            badge.remove();
+                        }
+                    }
+                    if (typeof data.html === 'string') {
+                        list.innerHTML = data.html;
+                    }
+                    window.isShowingAllNotifications = true;
+                })
+                .catch(function () {
+                    list.innerHTML = '<div class="notification-empty">Lỗi khi tải thông báo.</div>';
+                });
+        }
+
+        function reloadNotificationDropdown(event) {
+            if (event) event.preventDefault();
+            var list = document.querySelector('#notif-dropdown .notification-dropdown-list');
+            if (!list) return;
+
+            var btn = event ? event.currentTarget : null;
+            if (btn) {
+                var svg = btn.querySelector('svg');
+                if (svg) {
+                    svg.style.transition = 'transform 0.5s ease-in-out';
+                    svg.style.transform = 'rotate(360deg)';
+                    setTimeout(function() {
+                        svg.style.transition = 'none';
+                        svg.style.transform = 'none';
+                    }, 500);
+                }
+            }
+
+            var showAll = window.isShowingAllNotifications;
+            var url = '{{ route('manager.notifications.poll') }}' + (showAll ? '?all=1' : '');
+
+            fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (!data) return;
+                    var notifBtn = document.getElementById('notif-btn');
+                    if (notifBtn) {
+                        var badge = notifBtn.querySelector('.badge');
+                        if (data.count > 0) {
+                            if (!badge) {
+                                badge = document.createElement('span');
+                                badge.className = 'badge';
+                                notifBtn.appendChild(badge);
+                            }
+                            badge.textContent = data.count > 99 ? 99 : data.count;
+                        } else if (badge) {
+                            badge.remove();
+                        }
+                    }
+                    if (typeof data.html === 'string') {
+                        list.innerHTML = data.html;
+                    }
+                })
+                .catch(function () {
+                    // silently fail
+                });
+        }
+
         // ── Polling thông báo: tự cập nhật badge + danh sách, không cần F5 ──
         (function () {
             var POLL_URL = '{{ route('manager.notifications.poll') }}';
@@ -850,6 +941,7 @@
 
             if (notifWrap && notifMenu && !notifWrap.contains(event.target)) {
                 notifMenu.classList.remove('open');
+                window.isShowingAllNotifications = false;
             }
         });
 

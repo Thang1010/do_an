@@ -28,7 +28,7 @@
 
 		<!-- ============ FEATURED PRODUCTS ============ -->
 		@if(isset($featuredProducts) && $featuredProducts->count() > 0)
-			<section id="featured-products" class="max-w-[1680px] mx-auto px-8 sm:px-12 lg:px-20 mb-20 relative">
+			<section id="featured-products" class="max-w-[1680px] mx-auto px-8 sm:px-12 lg:px-20 mb-10 relative">
 				<div class="text-center mb-12 reveal">
 					<h2 class="section-title">⭐ Sản phẩm nổi bật</h2>
 				</div>
@@ -77,79 +77,56 @@
 			</section>
 		@endif
 
-		<!-- ============ BEST SELLERS: ALL ============ -->
-		<section id="best-sellers" class="max-w-[1680px] mx-auto px-8 sm:px-12 lg:px-20 mb-20 relative">
-			<div class="text-center mb-12 reveal">
-				<h2 class="section-title">Top 10 món bán chạy nhất trong tuần</h2>
-			</div>
+		<!-- ============ BEST SELLERS BY CATEGORY ============ -->
+		@if(isset($bestSellersByCategory) && count($bestSellersByCategory) > 0)
+			@foreach($bestSellersByCategory as $group)
+				<section class="t5-section reveal">
+					<div class="t5-inner">
+						<div class="t5-head">
+							<span class="t5-eyebrow">🔥 Bán chạy nhất tuần này</span>
+							<h2 class="t5-title">Top 5 <span class="t5-cat">{{ $group['category']->ten_danh_muc }}</span></h2>
+						</div>
 
-			<div class="relative">
-				<!-- Left Arrow -->
-				<button id="sellers-left-arrow" aria-label="Trước" class="arrow-btn hidden lg:flex" style="left: -36px;"
-					onclick="slideCarousel('sellers', -1)">
-					<svg class="w-6 h-6 text-[#30261C]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
-					</svg>
-				</button>
-
-				<!-- Product Carousel (coverflow: thẻ giữa nổi bật) -->
-				<div id="sellers-grid">
-					@if(isset($bestSellers) && $bestSellers->count() > 0)
-						@foreach($bestSellers as $product)
-							<div id="product-{{ Str::slug($product->ten_san_pham) }}" class="product-card cursor-pointer"
-								onclick="window.location='{{ route('menu.show', $product->id) }}'">
-								<div class="relative">
-									<img src="{{ $product->image_url }}" class="card-img" alt="{{ $product->ten_san_pham }}" />
-									@if($product->noi_bat)
-										<span style="position:absolute;top:10px;left:10px;background:#f59e0b;color:#3b2600;font-weight:700;font-size:11px;padding:3px 8px;border-radius:999px;z-index:2;">⭐ Nổi bật</span>
-									@endif
-									<button class="heart-btn" aria-label="Yêu thích" data-wishlist-id="{{ $product->id }}"
-										onclick="event.stopPropagation();">
-										<svg class="w-7 h-7 text-[#F1F0EE]" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-											stroke-width="2">
-											<path stroke-linecap="round" stroke-linejoin="round"
-												d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-										</svg>
-									</button>
-								</div>
-								<div class="flex flex-col gap-1">
-									<h3 class="product-name">{{ $product->ten_san_pham }}</h3>
-									@php $avgRating = round($product->avg_rating ?? 0, 1); @endphp
-									<div class="flex items-center gap-1">
-										@for($i = 1; $i <= 5; $i++)
-											<svg class="w-4 h-4 {{ $i <= round($avgRating) ? 'text-yellow-500' : 'text-gray-300' }}" fill="currentColor" viewBox="0 0 20 20">
-												<path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+						<div class="t5-grid">
+							@foreach($group['products'] as $product)
+								<article class="t5-card cursor-pointer" onclick="window.location='{{ route('menu.show', $product->id) }}'">
+									<div class="t5-thumb">
+										<img src="{{ $product->image_url }}" alt="{{ $product->ten_san_pham }}" class="card-img">
+										<span class="t5-rank {{ $loop->first ? 'top1' : '' }}">#{{ $loop->iteration }}</span>
+										<button class="heart-btn t5-fav" aria-label="Yêu thích" data-wishlist-id="{{ $product->id }}" onclick="event.stopPropagation();">
+											<svg class="w-6 h-6 text-[#F1F0EE]" fill="{{ auth()->check() && $product->nguoiDungYeuThich()->where('nguoi_dung_id', auth()->id())->exists() ? '#c94040' : 'none' }}" viewBox="0 0 24 24" stroke="{{ auth()->check() && $product->nguoiDungYeuThich()->where('nguoi_dung_id', auth()->id())->exists() ? '#c94040' : 'currentColor' }}" stroke-width="2">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
 											</svg>
-										@endfor
-										<span class="text-xs text-[#30261C]/60 ml-1 font-outfit">{{ $avgRating > 0 ? number_format($avgRating, 1) : '' }}</span>
+										</button>
 									</div>
-								</div>
-								<div class="flex items-center justify-between mt-auto pt-2">
-									<span
-										class="product-price">{{ number_format($product->gia_khuyen_mai ?? $product->gia_goc, 0, ',', '.') }}đ</span>
-									<button class="product-btn home-add-btn" data-product-id="{{ $product->id }}"
-										data-product-name="{{ $product->ten_san_pham }}"
-										data-product-img="{{ $product->image_url }}" data-add-url="{{ route('cart.add') }}"									data-sizes="{{ json_encode($product->kichCo->map(fn($kc) => ['id' => $kc->id, 'name' => $kc->ten_kich_co, 'code' => $kc->ma_kich_co ?? '', 'price' => (float)(($product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc) * ($kc->he_so_gia ?? 1))])->values()) }}"
-										data-nhiet-do="{{ $product->nhiet_do ?? '' }}"
-										onclick="event.stopPropagation();">Thêm
-										món</button>
-								</div>
-							</div>
-						@endforeach
-					@else
-						<div class="col-span-full w-full text-center text-sm text-[#30261C]/70 py-10">Chưa có sản phẩm bán chạy.</div>
-					@endif
-				</div>
-
-				<!-- Right Arrow -->
-				<button id="sellers-right-arrow" aria-label="Tiếp theo" class="arrow-btn hidden lg:flex"
-					style="right: -36px;" onclick="slideCarousel('sellers', 1)">
-					<svg class="w-6 h-6 text-[#30261C]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
-					</svg>
-				</button>
-			</div>
-		</section>
+									<div class="t5-body">
+										<div class="t5-name">{{ $product->ten_san_pham }}</div>
+										<div class="t5-stars">
+											@php $avgRating = round($product->avg_rating ?? 0, 1); @endphp
+											@for($i = 1; $i <= 5; $i++)
+												{{ $i <= round($avgRating) ? '★' : '☆' }}
+											@endfor
+											<span>{{ $avgRating > 0 ? number_format($avgRating, 1) : '0.0' }}</span>
+										</div>
+										<div class="t5-foot">
+											<span class="t5-price">{{ number_format($product->gia_khuyen_mai ?? $product->gia_goc, 0, ',', '.') }}đ</span>
+											<button class="t5-add home-add-btn" data-product-id="{{ $product->id }}"
+												data-product-name="{{ $product->ten_san_pham }}"
+												data-product-img="{{ $product->image_url }}" data-add-url="{{ route('cart.add') }}" data-sizes="{{ json_encode($product->kichCo->map(fn($kc) => ['id' => $kc->id, 'name' => $kc->ten_kich_co, 'code' => $kc->ma_kich_co ?? '', 'price' => (float)(($product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc) * ($kc->he_so_gia ?? 1))])->values()) }}"
+												data-nhiet-do="{{ $product->nhiet_do ?? '' }}"
+												onclick="event.stopPropagation();">Thêm</button>
+										</div>
+									</div>
+								</article>
+							@endforeach
+						</div>
+					</div>
+				</section>
+				@if(!$loop->last)
+					<div class="t5-divider"></div>
+				@endif
+			@endforeach
+		@endif
 
 		<!-- ============ DISCOVER BANNER ============ -->
 		<section id="discover-banner" class="bg-[#E2D9C8] mb-20 overflow-hidden">
@@ -419,6 +396,45 @@ html { scroll-behavior: smooth; }
 	.t-card.is-active { transform: scale(1); margin: 0; }
 	.t-card { width: min(380px, 88vw); padding: 20px; }
 }
+
+.t5-section{ padding:16px 20px 48px; }
+.t5-inner{ max-width:1200px; margin:0 auto; }
+
+.t5-head{ text-align:center; margin-bottom:32px; }
+.t5-eyebrow{ display:inline-flex; align-items:center; gap:6px; background:#F6E1D4; color:#9A3D18;
+  font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  padding:6px 14px; border-radius:999px; }
+.t5-title{ margin:14px 0 0; font-size:38px; font-weight:800; color:#2B2622; line-height:1.1; letter-spacing:-.01em; }
+.t5-cat{ position:relative; color:#C05A28; white-space:nowrap; }
+.t5-cat::after{ content:""; position:absolute; left:0; right:0; bottom:-6px; height:6px;
+  background:#E39A6B; border-radius:999px; }
+
+/* Hàng sản phẩm: căn giữa, tự dàn theo số lượng */
+.t5-grid{ display:flex; flex-wrap:wrap; justify-content:center; gap:16px; }
+.t5-card{ width:210px; background:#fff; border:1px solid #EBE3D7; border-radius:14px;
+  overflow:hidden; display:flex; flex-direction:column; transition:transform .15s, box-shadow .15s; }
+.t5-card:hover{ transform:translateY(-3px); box-shadow:0 8px 20px rgba(80,50,20,.10); }
+
+.t5-thumb{ position:relative; aspect-ratio:1/1; background:#E7DECF; width:100%; }
+.t5-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+.t5-rank{ position:absolute; top:8px; left:8px; background:#9A907F; color:#fff;
+  font-size:11px; font-weight:700; padding:2px 9px; border-radius:999px; z-index:2; }
+.t5-rank.top1{ background:#C05A28; }
+.t5-fav{ position:absolute; top:8px; right:8px; cursor:pointer; background:none; border:none; padding:0; display:flex; align-items:center; justify-content:center; z-index:2; }
+
+.t5-body{ padding:12px 12px 14px; display:flex; flex-direction:column; flex:1; }
+.t5-name{ font-size:15px; font-weight:600; color:#2B2622; line-height:1.3; margin-bottom:4px; }
+.t5-stars{ font-size:12px; color:#E0A030; margin:auto 0 8px 0; }
+.t5-stars span{ color:#9A907F; margin-left:2px; }
+.t5-foot{ display:flex; align-items:center; justify-content:space-between; margin-top:auto; }
+.t5-price{ font-size:15px; font-weight:700; color:#C05A28; }
+.t5-add{ background:#C05A28; color:#fff; border:none; font-size:12px; font-weight:600;
+  padding:6px 12px; border-radius:8px; cursor:pointer; transition:background 0.2s; }
+.t5-add:hover{ background:#A84A1E; }
+
+.t5-divider{ max-width:1200px; margin:0 auto; height:1px; background:#E3DACB; }
+
+@media (max-width:560px){ .t5-title{ font-size:26px; } .t5-card{ width:160px; } }
 </style>
 @endpush
 
@@ -533,7 +549,7 @@ html { scroll-behavior: smooth; }
 				var productName = this.dataset.productName;
 				var imgSrc      = this.dataset.productImg;
 				var addUrl      = this.dataset.addUrl;
-				var imgEl       = this.closest('.product-card')?.querySelector('.card-img') || null;
+				var imgEl       = this.closest('.product-card, .t5-card')?.querySelector('.card-img') || null;
 
 				var sizes = [];
 				try { sizes = JSON.parse(this.dataset.sizes || '[]'); } catch (e) {}

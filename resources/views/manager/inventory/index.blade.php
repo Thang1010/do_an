@@ -76,7 +76,7 @@
                 <option value="ok" {{ request('trang_thai') === 'ok' ? 'selected' : '' }}>Đủ hàng</option>
             </select>
             <button type="submit" class="btn btn-secondary">Lọc</button>
-            <a href="{{ route('manager.inventory.index', array_filter(['tab' => 'stock', 'muc_dich_su_dung' => $currentPurposeValue])) }}" class="btn btn-secondary">Đặt lại</a>
+            <a href="{{ route('manager.inventory.index', array_filter(['tab' => 'stock', 'muc_dich_su_dung' => $currentPurposeValue])) }}" class="btn btn-secondary">Xóa lọc</a>
             <a href="{{ route('manager.inventory.stock.excel', array_filter(array_merge(
                 request()->except(['page', 'import_page', 'export_page']),
                 ['muc_dich_su_dung' => $currentPurposeValue]

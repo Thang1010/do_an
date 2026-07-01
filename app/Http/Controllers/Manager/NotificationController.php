@@ -65,8 +65,13 @@ class NotificationController extends Controller
     public function poll(Request $request)
     {
         $user = $request->user();
+        $showAll = $request->has('all');
 
-        $recentNotifications = $user->notifications()->latest()->limit(8)->get();
+        $query = $user->notifications()->latest();
+        if (!$showAll) {
+            $query->limit(8);
+        }
+        $recentNotifications = $query->get();
         $count = $user->unreadNotifications()->count();
 
         $html = view('partials.notification-items', [

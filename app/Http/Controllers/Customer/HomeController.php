@@ -70,6 +70,18 @@ class HomeController extends Controller
 
         $bestSellers = $this->bestSellers([], $from, 10);
 
+        // Lấy top 5 sản phẩm bán chạy nhất trong tuần cho mỗi danh mục
+        $bestSellersByCategory = [];
+        foreach ($categories as $category) {
+            $products = $this->bestSellers([$category->id], $from, 5);
+            if ($products->isNotEmpty()) {
+                $bestSellersByCategory[] = [
+                    'category' => $category,
+                    'products' => $products
+                ];
+            }
+        }
+
         // Sản phẩm NỔI BẬT (do quán đánh dấu) để hiển thị mục riêng ở trang chủ.
         $featuredProducts = SanPham::whereIn('trang_thai_ban', ['dang_ban', 'đang bán'])
             ->where('noi_bat', true)
@@ -115,6 +127,7 @@ class HomeController extends Controller
             'categoryImages',
             'categorySlugs',
             'bestSellers',
+            'bestSellersByCategory',
             'featuredProducts',
             'testimonials'
         ));

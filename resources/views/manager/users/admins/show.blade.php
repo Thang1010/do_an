@@ -11,11 +11,11 @@
 	</div>
 	<div class="page-actions">
 		@if($user->vai_tro === 'khách hàng')
-			<a href="{{ route('manager.users.customers') }}" class="btn btn-secondary">Quay lại danh sách khách hàng</a>
+			<a href="{{ route('manager.users.customers') }}" class="btn btn-secondary">Quay lại</a>
 		@elseif($user->vai_tro === 'nhân viên')
-			<a href="{{ route('manager.users.staffs') }}" class="btn btn-secondary">Quay lại danh sách nhân viên</a>
+			<a href="{{ route('manager.users.staffs') }}" class="btn btn-secondary">Quay lại</a>
 		@else
-			<a href="{{ route('manager.users.admins') }}" class="btn btn-secondary">Quay lại danh sách quản lý</a>
+			<a href="{{ route('manager.users.admins') }}" class="btn btn-secondary">Quay lại</a>
 		@endif
 	</div>
 </div>

@@ -36,7 +36,10 @@ class UserController extends Controller
         if ($request->filled('search')) {
             $s = $request->search;
             $query->where(function ($q) use ($s) {
-                $q->where('email', 'like', "%$s%");
+                $q->where('email', 'like', "%$s%")
+                  ->orWhereHas('hoSoKhachHang', function ($qProfile) use ($s) {
+                      $qProfile->where('ho_ten', 'like', "%$s%");
+                  });
             });
         }
 
@@ -65,7 +68,11 @@ class UserController extends Controller
         if ($request->filled('search')) {
             $s = $request->search;
             $query->where(function ($q) use ($s) {
-                $q->where('email', 'like', "%$s%");
+                $q->where('email', 'like', "%$s%")
+                  ->orWhereHas('hoSoNhanVien', function ($qProfile) use ($s) {
+                      $qProfile->where('ho_ten', 'like', "%$s%")
+                               ->orWhere('so_dien_thoai', 'like', "%$s%");
+                  });
             });
         }
 
@@ -105,7 +112,11 @@ class UserController extends Controller
         if ($request->filled('search')) {
             $s = $request->search;
             $query->where(function ($q) use ($s) {
-                $q->where('email', 'like', "%$s%");
+                $q->where('email', 'like', "%$s%")
+                  ->orWhereHas('hoSoQuanLy', function ($qProfile) use ($s) {
+                      $qProfile->where('ho_ten', 'like', "%$s%")
+                               ->orWhere('so_dien_thoai', 'like', "%$s%");
+                  });
             });
         }
 

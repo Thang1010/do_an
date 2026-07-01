@@ -583,7 +583,17 @@ tbody tr:last-child td { border-bottom: none; }
 .form-control::placeholder { color: var(--text-muted); }
 .form-control:focus { border-color: var(--accent-dark); }
 .form-control.is-invalid { border-color: #EF4444; }
-select.form-control { cursor: pointer; }
+select.form-control {
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237a6555' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 16px;
+    padding-right: 40px;
+}
 textarea.form-control { resize: vertical; min-height: 100px; }
 .form-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 .form-error { font-size: 12px; color: var(--danger); margin-top: 4px; }
@@ -718,6 +728,12 @@ textarea.form-control { resize: vertical; min-height: 100px; }
 .modal-box .form-control::placeholder { color: rgba(241,240,238,0.45); }
 .modal-box .form-control:focus { border-color: #c49a6c; }
 .modal-box select.form-control option { background: #1f1710; color: #f1f0ee; }
+.modal-box select.form-control {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23f1f0ee' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 16px;
+}
 .modal-box .form-hint,
 .modal-box .text-muted,
 .modal-box small { color: rgba(241,240,238,0.55) !important; }

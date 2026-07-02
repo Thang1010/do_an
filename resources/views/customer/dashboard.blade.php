@@ -24,7 +24,7 @@
 	{{-- Cờ trạng thái cho JS đọc qua data-* (tránh nhúng Blade trong <script>). --}}
 	<span id="dashboard-flags" data-authenticated="{{ \Illuminate\Support\Facades\Auth::check() ? '1' : '0' }}" hidden></span>
 	<script>document.documentElement.classList.add('reveal-on');</script>
-	<main class="py-16">
+	<main class="pt-24 pb-16">
 
 		<!-- ============ FEATURED PRODUCTS ============ -->
 		@if(isset($featuredProducts) && $featuredProducts->count() > 0)
@@ -51,6 +51,11 @@
 							</div>
 							<div class="flex flex-col gap-1">
 								<h3 class="product-name">{{ $product->ten_san_pham }}</h3>
+								@if($product->mo_ta)
+									<p class="text-xs text-[#30261C]/70 font-outfit line-clamp-2" style="margin-top: 1px; margin-bottom: 2px;">
+										{{ $product->mo_ta }}
+									</p>
+								@endif
 								@php $avgRating = round($product->avg_rating ?? 0, 1); @endphp
 								<div class="flex items-center gap-1">
 									@for($i = 1; $i <= 5; $i++)
@@ -85,6 +90,11 @@
 						<div class="t5-head">
 							<span class="t5-eyebrow">🔥 Bán chạy nhất tuần này</span>
 							<h2 class="t5-title">Top 5 <span class="t5-cat">{{ $group['category']->ten_danh_muc }}</span></h2>
+							@if($group['category']->mo_ta)
+								<p class="t5-desc" style="font-family: 'Outfit', sans-serif; font-size: 20px; color: #503214; margin-top: 12px; max-width: 600px; margin-left: auto; margin-right: auto; line-height: 1.5; opacity: 0.85;">
+									{{ $group['category']->mo_ta }}
+								</p>
+							@endif
 						</div>
 
 						<div class="t5-grid">
@@ -101,6 +111,11 @@
 									</div>
 									<div class="t5-body">
 										<div class="t5-name">{{ $product->ten_san_pham }}</div>
+										@if($product->mo_ta)
+											<p class="text-xs text-[#30261C]/70 font-outfit line-clamp-2" style="margin-top: 1px; margin-bottom: 2px;">
+												{{ $product->mo_ta }}
+											</p>
+										@endif
 										<div class="t5-stars">
 											@php $avgRating = round($product->avg_rating ?? 0, 1); @endphp
 											@for($i = 1; $i <= 5; $i++)
@@ -402,9 +417,9 @@ html { scroll-behavior: smooth; }
 
 .t5-head{ text-align:center; margin-bottom:32px; }
 .t5-eyebrow{ display:inline-flex; align-items:center; gap:6px; background:#F6E1D4; color:#9A3D18;
-  font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
-  padding:6px 14px; border-radius:999px; }
-.t5-title{ margin:14px 0 0; font-size:38px; font-weight:800; color:#2B2622; line-height:1.1; letter-spacing:-.01em; }
+  font-size:15px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  padding:8px 18px; border-radius:999px; }
+.t5-title{ margin:14px 0 0; font-size:48px; font-weight:800; color:#2B2622; line-height:1.1; letter-spacing:-.01em; }
 .t5-cat{ position:relative; color:#C05A28; white-space:nowrap; }
 .t5-cat::after{ content:""; position:absolute; left:0; right:0; bottom:-6px; height:6px;
   background:#E39A6B; border-radius:999px; }
@@ -434,7 +449,7 @@ html { scroll-behavior: smooth; }
 
 .t5-divider{ max-width:1200px; margin:0 auto; height:1px; background:#E3DACB; }
 
-@media (max-width:560px){ .t5-title{ font-size:26px; } .t5-card{ width:160px; } }
+@media (max-width:560px){ .t5-title{ font-size:32px; } .t5-card{ width:160px; } }
 </style>
 @endpush
 

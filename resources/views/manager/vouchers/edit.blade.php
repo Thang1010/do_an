@@ -17,7 +17,7 @@
 		<p class="page-subtitle">Cập nhật thông tin mã giảm giá</p>
 	</div>
 	<div class="page-actions">
-		<a href="{{ route('manager.vouchers.index') }}" class="btn btn-secondary">Quay lại danh sách</a>
+		<a href="{{ route('manager.vouchers.index') }}" class="btn btn-secondary">Quay lại</a>
 	</div>
 </div>
 

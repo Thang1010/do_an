@@ -689,11 +689,55 @@
                 });
         }
 
+        // ── Chuông báo thông báo mới (WebAudio — không cần file âm thanh) ──
+        var __notifAudioCtx = null;
+        function __initNotifAudio() {
+            if (!__notifAudioCtx) {
+                try { __notifAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+                catch (e) { __notifAudioCtx = null; }
+            }
+            if (__notifAudioCtx && __notifAudioCtx.state === 'suspended') __notifAudioCtx.resume();
+        }
+        // Trình duyệt chặn phát âm thanh cho tới khi người dùng tương tác với trang lần đầu.
+        document.addEventListener('click', __initNotifAudio, { once: true });
+        document.addEventListener('keydown', __initNotifAudio, { once: true });
+
+        function playNotifBell() {
+            if (!__notifAudioCtx) return;
+            var ctx = __notifAudioCtx;
+            var now = ctx.currentTime;
+            // Chuỗi chuông TO & DÀI hơn: lặp "ting-ting" 3 lần trong ~1.8 giây.
+            var notes = [
+                [0.00, 880], [0.20, 1174.66],
+                [0.60, 880], [0.80, 1174.66],
+                [1.20, 880], [1.40, 1174.66]
+            ];
+            notes.forEach(function (pair) {
+                var t = now + pair[0];
+                var osc = ctx.createOscillator();
+                var gain = ctx.createGain();
+                osc.type = 'triangle'; // đầy tiếng hơn sine → nghe to/rõ hơn
+                osc.frequency.value = pair[1];
+                gain.gain.setValueAtTime(0.0001, t);
+                gain.gain.exponentialRampToValueAtTime(0.8, t + 0.02); // to hơn (0.35 → 0.8)
+                gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.40);
+                osc.connect(gain).connect(ctx.destination);
+                osc.start(t);
+                osc.stop(t + 0.44);
+            });
+        }
+
         // ── Polling thông báo: tự cập nhật badge + danh sách, không cần F5 ──
         (function () {
             var POLL_URL = '{{ route('staff.notifications.poll') }}';
-            var INTERVAL = 20000; // 20 giây
+            var INTERVAL = 10000; // 10 giây
             var inFlight = false;
+            // Giá trị lúc tải trang — chuông kêu khi BẤT KỲ tín hiệu nào TĂNG:
+            // thông báo mới, bàn rung mới (khách gọi tại bàn/dùng ngay), hoặc đơn mang về mới.
+            var lastCount = {{ (int) $unreadNotificationCount }};
+            var lastBanRung = {{ (int) ($banRungCount ?? 0) }};
+            var lastTakeaway = {{ (int) ($takeawayQueueCount ?? 0) }};
+            var lastActivity = null; // đơn/món mới do quản lý/nhân viên khác tạo (lấy mốc ở lần poll đầu)
 
             function updateBadge(count) {
                 var btn = document.getElementById('notif-btn');
@@ -746,9 +790,26 @@
                     .then(function (r) { return r.ok ? r.json() : null; })
                     .then(function (data) {
                         if (!data) return;
-                        updateBadge(data.count || 0);
-                        updateTakeawayBadge(data.takeawayCount || 0);
-                        updateBanRungBadge(data.banRungCount || 0);
+                        var count = data.count || 0;
+                        var banRung = data.banRungCount || 0;
+                        var takeaway = data.takeawayCount || 0;
+                        var activity = data.activityCount || 0;
+                        // Kêu chuông khi có đơn/việc MỚI ở BẤT KỲ hình thức nào:
+                        // - bàn rung tăng (khách gọi tại bàn / dùng ngay / đặt bàn)
+                        // - đơn mang về tăng
+                        // - QUẢN LÝ hoặc nhân viên khác vừa tạo/bổ sung đơn (activity tăng)
+                        // - thông báo mới bất kỳ
+                        if (count > lastCount || banRung > lastBanRung || takeaway > lastTakeaway
+                            || (lastActivity !== null && activity > lastActivity)) {
+                            playNotifBell();
+                        }
+                        lastCount = count;
+                        lastBanRung = banRung;
+                        lastTakeaway = takeaway;
+                        lastActivity = activity;
+                        updateBadge(count);
+                        updateTakeawayBadge(takeaway);
+                        updateBanRungBadge(banRung);
                         var list = document.querySelector('#notif-dropdown .notification-dropdown-list');
                         if (list && typeof data.html === 'string') list.innerHTML = data.html;
                     })

@@ -15,7 +15,7 @@
         <p class="page-subtitle">Cập nhật thông tin chức vụ</p>
     </div>
     <div class="page-actions">
-        <a href="{{ route('manager.positions.index') }}" class="btn btn-secondary">Quay lại danh sách</a>
+        <a href="{{ route('manager.positions.index') }}" class="btn btn-secondary">Quay lại</a>
     </div>
 </div>
 

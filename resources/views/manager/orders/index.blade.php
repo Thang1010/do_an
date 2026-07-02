@@ -72,8 +72,9 @@
                         <div class="form-group">
                             <label class="form-label">Loại đơn</label>
                             <select name="loai_don" id="create-order-type" class="form-control" required>
-                                <option value="sử dụng ngay" {{ old('loai_don') === 'sử dụng ngay' ? 'selected' : '' }}>Sử dụng ngay</option>
-                                <option value="đặt hàng trước" {{ old('loai_don') === 'đặt hàng trước' ? 'selected' : '' }}>Đặt hàng trước</option>
+                                <option value="sử dụng ngay" {{ old('loai_don') === 'sử dụng ngay' ? 'selected' : '' }}>Sử dụng ngay (tại quán)</option>
+                                <option value="đặt hàng trước" {{ old('loai_don') === 'đặt hàng trước' ? 'selected' : '' }}>Đặt trước (ngồi tại quán, hẹn giờ)</option>
+                                <option value="mang về" {{ old('loai_don') === 'mang về' ? 'selected' : '' }}>Mang về</option>
                             </select>
                         </div>
 
@@ -94,13 +95,16 @@
                             <select name="ban_an_id" id="create-order-table" class="form-control" required>
                                 <option value="">Chọn bàn</option>
                                 @foreach($banAns ?? [] as $table)
-                                    @if($table->trang_thai === 'trống')
-                                        <option value="{{ $table->id }}" {{ (string) old('ban_an_id') === (string) $table->id ? 'selected' : '' }}>
-                                            Bàn {{ $table->so_ban }}
+                                    @if($table->trang_thai !== 'ngưng sử dụng')
+                                        <option value="{{ $table->id }}"
+                                            data-trang-thai="{{ $table->trang_thai }}"
+                                            {{ (string) old('ban_an_id') === (string) $table->id ? 'selected' : '' }}>
+                                            Bàn {{ $table->so_ban }}@if($table->trang_thai !== 'trống') — {{ $table->trang_thai }}@endif
                                         </option>
                                     @endif
                                 @endforeach
                             </select>
+                            <small class="text-muted" id="create-order-table-hint" style="display:none;">Đặt trước chỉ chọn được bàn đang trống.</small>
                         </div>
 
                         <div class="form-group">
@@ -115,16 +119,14 @@
 
                     </div>
 
-                    <div class="form-group" id="create-order-address-group" style="display: none;">
-                        <label class="form-label">Địa chỉ giao hàng (đơn online)</label>
-                        <textarea name="ghi_chu_them" class="form-control"
-                            rows="2"></textarea>
+                    <div class="form-group" id="create-order-time-group" style="display: none;">
+                        <label class="form-label">Hẹn giờ đến <span>*</span></label>
+                        <input type="time" name="thoi_gian_den" id="create-order-time" class="form-control"
+                            value="{{ old('thoi_gian_den') }}">
+                        <small class="text-muted">Khách đặt trước và ngồi dùng tại quán theo giờ hẹn (trong ngày).</small>
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label">Ghi chú đơn</label>
-                        <textarea name="ghi_chu" class="form-control" rows="2">{{ old('ghi_chu') }}</textarea>
-                    </div>
+
 
                     <div style="display: flex; align-items: center; justify-content: space-between; margin: 16px 0 8px;">
                         <label class="form-label" style="margin: 0;">Danh sách món <span>*</span></label>
@@ -136,8 +138,11 @@
                             <div
                                 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <strong class="order-item-label">Món 1</strong>
-                                <button type="button" class="btn btn-danger btn-sm btn-remove-order-item"
-                                    style="display: none;">Xóa món</button>
+                                <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
+                                    <span class="item-price-display price-text text-primary" style="font-size: 15px; font-weight: 700;">0đ</span>
+                                    <button type="button" class="btn btn-danger btn-sm btn-remove-order-item"
+                                        style="display: none;">Xóa món</button>
+                                </div>
                             </div>
 
                             <div class="form-group" style="margin: 0 0 10px;">
@@ -197,6 +202,10 @@
                             </div>
                         </div>
                     </div>
+                    <div style="margin-top: 20px; border: 1px solid rgba(240, 221, 184, 0.12); border-radius: 10px; background: rgba(255, 255, 255, 0.03); display: flex; justify-content: flex-end; align-items: center; gap: 16px; padding: 14px 20px;">
+                        <span style="font-size: 14px; font-weight: 600; color: #a89f91;">Tổng cộng giá trị đơn:</span>
+                        <span id="order-grand-total" style="font-size: 20px; font-weight: 700; color: #f0ddb8;">0đ</span>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -253,17 +262,36 @@
         function updateOrderTypeFields() {
             const typeSelect = document.getElementById('create-order-type');
             const tableSelect = document.getElementById('create-order-table');
-            const addressGroup = document.getElementById('create-order-address-group');
-            const isOnline = typeSelect && typeSelect.value === 'đặt hàng trước';
+            const tableGroup = document.getElementById('create-order-table-group');
+            const tableHint = document.getElementById('create-order-table-hint');
+            const timeGroup = document.getElementById('create-order-time-group');
+            const timeInput = document.getElementById('create-order-time');
+            if (!typeSelect || !tableSelect) return;
 
-            if (!tableSelect || !addressGroup) return;
+            const type = typeSelect.value;
+            const isTakeaway = type === 'mang về';
+            const isBooking = type === 'đặt hàng trước';
 
-            tableSelect.required = !isOnline;
-            if (isOnline) {
-                addressGroup.style.display = 'block';
-            } else {
-                addressGroup.style.display = 'none';
+            // Bàn: cần cho "sử dụng ngay" và "đặt trước"; ẩn với "mang về".
+            if (tableGroup) tableGroup.style.display = isTakeaway ? 'none' : 'block';
+            tableSelect.required = !isTakeaway;
+
+            // "Đặt trước" chỉ được chọn bàn TRỐNG → lọc option; các loại khác hiện mọi bàn dùng được.
+            Array.from(tableSelect.options).forEach(function (opt) {
+                if (!opt.value) return;
+                var st = opt.getAttribute('data-trang-thai');
+                var hide = isBooking && st && st !== 'trống';
+                opt.hidden = hide;
+                opt.disabled = hide;
+            });
+            if (isBooking && tableSelect.selectedOptions[0] && tableSelect.selectedOptions[0].disabled) {
+                tableSelect.value = '';
             }
+            if (tableHint) tableHint.style.display = isBooking ? 'block' : 'none';
+
+            // Hẹn giờ đến: chỉ cho "đặt trước".
+            if (timeGroup) timeGroup.style.display = isBooking ? 'block' : 'none';
+            if (timeInput) timeInput.required = isBooking;
         }
 
         function syncOrderItemNames() {
@@ -300,6 +328,83 @@
             }
         }
 
+        function updateRowPrice(row) {
+            const productSelect = row.querySelector('.js-product-select');
+            const sizeSelect = row.querySelector('.js-size-select');
+            const qtyInput = row.querySelector('[data-field="so_luong"]');
+            const priceDisplay = row.querySelector('.item-price-display');
+
+            if (!productSelect || !priceDisplay) return;
+
+            const productId = productSelect.value;
+            if (!productId) {
+                priceDisplay.textContent = '0đ';
+                return;
+            }
+
+            const productInfo = orderProductMap[String(productId)] || orderProductMap[productId];
+            if (!productInfo) {
+                priceDisplay.textContent = '0đ';
+                return;
+            }
+
+            let unitPrice = parseFloat(productInfo.base_price || 0);
+            const sizeId = sizeSelect ? sizeSelect.value : '';
+            if (sizeId && Array.isArray(productInfo.sizes)) {
+                const sizeItem = productInfo.sizes.find(s => String(s.id) === String(sizeId));
+                if (sizeItem && sizeItem.price !== undefined) {
+                    unitPrice = parseFloat(sizeItem.price);
+                }
+            }
+
+            const qty = parseInt(qtyInput ? qtyInput.value : 1) || 1;
+            const total = unitPrice * qty;
+
+            const formatCurrency = (val) => new Intl.NumberFormat('vi-VN').format(val) + 'đ';
+
+            if (qty > 1) {
+                priceDisplay.textContent = `${formatCurrency(unitPrice)} x ${qty} = ${formatCurrency(total)}`;
+            } else {
+                priceDisplay.textContent = formatCurrency(unitPrice);
+            }
+        }
+
+        function updateGrandTotal() {
+            const rows = document.querySelectorAll('.order-item-row');
+            let grandTotal = 0;
+
+            rows.forEach(row => {
+                const productSelect = row.querySelector('.js-product-select');
+                const sizeSelect = row.querySelector('.js-size-select');
+                const qtyInput = row.querySelector('[data-field="so_luong"]');
+
+                if (!productSelect) return;
+
+                const productId = productSelect.value;
+                if (!productId) return;
+
+                const productInfo = orderProductMap[String(productId)] || orderProductMap[productId];
+                if (!productInfo) return;
+
+                let unitPrice = parseFloat(productInfo.base_price || 0);
+                const sizeId = sizeSelect ? sizeSelect.value : '';
+                if (sizeId && Array.isArray(productInfo.sizes)) {
+                    const sizeItem = productInfo.sizes.find(s => String(s.id) === String(sizeId));
+                    if (sizeItem && sizeItem.price !== undefined) {
+                        unitPrice = parseFloat(sizeItem.price);
+                    }
+                }
+
+                const qty = parseInt(qtyInput ? qtyInput.value : 1) || 1;
+                grandTotal += unitPrice * qty;
+            });
+
+            const totalEl = document.getElementById('order-grand-total');
+            if (totalEl) {
+                totalEl.textContent = new Intl.NumberFormat('vi-VN').format(grandTotal) + 'đ';
+            }
+        }
+
         function createOrderItemRow() {
             const container = document.getElementById('order-items-container');
             const firstRow = container.querySelector('.order-item-row');
@@ -324,6 +429,11 @@
                 sizeSelect.innerHTML = '<option value="">Không chọn kích cỡ</option>';
             }
 
+            const priceDisplay = newRow.querySelector('.item-price-display');
+            if (priceDisplay) {
+                priceDisplay.textContent = '0đ';
+            }
+
             container.appendChild(newRow);
             syncOrderItemNames();
         }
@@ -337,12 +447,35 @@
                 const row = event.target.closest('.order-item-row');
                 const sizeSelect = row ? row.querySelector('.js-size-select') : null;
                 buildSizeOptions(sizeSelect, event.target.value);
+                if (row) {
+                    updateRowPrice(row);
+                    updateGrandTotal();
+                }
+            }
+
+            if (event.target && event.target.matches('.js-size-select')) {
+                const row = event.target.closest('.order-item-row');
+                if (row) {
+                    updateRowPrice(row);
+                    updateGrandTotal();
+                }
+            }
+        });
+
+        document.addEventListener('input', function (event) {
+            if (event.target && event.target.matches('[data-field="so_luong"]')) {
+                const row = event.target.closest('.order-item-row');
+                if (row) {
+                    updateRowPrice(row);
+                    updateGrandTotal();
+                }
             }
         });
 
         document.addEventListener('click', function (event) {
             if (event.target && event.target.id === 'add-order-item') {
                 createOrderItemRow();
+                updateGrandTotal();
             }
 
             if (event.target && event.target.matches('.btn-remove-order-item')) {
@@ -351,6 +484,7 @@
                 if (!row || !container) return;
                 row.remove();
                 syncOrderItemNames();
+                updateGrandTotal();
             }
         });
 
@@ -362,7 +496,11 @@
                 const row = select.closest('.order-item-row');
                 const sizeSelect = row ? row.querySelector('.js-size-select') : null;
                 buildSizeOptions(sizeSelect, select.value);
+                if (row) {
+                    updateRowPrice(row);
+                }
             });
+            updateGrandTotal();
 
             if (shouldOpenCreateOrderModal) {
                 openModal('create-order-modal');

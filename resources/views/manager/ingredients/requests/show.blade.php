@@ -23,7 +23,7 @@
         <p class="page-subtitle">Xem danh sách nguyên liệu đã gửi và trạng thái xử lý</p>
     </div>
     <div class="page-actions">
-        <a href="{{ route('manager.ingredients.requests.index') }}" class="btn btn-secondary">Quay lại danh sách yêu cầu</a>
+        <a href="{{ route('manager.ingredients.requests.index') }}" class="btn btn-secondary">Quay lại</a>
     </div>
 </div>
 

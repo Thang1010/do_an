@@ -677,17 +677,38 @@
 				}
 			});
 
-			window.updateCartBadge = function (count) {
+			// Cập nhật badge trên DOM (không ghi localStorage — tránh vòng lặp giữa các tab).
+			function paintCartBadge(count) {
 				document.querySelectorAll('.cart-count-badge').forEach(el => {
 					el.textContent = count;
 					el.style.display = count > 0 ? 'flex' : 'none';
 				});
+			}
+
+			window.updateCartBadge = function (count) {
+				paintCartBadge(count);
+				// Phát tín hiệu cho các tab khác đồng bộ ngay (realtime liên tab).
+				try { localStorage.setItem('xm_cart_count', String(count)); } catch (e) { }
 			};
 
-			fetch('/cart/count')
-				.then(r => r.json())
-				.then(d => window.updateCartBadge(d.cart_count || 0))
-				.catch(() => { });
+			// Tab khác vừa đổi giỏ hàng → cập nhật badge tại tab này ngay lập tức.
+			window.addEventListener('storage', function (e) {
+				if (e.key === 'xm_cart_count' && e.newValue !== null) {
+					paintCartBadge(parseInt(e.newValue, 10) || 0);
+				}
+			});
+
+			// Lấy số lượng giỏ ban đầu + poll định kỳ (bắt cả thay đổi từ server:
+			// vd món bị gỡ khỏi giỏ khi hết hàng, đơn thanh toán ở nơi khác...).
+			function refreshCartCount() {
+				if (document.hidden) return;
+				fetch('/cart/count')
+					.then(r => r.json())
+					.then(d => window.updateCartBadge(d.cart_count || 0))
+					.catch(() => { });
+			}
+			refreshCartCount();
+			setInterval(refreshCartCount, 15000);
 
 			const forceModal = document.getElementById('force-password-modal');
 			if (forceModal) {

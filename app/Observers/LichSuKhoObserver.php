@@ -41,8 +41,8 @@ class LichSuKhoObserver
         $previousStock = $currentStock + $delta;
         $soCupPrev = (int) floor($previousStock / $maxTieuHao);
         
-        $statusCurrent = $soCupCurrent <= 0 ? 'het' : ($soCupCurrent <= 3 ? 'sap_het' : 'ok');
-        $statusPrev = $soCupPrev <= 0 ? 'het' : ($soCupPrev <= 3 ? 'sap_het' : 'ok');
+        $statusCurrent = $soCupCurrent <= 0 ? 'het' : ($soCupCurrent <= 20 ? 'sap_het' : 'ok');
+        $statusPrev = $soCupPrev <= 0 ? 'het' : ($soCupPrev <= 20 ? 'sap_het' : 'ok');
         
         if ($statusCurrent !== $statusPrev && in_array($statusCurrent, ['het', 'sap_het'])) {
             $this->notifyManagers($ingredient, $currentStock, $statusCurrent);

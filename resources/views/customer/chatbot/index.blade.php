@@ -548,7 +548,16 @@
 					}
 
 					try {
-						const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+						// Bật DSP của trình duyệt (khử ồn/vọng + tự động chỉnh gain) → thu rõ hơn hẳn.
+						const stream = await navigator.mediaDevices.getUserMedia({
+							audio: {
+								channelCount: 1,
+								echoCancellation: true,
+								noiseSuppression: true,
+								autoGainControl: true,
+								sampleRate: 16000
+							}
+						});
 						mediaRecorder = new MediaRecorder(stream);
 						audioChunks = [];
 
@@ -556,10 +565,20 @@
 							audioChunks.push(event.data);
 						});
 
-						mediaRecorder.addEventListener('stop', () => {
-							const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-							sendVoiceToChat(audioBlob);
+						mediaRecorder.addEventListener('stop', async () => {
 							stream.getTracks().forEach(track => track.stop());
+							// MediaRecorder xuất WebM/Opus mà API nhận dạng (Whisper qua Hugging Face)
+							// KHÔNG giải mã được (soundfile chỉ đọc wav/flac/mp3) → nghe thành im lặng
+							// và trả về "you". Vì vậy chuyển sang WAV PCM 16kHz mono trước khi gửi.
+							try {
+								const rawBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+								const wavBlob = await blobToWav(rawBlob);
+								sendVoiceToChat(wavBlob);
+							} catch (e) {
+								input.value = '';
+								input.disabled = false;
+								appendMessage('Xin lỗi, không xử lý được âm thanh. Vui lòng thử lại.', 'bot');
+							}
 						});
 
 						mediaRecorder.start();
@@ -573,9 +592,79 @@
 				});
 			}
 
+			// Giải mã audio ghi được (WebM/Opus...) rồi encode lại thành WAV PCM 16-bit,
+			// 16kHz, mono — định dạng mà Whisper (Hugging Face) đọc ổn định.
+			async function blobToWav(blob) {
+				const arrayBuffer = await blob.arrayBuffer();
+				const AudioCtx = window.AudioContext || window.webkitAudioContext;
+				const audioCtx = new AudioCtx();
+				const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+				audioCtx.close();
+
+				const targetRate = 16000;
+				const numCh = decoded.numberOfChannels;
+				const len = decoded.length;
+
+				// Downmix về mono
+				const mono = new Float32Array(len);
+				for (let ch = 0; ch < numCh; ch++) {
+					const data = decoded.getChannelData(ch);
+					for (let i = 0; i < len; i++) mono[i] += data[i] / numCh;
+				}
+
+				// Resample tuyến tính về 16kHz
+				const ratio = decoded.sampleRate / targetRate;
+				const outLen = Math.max(1, Math.round(len / ratio));
+				const out = new Float32Array(outLen);
+				for (let i = 0; i < outLen; i++) {
+					const idx = i * ratio;
+					const i0 = Math.floor(idx);
+					const i1 = Math.min(i0 + 1, len - 1);
+					const frac = idx - i0;
+					out[i] = mono[i0] * (1 - frac) + mono[i1] * frac;
+				}
+
+				// Chuẩn hóa âm lượng (peak normalization): khuếch đại giọng thu nhỏ lên gần mức tối đa
+				// để Whisper nghe rõ, nhưng giới hạn hệ số khuếch đại để không thổi phồng tạp âm khi im lặng.
+				let peak = 0;
+				for (let i = 0; i < outLen; i++) {
+					const a = Math.abs(out[i]);
+					if (a > peak) peak = a;
+				}
+				if (peak > 0.001) {
+					const gain = Math.min(0.97 / peak, 8); // trần gain x8 tránh khuếch đại nhiễu
+					for (let i = 0; i < outLen; i++) out[i] *= gain;
+				}
+
+				// Encode WAV 16-bit PCM mono
+				const buffer = new ArrayBuffer(44 + outLen * 2);
+				const view = new DataView(buffer);
+				const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+				writeStr(0, 'RIFF');
+				view.setUint32(4, 36 + outLen * 2, true);
+				writeStr(8, 'WAVE');
+				writeStr(12, 'fmt ');
+				view.setUint32(16, 16, true);
+				view.setUint16(20, 1, true);           // PCM
+				view.setUint16(22, 1, true);           // mono
+				view.setUint32(24, targetRate, true);
+				view.setUint32(28, targetRate * 2, true); // byte rate = rate * blockAlign
+				view.setUint16(32, 2, true);           // block align = channels * bytesPerSample
+				view.setUint16(34, 16, true);          // bits per sample
+				writeStr(36, 'data');
+				view.setUint32(40, outLen * 2, true);
+				let off = 44;
+				for (let i = 0; i < outLen; i++) {
+					let s = Math.max(-1, Math.min(1, out[i]));
+					view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+					off += 2;
+				}
+				return new Blob([view], { type: 'audio/wav' });
+			}
+
 			function sendVoiceToChat(audioBlob) {
 				var formData = new FormData();
-				formData.append('audio', audioBlob, 'chat_audio.webm');
+				formData.append('audio', audioBlob, 'chat_audio.wav');
 
 				fetch('{{ route("cart.voice_order") }}', {
 					method: 'POST',

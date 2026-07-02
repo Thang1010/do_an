@@ -43,7 +43,7 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
         <p class="page-subtitle">Mã đơn: {{ $order->ma_don_hang }} • {{ optional($order->created_at)->format('d/m/Y H:i') ?? '—' }}</p>
     </div>
     <div class="page-actions">
-        <a href="{{ route('manager.orders.show', $order->id) }}" class="btn btn-secondary">Quay lại</a>
+        <a href="{{ route('manager.orders.index') }}" class="btn btn-secondary">Quay lại</a>
     </div>
 </div>
 
@@ -94,7 +94,10 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
                     <div class="order-item-row" style="border: 1px solid #eee; border-radius: 10px; padding: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <strong class="order-item-label">Món {{ $index + 1 }}</strong>
-                            <button type="button" class="btn btn-danger btn-sm btn-remove-order-item" style="display: none;">Xóa món</button>
+                            <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
+                                <span class="item-price-display price-text text-primary" style="font-size: 15px; font-weight: 700;">0đ</span>
+                                <button type="button" class="btn btn-danger btn-sm btn-remove-order-item" style="display: none;">Xóa món</button>
+                            </div>
                         </div>
 
                         <div class="form-group" style="margin: 0 0 10px;">
@@ -158,8 +161,13 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
         </div>
     </div>
 
+    <div style="margin-top: 20px; border: 1px solid rgba(240, 221, 184, 0.12); border-radius: 10px; background: rgba(255, 255, 255, 0.03); display: flex; justify-content: flex-end; align-items: center; gap: 16px; padding: 14px 20px;">
+        <span style="font-size: 15px; font-weight: 600; color: #a89f91;">Tổng cộng giá trị đơn:</span>
+        <span id="order-grand-total" style="font-size: 22px; font-weight: 700; color: #f0ddb8;">0đ</span>
+    </div>
+
     <div class="action-row" style="justify-content: flex-end; margin-top: 16px;">
-        <a href="{{ route('manager.orders.show', $order->id) }}" class="btn btn-secondary">Hủy</a>
+        <a href="{{ route('manager.orders.index') }}" class="btn btn-secondary">Hủy</a>
         <button type="submit" class="btn btn-primary">Lưu thay đổi</button>
     </div>
 </form>
@@ -289,6 +297,83 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
         }
     }
 
+    function updateRowPrice(row) {
+        const productSelect = row.querySelector('.js-product-select');
+        const sizeSelect = row.querySelector('.js-size-select');
+        const qtyInput = row.querySelector('[data-field="so_luong"]');
+        const priceDisplay = row.querySelector('.item-price-display');
+
+        if (!productSelect || !priceDisplay) return;
+
+        const productId = productSelect.value;
+        if (!productId) {
+            priceDisplay.textContent = '0đ';
+            return;
+        }
+
+        const productInfo = orderProductMap[String(productId)] || orderProductMap[productId];
+        if (!productInfo) {
+            priceDisplay.textContent = '0đ';
+            return;
+        }
+
+        let unitPrice = parseFloat(productInfo.base_price || 0);
+        const sizeId = sizeSelect ? sizeSelect.value : '';
+        if (sizeId && Array.isArray(productInfo.sizes)) {
+            const sizeItem = productInfo.sizes.find(s => String(s.id) === String(sizeId));
+            if (sizeItem && sizeItem.price !== undefined) {
+                unitPrice = parseFloat(sizeItem.price);
+            }
+        }
+
+        const qty = parseInt(qtyInput ? qtyInput.value : 1) || 1;
+        const total = unitPrice * qty;
+
+        const formatCurrency = (val) => new Intl.NumberFormat('vi-VN').format(val) + 'đ';
+
+        if (qty > 1) {
+            priceDisplay.textContent = `${formatCurrency(unitPrice)} x ${qty} = ${formatCurrency(total)}`;
+        } else {
+            priceDisplay.textContent = formatCurrency(unitPrice);
+        }
+    }
+
+    function updateGrandTotal() {
+        const rows = document.querySelectorAll('.order-item-row');
+        let grandTotal = 0;
+
+        rows.forEach(row => {
+            const productSelect = row.querySelector('.js-product-select');
+            const sizeSelect = row.querySelector('.js-size-select');
+            const qtyInput = row.querySelector('[data-field="so_luong"]');
+
+            if (!productSelect) return;
+
+            const productId = productSelect.value;
+            if (!productId) return;
+
+            const productInfo = orderProductMap[String(productId)] || orderProductMap[productId];
+            if (!productInfo) return;
+
+            let unitPrice = parseFloat(productInfo.base_price || 0);
+            const sizeId = sizeSelect ? sizeSelect.value : '';
+            if (sizeId && Array.isArray(productInfo.sizes)) {
+                const sizeItem = productInfo.sizes.find(s => String(s.id) === String(sizeId));
+                if (sizeItem && sizeItem.price !== undefined) {
+                    unitPrice = parseFloat(sizeItem.price);
+                }
+            }
+
+            const qty = parseInt(qtyInput ? qtyInput.value : 1) || 1;
+            grandTotal += unitPrice * qty;
+        });
+
+        const totalEl = document.getElementById('order-grand-total');
+        if (totalEl) {
+            totalEl.textContent = new Intl.NumberFormat('vi-VN').format(grandTotal) + 'đ';
+        }
+    }
+
     function createOrderItemRow() {
         const container = document.getElementById('edit-order-items-container');
         const firstRow = container.querySelector('.order-item-row');
@@ -314,6 +399,11 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
             sizeSelect.innerHTML = '<option value="">Không chọn kích cỡ</option>';
         }
 
+        const priceDisplay = newRow.querySelector('.item-price-display');
+        if (priceDisplay) {
+            priceDisplay.textContent = '0đ';
+        }
+
         container.appendChild(newRow);
         syncOrderItemNames();
     }
@@ -326,12 +416,35 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
                 sizeSelect.dataset.selected = '';
             }
             buildSizeOptions(sizeSelect, event.target.value);
+            if (row) {
+                updateRowPrice(row);
+                updateGrandTotal();
+            }
+        }
+
+        if (event.target && event.target.matches('.js-size-select')) {
+            const row = event.target.closest('.order-item-row');
+            if (row) {
+                updateRowPrice(row);
+                updateGrandTotal();
+            }
+        }
+    });
+
+    document.addEventListener('input', function (event) {
+        if (event.target && event.target.matches('[data-field="so_luong"]')) {
+            const row = event.target.closest('.order-item-row');
+            if (row) {
+                updateRowPrice(row);
+                updateGrandTotal();
+            }
         }
     });
 
     document.addEventListener('click', function (event) {
         if (event.target && event.target.id === 'add-edit-order-item') {
             createOrderItemRow();
+            updateGrandTotal();
         }
 
         if (event.target && event.target.matches('.btn-remove-order-item')) {
@@ -340,6 +453,7 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
             if (!row || !container) return;
             row.remove();
             syncOrderItemNames();
+            updateGrandTotal();
         }
     });
 
@@ -351,7 +465,11 @@ Kinh doanh / <a href="{{ route('manager.orders.index') }}">Quản lý đơn hàn
             const row = select.closest('.order-item-row');
             const sizeSelect = row ? row.querySelector('.js-size-select') : null;
             buildSizeOptions(sizeSelect, select.value);
+            if (row) {
+                updateRowPrice(row);
+            }
         });
+        updateGrandTotal();
     });
 </script>
 <script>

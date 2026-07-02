@@ -166,16 +166,19 @@ class OrderController extends Controller
 
         $productSizeMap = [];
         foreach ($availableProducts as $product) {
+            $basePrice = $product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc;
             $sizes = [];
             foreach ($product->kichCo ?? [] as $sizeItem) {
                 $sizes[] = [
                     'id' => $sizeItem->id,
                     'name' => $sizeItem->ten_kich_co ?? ('Size #' . $sizeItem->id),
+                    'price' => (float) ($basePrice * ($sizeItem->he_so_gia ?? 1)),
                 ];
             }
 
             $productSizeMap[$product->id] = [
                 'danh_muc_id' => $product->danh_muc_id,
+                'base_price' => (float) $basePrice,
                 'sizes' => $sizes,
                 'temps' => array_values(array_filter(array_map('trim', explode(',', (string) $product->nhiet_do)))),
             ];
@@ -205,11 +208,23 @@ class OrderController extends Controller
     public function store(StoreOrderRequest $request)
     {
         $validated = $request->validated();
+        $loaiDon = $validated['loai_don'];
+        // Mang về không gắn bàn; các loại còn lại lấy bàn đã chọn.
+        $banAnId = $loaiDon === 'mang về' ? null : ($validated['ban_an_id'] ?? null);
 
-        if ($validated['loai_don'] !== 'đặt hàng trước' && empty($validated['ban_an_id'])) {
-            return back()->withErrors([
-                'ban_an_id' => 'Đơn tại quán hoặc gọi tại bàn bằng QR bắt buộc chọn bàn ăn.',
-            ])->withInput();
+        // Đặt trước = ngồi tại quán theo giờ hẹn: bắt buộc bàn TRỐNG + giờ hẹn ở tương lai
+        // (giống luồng "đặt bàn" của khách thành viên).
+        $thoiGianDen = null;
+        if ($loaiDon === 'đặt hàng trước') {
+            $ban = BanAn::find($banAnId);
+            if (! $ban || $ban->trang_thai !== 'trống') {
+                return back()->withErrors(['ban_an_id' => 'Đơn đặt trước phải chọn bàn đang trống.'])->withInput();
+            }
+            $den = Carbon::createFromFormat('H:i', $validated['thoi_gian_den'])->setDateFrom(now());
+            if ($den->isPast()) {
+                return back()->withErrors(['thoi_gian_den' => 'Giờ hẹn đến phải lớn hơn thời gian hiện tại.'])->withInput();
+            }
+            $thoiGianDen = $den->format('Y-m-d H:i:s');
         }
 
         $preparedItems = [];
@@ -260,60 +275,152 @@ class OrderController extends Controller
             ];
         }
 
-        $selectedCustomer = null;
-        if (!empty($validated['nguoi_dung_id'])) {
-            $selectedCustomer = NguoiDung::query()->find($validated['nguoi_dung_id']);
-        }
-
         $orderId = null;
+        $merged = false;
+        $paidImmediately = false;
 
-        DB::transaction(function () use ($validated, $selectedCustomer, $preparedItems, $tamTinh, &$orderId): void {
-            $banAnId = $validated['loai_don'] === 'đặt hàng trước'
-                ? null
-                : ($validated['ban_an_id'] ?? null);
+        DB::transaction(function () use ($validated, $preparedItems, $loaiDon, $banAnId, $thoiGianDen, &$orderId, &$merged, &$paidImmediately): void {
+            $phuongThuc = $validated['phuong_thuc_thanh_toan'] ?? null;
+            $paidImmediately = !empty($phuongThuc);
+
+            // BỔ SUNG món vào bàn đang phục vụ: nếu bàn đã có đơn (nhân viên/quản lý) còn
+            // dòng chưa thanh toán và chưa đóng phiên → gộp món vào đơn đó thay vì tạo đơn rời.
+            $targetOrder = null;
+            if ($loaiDon === 'sử dụng ngay' && $banAnId) {
+                $targetOrder = DonHang::where('ban_an_id', $banAnId)
+                    ->whereNull('da_giao_luc')
+                    ->whereNotNull('nhan_vien_id')
+                    ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'chưa thanh toán'))
+                    ->latest()
+                    ->first();
+            }
+
+            if ($targetOrder) {
+                // Gộp món & chỉ trừ kho phần chênh lệch.
+                $oldUsage = $this->inventoryService->ingredientUsageForOrder($targetOrder->id);
+                $this->appendOrderItems($targetOrder, $preparedItems, $loaiDon, $phuongThuc, $thoiGianDen);
+                $newUsage = $this->inventoryService->ingredientUsageForOrder($targetOrder->id);
+                $this->inventoryService->applyIngredientDelta($oldUsage, $newUsage, $targetOrder->id);
+
+                TableStatusService::refreshForTable($targetOrder->ban_an_id);
+                // Gộp món KHÔNG tạo đơn mới → không có sự kiện created → chủ động báo nhân viên (để có chuông).
+                $this->notifyStaffNewOrder($targetOrder);
+
+                if ($paidImmediately) {
+                    $this->paymentService->syncThanhToanRecord($targetOrder->fresh(), $phuongThuc, 'đã thanh toán');
+                    $this->paymentService->applyTableStatusAfterPayment($targetOrder);
+                }
+
+                $orderId = $targetOrder->id;
+                $merged = true;
+                return;
+            }
+
+            $emailKhachHang = ($validated['nguoi_dung_id'] ?? null)
+                ? NguoiDung::whereKey($validated['nguoi_dung_id'])->value('email')
+                : null;
 
             $order = DonHang::create([
                 'ma_don_hang' => $this->generateOrderCode(),
                 'nguoi_dung_id' => $validated['nguoi_dung_id'] ?? null,
+                'email_khach_hang' => $emailKhachHang,
                 'nhan_vien_id' => Auth::id(),
                 'ban_an_id' => $banAnId,
                 'voucher_nguoi_dung_id' => null,
             ]);
 
-            $loaiDon = $validated['loai_don'] ?? 'sử dụng ngay';
-
-            foreach ($preparedItems as $item) {
-                ChiTietDonHang::create([
-                    'don_hang_id' => $order->id,
-                    'san_pham_id' => $item['san_pham_id'],
-                    'kich_co_id' => $item['kich_co_id'],
-                    'ten_san_pham' => $item['ten_san_pham'],
-                    'ten_kich_co' => $item['ten_kich_co'],
-                    'don_gia' => $item['don_gia'],
-                    'so_luong' => $item['so_luong'],
-                    'ghi_chu_mon' => $item['ghi_chu_mon'],
-                    'thanh_tien' => $item['thanh_tien'],
-                    'loai_don' => $loaiDon,
-                    'trang_thai_thanh_toan' => 'chưa thanh toán',
-                    'phuong_thuc_thanh_toan' => $validated['phuong_thuc_thanh_toan'] ?? null,
-                    'so_tien_giam' => 0,
-                    'tong_tien' => $item['thanh_tien'],
-                    'created_at' => now(),
-                ]);
-            }
+            $this->appendOrderItems($order, $preparedItems, $loaiDon, $phuongThuc, $thoiGianDen);
 
             // Đơn đã xác nhận ngay -> xuất kho
             $this->inventoryService->exportIngredientsForOrder($order);
-
             TableStatusService::refreshForTable($order->ban_an_id);
+
+            if ($paidImmediately) {
+                $this->paymentService->syncThanhToanRecord($order->fresh(), $phuongThuc, 'đã thanh toán');
+                $this->paymentService->applyTableStatusAfterPayment($order);
+            }
 
             $orderId = $order->id;
         });
 
-        $statusMsg = "Đã tạo đơn hàng #{$orderId} thành công.";
+        if ($paidImmediately) {
+            $freshOrder = DonHang::find($orderId);
+            if ($freshOrder) {
+                try {
+                    if ($freshOrder->email_khach_hang) {
+                        \Illuminate\Support\Facades\Mail::to($freshOrder->email_khach_hang)->queue(new \App\Mail\CustomerOrderPaidMail($freshOrder));
+                    } elseif ($freshOrder->nguoiDung && $freshOrder->nguoiDung->email) {
+                        \Illuminate\Support\Facades\Mail::to($freshOrder->nguoiDung->email)->queue(new \App\Mail\CustomerOrderPaidMail($freshOrder));
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Không thể gửi mail thanh toán khi tạo đơn:', [
+                        'order_id' => $orderId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        $statusMsg = $merged
+            ? "Đã bổ sung món vào đơn #{$orderId} của bàn."
+            : "Đã tạo đơn hàng #{$orderId} thành công.";
 
         return redirect()->route('manager.orders.index')
             ->with('success', $statusMsg);
+    }
+
+    /**
+     * Ghi các dòng món đã chuẩn bị vào một đơn (đơn mới hoặc đơn đang bổ sung).
+     */
+    private function appendOrderItems(DonHang $order, array $preparedItems, string $loaiDon, ?string $phuongThuc, ?string $thoiGianDen): void
+    {
+        $trangThaiThanhToan = $phuongThuc ? 'đã thanh toán' : 'chưa thanh toán';
+
+        foreach ($preparedItems as $item) {
+            ChiTietDonHang::create([
+                'don_hang_id' => $order->id,
+                'san_pham_id' => $item['san_pham_id'],
+                'kich_co_id' => $item['kich_co_id'],
+                'ten_san_pham' => $item['ten_san_pham'],
+                'ten_kich_co' => $item['ten_kich_co'],
+                'don_gia' => $item['don_gia'],
+                'so_luong' => $item['so_luong'],
+                'ghi_chu_mon' => $item['ghi_chu_mon'],
+                'thanh_tien' => $item['thanh_tien'],
+                'loai_don' => $loaiDon,
+                'trang_thai_thanh_toan' => $trangThaiThanhToan,
+                'phuong_thuc_thanh_toan' => $phuongThuc,
+                'so_tien_giam' => 0,
+                'tong_tien' => $item['thanh_tien'],
+                'thoi_gian_den' => $thoiGianDen,
+                'created_at' => now(),
+            ]);
+        }
+    }
+
+    /**
+     * Báo cho nhân viên/quản lý/chủ đang hoạt động khi có đơn/việc mới (để kêu chuông).
+     * Dùng cho trường hợp GỘP món vào đơn sẵn có — vốn không kích hoạt sự kiện created.
+     */
+    private function notifyStaffNewOrder(DonHang $order): void
+    {
+        if (! Schema::hasTable('thong_bao')) {
+            return;
+        }
+
+        try {
+            // Chỉ báo NHÂN VIÊN (người pha chế) — quản lý không cần kêu chuông cho đơn tại quán.
+            NguoiDung::query()
+                ->where('vai_tro', 'nhân viên')
+                ->where('trang_thai', 'hoạt động')
+                ->get()
+                ->each(fn($user) => $user->notify(new \App\Notifications\QrOrderPendingNotification($order)));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Không thể gửi thông báo bổ sung món.', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function show(int $id)
@@ -361,16 +468,19 @@ class OrderController extends Controller
 
         $productSizeMap = [];
         foreach ($availableProducts as $product) {
+            $basePrice = $product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc;
             $sizes = [];
             foreach ($product->kichCo ?? [] as $sizeItem) {
                 $sizes[] = [
                     'id' => $sizeItem->id,
                     'name' => $sizeItem->ten_kich_co ?? ('Size #' . $sizeItem->id),
+                    'price' => (float) ($basePrice * ($sizeItem->he_so_gia ?? 1)),
                 ];
             }
 
             $productSizeMap[$product->id] = [
                 'danh_muc_id' => $product->danh_muc_id,
+                'base_price' => (float) $basePrice,
                 'sizes' => $sizes,
                 'temps' => array_values(array_filter(array_map('trim', explode(',', (string) $product->nhiet_do)))),
             ];
@@ -456,8 +566,10 @@ class OrderController extends Controller
 
         $oldBanAnId = $order->ban_an_id;
         $oldUsage = $this->inventoryService->ingredientUsageForOrder($order->id);
-        $selectedBanAnId = $order->loai_don === 'đặt hàng trước'
-            ? null
+        // Đặt trước & mang về: giữ nguyên bàn hiện tại của đơn (đặt trước có bàn trống đã chọn,
+        // mang về không có bàn). Các đơn tại quán lấy bàn từ form.
+        $selectedBanAnId = in_array($order->loai_don, ['đặt hàng trước', 'mang về'], true)
+            ? $order->ban_an_id
             : ($validated['ban_an_id'] ?? null);
 
         DB::transaction(function () use ($order, $preparedItems, $tamTinh, $oldBanAnId, $oldUsage, $selectedBanAnId): void {

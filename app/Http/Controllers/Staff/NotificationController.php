@@ -84,11 +84,19 @@ class NotificationController extends Controller
             'openRoute' => 'staff.notifications.open',
         ])->render();
 
+        // Tín hiệu "có món mới thuộc đơn do QUẢN LÝ/CHỦ tạo hôm nay" — đếm trực tiếp để kêu chuông
+        // ỔN ĐỊNH. Đơn do CHÍNH nhân viên tạo KHÔNG tính (không ai cần kêu); đơn khách đã có "bàn rung".
+        $managerIds = \App\Models\NguoiDung::whereIn('vai_tro', ['quản lý', 'chủ cửa hàng'])->pluck('id');
+        $activityCount = \App\Models\ChiTietDonHang::whereDate('created_at', today())
+            ->whereHas('donHang', fn($q) => $q->whereIn('nhan_vien_id', $managerIds))
+            ->count();
+
         return response()->json([
             'count' => $count,
             'html' => $html,
             'takeawayCount' => DonHang::takeawayQueue()->count(),
             'banRungCount' => DonHang::banRung()->distinct('ban_an_id')->count('ban_an_id'),
+            'activityCount' => $activityCount,
         ]);
     }
 }

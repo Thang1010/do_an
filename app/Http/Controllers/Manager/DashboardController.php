@@ -32,7 +32,7 @@ class DashboardController extends Controller
             ->where('vai_tro', 'khách hàng')
             ->count();
 
-        // Nguyên liệu sắp hết / hết hàng (tồn kho làm được <= 3 cốc)
+        // Nguyên liệu sắp hết / hết hàng (tồn kho làm được <= 20 cốc)
         $balanceExpr = TransactionType::stockBalanceExpression('lich_su_kho');
         // Biểu thức GỐC (không dùng alias so_luong/max_tieu_hao) để hợp ONLY_FULL_GROUP_BY (MySQL 5.7).
         $cups = "FLOOR(COALESCE({$balanceExpr}, 0) / GREATEST(COALESCE((SELECT MAX(ctsp.so_luong_can) FROM cong_thuc_san_pham ctsp WHERE ctsp.nguyen_lieu_id = nguyen_lieu.id), 1), 1))";
@@ -43,7 +43,7 @@ class DashboardController extends Controller
             ->selectRaw("COALESCE({$balanceExpr}, 0) as so_luong")
             ->selectRaw('(SELECT MAX(ctsp.so_luong_can) FROM cong_thuc_san_pham ctsp WHERE ctsp.nguyen_lieu_id = nguyen_lieu.id) as max_tieu_hao')
             ->groupBy('nguyen_lieu.id', 'nguyen_lieu.ten_nguyen_lieu', 'nguyen_lieu.don_vi_tinh')
-            ->havingRaw("{$cups} <= 3")
+            ->havingRaw("{$cups} <= 20")
             ->orderByRaw("CASE WHEN {$cups} <= 0 THEN 0 ELSE 1 END")
             ->orderBy('nguyen_lieu.ten_nguyen_lieu')
             ->get();
@@ -134,7 +134,7 @@ class DashboardController extends Controller
             ->selectRaw("COALESCE({$balanceExpr}, 0) as so_luong")
             ->selectRaw('(SELECT MAX(ctsp.so_luong_can) FROM cong_thuc_san_pham ctsp WHERE ctsp.nguyen_lieu_id = nguyen_lieu.id) as max_tieu_hao')
             ->groupBy('nguyen_lieu.id')
-            ->havingRaw("{$cups} <= 3")
+            ->havingRaw("{$cups} <= 20")
             ->get()
             ->count();
 

@@ -818,11 +818,50 @@
                 });
         }
 
+        // ── Chuông báo thông báo mới (WebAudio — không cần file âm thanh) ──
+        var __notifAudioCtx = null;
+        function __initNotifAudio() {
+            if (!__notifAudioCtx) {
+                try { __notifAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+                catch (e) { __notifAudioCtx = null; }
+            }
+            if (__notifAudioCtx && __notifAudioCtx.state === 'suspended') __notifAudioCtx.resume();
+        }
+        // Trình duyệt chặn phát âm thanh cho tới khi người dùng tương tác với trang lần đầu.
+        document.addEventListener('click', __initNotifAudio, { once: true });
+        document.addEventListener('keydown', __initNotifAudio, { once: true });
+
+        function playNotifBell() {
+            if (!__notifAudioCtx) return;
+            var ctx = __notifAudioCtx;
+            var now = ctx.currentTime;
+            // Chuỗi chuông TO & DÀI hơn: lặp "ting-ting" 3 lần trong ~1.8 giây.
+            var notes = [
+                [0.00, 880], [0.20, 1174.66],
+                [0.60, 880], [0.80, 1174.66],
+                [1.20, 880], [1.40, 1174.66]
+            ];
+            notes.forEach(function (pair) {
+                var t = now + pair[0];
+                var osc = ctx.createOscillator();
+                var gain = ctx.createGain();
+                osc.type = 'triangle'; // đầy tiếng hơn sine → nghe to/rõ hơn
+                osc.frequency.value = pair[1];
+                gain.gain.setValueAtTime(0.0001, t);
+                gain.gain.exponentialRampToValueAtTime(0.8, t + 0.02); // to hơn (0.35 → 0.8)
+                gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.40);
+                osc.connect(gain).connect(ctx.destination);
+                osc.start(t);
+                osc.stop(t + 0.44);
+            });
+        }
+
         // ── Polling thông báo: tự cập nhật badge + danh sách, không cần F5 ──
         (function () {
             var POLL_URL = '{{ route('manager.notifications.poll') }}';
-            var INTERVAL = 20000; // 20 giây
+            var INTERVAL = 10000; // 10 giây
             var inFlight = false;
+            var lastCount = {{ (int) $unreadNotificationCount }}; // số chưa đọc lúc tải trang
 
             function updateBadge(count) {
                 var btn = document.getElementById('notif-btn');
@@ -851,7 +890,11 @@
                     .then(function (r) { return r.ok ? r.json() : null; })
                     .then(function (data) {
                         if (!data) return;
-                        updateBadge(data.count || 0);
+                        var count = data.count || 0;
+                        // Có thông báo MỚI (số chưa đọc tăng) → kêu chuông.
+                        if (count > lastCount) playNotifBell();
+                        lastCount = count;
+                        updateBadge(count);
                         var list = document.querySelector('#notif-dropdown .notification-dropdown-list');
                         if (list && typeof data.html === 'string') list.innerHTML = data.html;
                     })

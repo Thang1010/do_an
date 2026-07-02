@@ -312,6 +312,9 @@ class TableController extends Controller
 
         $table->update(['trang_thai' => 'trống']);
 
+        // Đóng các đơn của bàn (kết thúc phiên) để không bị gộp lại khi bàn được dùng cho khách mới.
+        DonHang::closeForTable($table->id);
+
         return redirect()
             ->route('staff.tables.index')
             ->with('success', "Đã trả bàn {$table->so_ban} về trạng thái trống.");
@@ -638,11 +641,17 @@ class TableController extends Controller
 
             if ($order && !empty($cart)) {
                 foreach ($cart as $item) {
+                    $nhietDoSuffix = (!empty($item['nhiet_do'])) ? "({$item['nhiet_do']}) " : '';
+                    $savedGhiChuMon = trim($nhietDoSuffix . ($item['ghi_chu_mon'] ?? ''));
+                    if ($savedGhiChuMon === '') {
+                        $savedGhiChuMon = null;
+                    }
+
                     $existing = ChiTietDonHang::where('don_hang_id', $order->id)
                         ->where('san_pham_id', $item['san_pham_id'])
                         ->where('kich_co_id', $item['kich_co_id'])
                         ->where('ten_san_pham', $item['ten_san_pham'])
-                        ->where('ghi_chu_mon', $item['ghi_chu_mon'])
+                        ->where('ghi_chu_mon', $savedGhiChuMon)
                         ->first();
 
                     if ($existing) {
@@ -660,7 +669,7 @@ class TableController extends Controller
                             'don_gia' => $item['don_gia'],
                             'so_luong' => $item['so_luong'],
                             'thanh_tien' => $item['don_gia'] * $item['so_luong'],
-                            'ghi_chu_mon' => $item['ghi_chu_mon'],
+                            'ghi_chu_mon' => $savedGhiChuMon,
                             'created_at' => now(),
                         ]);
                     }
@@ -991,6 +1000,8 @@ class TableController extends Controller
 
             if (!$hasRemaining) {
                 $table->update(['trang_thai' => 'trống']);
+                // Đóng các đơn còn lại (đã thanh toán) để không gộp lại khi bàn dùng cho khách mới.
+                DonHang::closeForTable($table->id);
             }
         });
 

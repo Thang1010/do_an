@@ -42,6 +42,12 @@
 
             <h1 class="show-name">{{ $product->ten_san_pham }}</h1>
 
+            @if($product->mo_ta_chi_tiet)
+                <p class="show-desc" style="margin-top: 2px; margin-bottom: 8px;">
+                    {{ $product->mo_ta_chi_tiet }}
+                </p>
+            @endif
+
             {{-- Stars --}}
             <div class="show-stars">
                 @for($i = 1; $i <= 5; $i++)
@@ -97,11 +103,6 @@
                         @endforeach
                     </div>
                 </div>
-            @endif
-
-            {{-- Description --}}
-            @if($product->mo_ta)
-                <p class="show-desc">{{ $product->mo_ta }}</p>
             @endif
 
             {{-- Actions --}}

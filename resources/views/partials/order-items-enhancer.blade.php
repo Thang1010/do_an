@@ -18,18 +18,9 @@
 <style>
     .clearable-select { position: relative; }
     .clearable-select > select { width: 100%; }
-    .clearable-select.has-value > select {
-        -webkit-appearance: none; -moz-appearance: none; appearance: none;
-        padding-right: 36px;
-    }
     .clearable-select .clearable-clear {
-        position: absolute; top: 0; right: 0; height: 100%; width: 36px;
-        border: none; background: transparent; cursor: pointer;
-        font-size: 18px; line-height: 1; color: #9a8f80;
-        display: none; align-items: center; justify-content: center; padding: 0;
+        display: none !important;
     }
-    .clearable-select.has-value .clearable-clear { display: flex; }
-    .clearable-select .clearable-clear:hover { color: #d92d20; }
 </style>
 <script>
 (function () {

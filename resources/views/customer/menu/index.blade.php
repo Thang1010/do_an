@@ -64,132 +64,7 @@
 
         <!-- ── Panel Phải: Sản phẩm ── -->
         <section class="glass-content">
-
-            <!-- Tiêu đề + search bar -->
-            <div class="glass-title-bar">
-                <div class="glass-title-group">
-                    <h1 class="glass-cat-title">
-                        @if($search !== '')
-                            Tìm kiếm: "{{ $search }}"
-                        @elseif($activeCategory)
-                            {{ $activeCategory->ten_danh_muc }}
-                        @else
-                            Tất cả món
-                        @endif
-                    </h1>
-                    <p class="glass-product-count">{{ $products->total() }} sản phẩm</p>
-                </div>
-
-                <!-- search -->
-                <form action="{{ route('menu.index') }}" method="GET" class="glass-search-form">
-                    <input type="text" name="search" value="{{ $search }}" placeholder="Tìm kiếm theo tên sản phẩm..."
-                        class="glass-search-input" />
-                    @if($activeCategory && $search === '')
-                        <input type="hidden" name="category"
-                            value="{{ $categorySlugs[$activeCategory->id] ?? \Illuminate\Support\Str::slug($activeCategory->ten_danh_muc) }}" />
-                    @endif
-                    <button type="submit" class="glass-search-btn" aria-label="Tìm kiếm">
-                        <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                    </button>
-                </form>
-            </div>
-
-            <!-- Lưới sản phẩm -->
-            <div id="products-container">
-                <div class="products-grid">
-                    @forelse($products as $product)
-                        <div class="menu-card cursor-pointer" data-href="{{ route('menu.show', $product->id) }}">
-                            <!-- Image -->
-                            <div class="menu-card-img-wrap">
-                                <img src="{{ $product->image_url }}" alt="{{ $product->ten_san_pham }}" class="menu-card-img"
-                                    loading="lazy" />
-                                @if($product->noi_bat)
-                                    <span class="menu-card-feature-badge">⭐ Nổi bật</span>
-                                @endif
-                                @php $isFav = isset($product->is_favorite) && $product->is_favorite; @endphp
-                                <button class="menu-card-heart {{ $isFav ? 'liked' : '' }}" aria-label="Yêu thích"
-                                    data-wishlist="{{ $product->id }}" onclick="event.stopPropagation();">
-                                    <svg class="w-4 h-4" fill="{{ $isFav ? '#c94040' : 'none' }}" viewBox="0 0 24 24"
-                                        stroke="{{ $isFav ? '#c94040' : '#5a3520' }}" stroke-width="2">
-                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                                    </svg>
-                                </button>
-                            </div>
-
-                            <!-- Body -->
-                            <div class="menu-card-body">
-                                <h3 class="menu-card-name">{{ $product->ten_san_pham }}</h3>
-                                <div class="menu-card-footer">
-                                    <span class="menu-card-price">
-                                        {{ number_format($product->gia_khuyen_mai ?? $product->gia_goc, 0, ',', '.') }}đ
-                                    </span>
-                                    @php
-                                        $basePrice = (float)($product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc);
-                                        $sizesJson = $product->kichCo->map(function($kc) use ($basePrice) {
-                                            return [
-                                                'id' => $kc->id,
-                                                'name' => $kc->ten_kich_co,
-                                                'price' => $basePrice * (float)($kc->he_so_gia ?? 1),
-                                                'code' => $kc->ma_kich_co ?? '',
-                                            ];
-                                        })->toJson();
-                                    @endphp
-                                    <button class="menu-card-btn menu-add-btn" 
-                                        data-product-id="{{ $product->id }}"
-                                        data-product-name="{{ $product->ten_san_pham }}"
-                                        data-product-img="{{ $product->image_url }}" 
-                                        data-add-url="{{ route('cart.add') }}"
-                                        data-sizes="{{ $sizesJson }}"
-                                        data-nhiet-do="{{ $product->nhiet_do ?? '' }}"
-                                        onclick="event.stopPropagation();">Thêm
-                                        món</button>
-                                </div>
-                            </div>
-                        </div>
-                    @empty
-                        <div class="menu-empty">
-                            <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="rgba(255,255,255,0.35)"
-                                stroke-width="1">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <p>Không có sản phẩm nào trong danh mục này.</p>
-                        </div>
-                    @endforelse
-                </div>
-
-                <!-- Pagination -->
-                @if($products->hasPages())
-                    <nav class="menu-pagination" aria-label="Phân trang">
-                        @if($products->onFirstPage())
-                            <span class="disabled">&lsaquo;</span>
-                        @else
-                            <a href="{{ $products->previousPageUrl() }}">&lsaquo;</a>
-                        @endif
-
-                        @foreach($products->getUrlRange(max(1, $products->currentPage() - 2), min($products->lastPage(), $products->currentPage() + 2)) as $page => $url)
-                            @if($page == $products->currentPage())
-                                <span class="active">{{ $page }}</span>
-                            @else
-                                <a href="{{ $url }}">{{ $page }}</a>
-                            @endif
-                        @endforeach
-
-                        @if($products->hasMorePages())
-                            <a href="{{ $products->nextPageUrl() }}">&rsaquo;</a>
-                        @else
-                            <span class="disabled">&rsaquo;</span>
-                        @endif
-                    </nav>
-                @endif
-            </div>
-
-            <!-- Ngôi sao trang trí -->
-            <div class="glass-star">✦</div>
+            @include('customer.menu.partials._content')
         </section>
 
     </div><!-- end menu-main -->
@@ -198,17 +73,101 @@
 
 @push('scripts')
     <script>
-        // Điều hướng khi bấm vào thẻ sản phẩm (dùng data-href thay vì onclick nội tuyến)
-        document.querySelectorAll('.menu-card[data-href]').forEach(card => {
-            card.addEventListener('click', () => { window.location = card.dataset.href; });
+        const glassContent = document.querySelector('.glass-content');
+
+        // ── Nạp lưới sản phẩm qua AJAX (đổi danh mục / tìm kiếm / phân trang) ──
+        // Chỉ thay riêng #products-container, giữ nguyên nền + tiêu đề + thanh tìm kiếm.
+        let menuReq = 0; // chống race khi bấm nhanh nhiều danh mục
+        function loadMenu(url, push = true) {
+            const container = document.getElementById('products-container');
+            container?.classList.add('fading');
+            const reqId = ++menuReq;
+
+            fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(res => res.text())
+                .then(html => {
+                    if (reqId !== menuReq) return; // đã có request mới hơn → bỏ qua
+
+                    const tpl = document.createElement('template');
+                    tpl.innerHTML = html.trim();
+                    const fresh = tpl.content.getElementById('products-container');
+                    if (!fresh) { window.location = url; return; }
+
+                    // Cập nhật tiêu đề + số lượng (giữ nguyên phần còn lại)
+                    const title = document.querySelector('.glass-cat-title');
+                    const count = document.querySelector('.glass-product-count');
+                    if (title && fresh.dataset.title) title.textContent = fresh.dataset.title;
+                    if (count && fresh.dataset.count) count.textContent = fresh.dataset.count + ' sản phẩm';
+
+                    container.replaceWith(fresh);
+                    fresh.classList.remove('fading');
+                    if (push) history.pushState({ url }, '', url);
+                })
+                .catch(err => {
+                    if (reqId !== menuReq) return;
+                    console.error(err);
+                    window.location = url; // fallback: tải lại cả trang
+                });
+        }
+
+        // Đổi danh mục
+        document.querySelector('.glass-sidebar')?.addEventListener('click', (e) => {
+            const item = e.target.closest('.sidebar-cat-item');
+            if (!item) return;
+            e.preventDefault();
+            document.querySelectorAll('.sidebar-cat-item').forEach(el => el.classList.remove('active'));
+            item.classList.add('active');
+            loadMenu(item.href);
         });
 
-        // Heart toggle via AJAX
-        document.querySelectorAll('.menu-card-heart').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const productId = btn.getAttribute('data-wishlist');
-                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        // Tìm kiếm + phân trang (nằm trong vùng nội dung, dùng ủy quyền sự kiện)
+        glassContent?.addEventListener('submit', (e) => {
+            const form = e.target.closest('.glass-search-form');
+            if (!form) return;
+            e.preventDefault();
+            const params = new URLSearchParams(new FormData(form)).toString();
+            loadMenu(form.action + (params ? '?' + params : ''));
+        });
 
+        // Điều hướng bằng nút Back/Forward của trình duyệt
+        window.addEventListener('popstate', () => loadMenu(location.href, false));
+
+        // ── Realtime menu ──────────────────────────────────────────
+        // Chủ quán thêm sản phẩm / đổi giá / ẩn - hết hàng → khách tự thấy ngay
+        // (poll "phiên bản" menu; khi đổi thì làm mới lưới sản phẩm theo view hiện tại).
+        (function () {
+            var menuVersion = @json($menuVersion);
+            var VERSION_URL = '{{ route('menu.version') }}';
+            function checkMenuVersion() {
+                if (document.hidden) return;
+                fetch(VERSION_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (d) {
+                        if (!d || !d.v || d.v === menuVersion) return;
+                        menuVersion = d.v;
+                        loadMenu(location.href, false);
+                    })
+                    .catch(function () { });
+            }
+            setInterval(checkMenuVersion, 20000);
+        })();
+
+        // ── Tương tác trong lưới sản phẩm (ủy quyền sự kiện — không cần gắn lại sau khi swap) ──
+        glassContent?.addEventListener('click', (e) => {
+            // Phân trang
+            const pageLink = e.target.closest('.menu-pagination a');
+            if (pageLink) {
+                e.preventDefault();
+                loadMenu(pageLink.href);
+                return;
+            }
+
+            // Yêu thích (heart)
+            const heart = e.target.closest('.menu-card-heart');
+            if (heart) {
+                e.stopPropagation();
+                const productId = heart.getAttribute('data-wishlist');
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
                 fetch(`/menu/${productId}/favorite`, {
                     method: 'POST',
                     headers: {
@@ -226,19 +185,37 @@
                     })
                     .then(data => {
                         if (data && data.success) {
-                            // Đẩy lên đầu = reload lại trang để server sắp xếp lại
-                            window.location.reload();
+                            loadMenu(location.href, false); // làm mới danh sách để server sắp xếp lại
                         }
                     })
                     .catch(err => console.error(err));
-            });
-        });
+                return;
+            }
 
-        // Fade khi đổi danh mục
-        document.querySelectorAll('.sidebar-cat-item').forEach(item => {
-            item.addEventListener('click', () => {
-                document.getElementById('products-container')?.classList.add('fading');
-            });
+            // Nút "Thêm món"
+            const addBtn = e.target.closest('.menu-add-btn');
+            if (addBtn) {
+                e.stopPropagation();
+                const imgEl = addBtn.closest('.menu-card')?.querySelector('.menu-card-img');
+                if (typeof window.showGlobalSizeModal === 'function') {
+                    window.showGlobalSizeModal(
+                        addBtn.dataset.productId,
+                        addBtn.dataset.productName,
+                        addBtn.dataset.productImg,
+                        addBtn.dataset.addUrl,
+                        JSON.parse(addBtn.dataset.sizes || '[]'),
+                        imgEl,
+                        addBtn.dataset.nhietDo
+                    );
+                }
+                return;
+            }
+
+            // Bấm vào thẻ sản phẩm → xem chi tiết
+            const card = e.target.closest('.menu-card[data-href]');
+            if (card) {
+                window.location = card.dataset.href;
+            }
         });
 
         // ── Hàm animation parabol dùng chung ──────────────────────
@@ -290,22 +267,5 @@
                 el.style.display = count > 0 ? 'flex' : 'none';
             });
         };
-
-        // ── AJAX "Thêm món" ────────────────────────────────────────
-        document.querySelectorAll('.menu-add-btn').forEach(btn => {
-            btn.addEventListener('click', function () {
-                const productId = this.dataset.productId;
-                const productName = this.dataset.productName;
-                const imgSrc = this.dataset.productImg;
-                const addUrl = this.dataset.addUrl;
-                const sizes = JSON.parse(this.dataset.sizes || '[]');
-                const imgEl = this.closest('.menu-card')?.querySelector('.menu-card-img');
-                const nhietDo = this.dataset.nhietDo;
-
-                if (typeof window.showGlobalSizeModal === 'function') {
-                    window.showGlobalSizeModal(productId, productName, imgSrc, addUrl, sizes, imgEl, nhietDo);
-                }
-            });
-        });
     </script>
 @endpush

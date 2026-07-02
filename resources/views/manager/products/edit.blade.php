@@ -37,11 +37,19 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Mô tả chi tiết</label>
-                        <textarea name="mo_ta"
-                                  class="form-control @error('mo_ta') is-invalid @enderror"
-                                  rows="4">{{ old('mo_ta', $product->mo_ta) }}</textarea>
+                        <label class="form-label">Mô tả ngắn</label>
+                        <input type="text" name="mo_ta" class="form-control @error('mo_ta') is-invalid @enderror"
+                               placeholder="Mô tả ngắn gọn hiển thị trên card sản phẩm"
+                               value="{{ old('mo_ta', $product->mo_ta) }}">
                         @error('mo_ta')<div class="form-error">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Mô tả chi tiết</label>
+                        <textarea name="mo_ta_chi_tiet"
+                                  class="form-control @error('mo_ta_chi_tiet') is-invalid @enderror"
+                                  rows="4">{{ old('mo_ta_chi_tiet', $product->mo_ta_chi_tiet) }}</textarea>
+                        @error('mo_ta_chi_tiet')<div class="form-error">{{ $message }}</div>@enderror
                     </div>
 
                     <div class="form-grid-2">

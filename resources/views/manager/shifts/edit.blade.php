@@ -61,7 +61,7 @@
         <p class="page-subtitle">{{ $subtitleMap[$mode] ?? $subtitleMap['all'] }}</p>
     </div>
     <div class="page-actions">
-        <a href="{{ route('manager.shifts.index') }}" class="btn btn-secondary">Quay lại danh sách</a>
+        <a href="{{ route('manager.shifts.index') }}" class="btn btn-secondary">Quay lại</a>
     </div>
 </div>
 

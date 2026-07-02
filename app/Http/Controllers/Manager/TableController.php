@@ -173,6 +173,7 @@ class TableController extends Controller
 
         $availableProducts = \App\Models\SanPham::query()
             ->where('trang_thai_ban', 'đang bán')
+            ->with(['kichCo'])
             ->orderBy('ten_san_pham')
             ->get(['id', 'danh_muc_id', 'ten_san_pham', 'gia_goc', 'gia_khuyen_mai', 'nhiet_do']);
 
@@ -183,16 +184,19 @@ class TableController extends Controller
         $allSizes = \App\Models\KichCo::orderBy('he_so_gia')->orderBy('ten_kich_co')->get();
         $productSizeMap = [];
         foreach ($availableProducts as $product) {
+            $basePrice = $product->gia_khuyen_mai > 0 ? $product->gia_khuyen_mai : $product->gia_goc;
             $sizes = [];
-            foreach ($allSizes as $sizeItem) {
+            foreach ($product->kichCo ?? [] as $sizeItem) {
                 $sizes[] = [
                     'id' => $sizeItem->id,
                     'name' => $sizeItem->ten_kich_co ?? ('Size #' . $sizeItem->id),
+                    'price' => (float) ($basePrice * ($sizeItem->he_so_gia ?? 1)),
                 ];
             }
 
             $productSizeMap[$product->id] = [
                 'danh_muc_id' => $product->danh_muc_id,
+                'base_price' => (float) $basePrice,
                 'sizes' => $sizes,
                 'temps' => array_values(array_filter(array_map('trim', explode(',', (string) $product->nhiet_do)))),
             ];

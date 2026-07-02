@@ -21,7 +21,7 @@
         <p class="page-subtitle">Cập nhật vai trò tài khoản và lưu thay đổi</p>
     </div>
     <div class="page-actions">
-        <a href="{{ route($listRoute) }}" class="btn btn-secondary">Quay lại danh sách</a>
+        <a href="{{ route($listRoute) }}" class="btn btn-secondary">Quay lại</a>
         <a href="{{ route('manager.users.show', $user->id) }}" class="btn btn-secondary">Xem chi tiết</a>
     </div>
 </div>

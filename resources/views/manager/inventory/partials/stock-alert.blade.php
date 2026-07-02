@@ -6,7 +6,7 @@
             Có <strong>{{ $hetCount }}</strong> nguyên liệu <strong>đã hết hàng</strong> (tồn kho = 0).
         @endif
         @if($lowCount > 0)
-            Có <strong>{{ $lowCount }}</strong> nguyên liệu <strong>sắp hết</strong> (chỉ còn đủ làm ≤ 3 cốc/sản phẩm).
+            Có <strong>{{ $lowCount }}</strong> nguyên liệu <strong>sắp hết</strong> (chỉ còn đủ làm ≤ 20 cốc/sản phẩm).
         @endif
         — cần nhập kho ngay!
     </span>

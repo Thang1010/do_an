@@ -62,6 +62,8 @@ class MenuController extends Controller
 
         // Build products query
         $productsQuery = SanPham::with(['danhMuc', 'kichCo'])
+            ->withAvg('danhGiaSanPham as avg_rating', 'so_sao')
+            ->withCount('danhGiaSanPham')
             ->whereIn('trang_thai_ban', ['dang_ban', 'đang bán']);
 
         if (Auth::check()) {
@@ -84,6 +86,17 @@ class MenuController extends Controller
         // Bàn gắn từ QR (nếu khách vào menu bằng cách quét QR tại bàn).
         $qrTable = session('qr_ban_an_id') ? BanAn::find(session('qr_ban_an_id')) : null;
 
+        // Yêu cầu AJAX (đổi danh mục / tìm kiếm / phân trang) chỉ cần lưới sản phẩm.
+        if ($request->ajax()) {
+            return view('customer.menu.partials._products', compact(
+                'activeCategory',
+                'products',
+                'search'
+            ));
+        }
+
+        $menuVersion = $this->menuVersion();
+
         return view('customer.menu.index', compact(
             'categories',
             'categorySlugs',
@@ -91,8 +104,33 @@ class MenuController extends Controller
             'activeCategory',
             'products',
             'search',
-            'qrTable'
+            'qrTable',
+            'menuVersion'
         ));
+    }
+
+    /**
+     * "Phiên bản" của menu — đổi mỗi khi có sản phẩm/danh mục được thêm, sửa (giá,
+     * trạng thái bán, nổi bật...) hoặc xoá. Khách poll giá trị này; khác với bản đang
+     * hiển thị thì làm mới lưới sản phẩm (realtime) mà không cần tải lại cả trang.
+     */
+    private function menuVersion(): string
+    {
+        $sp = SanPham::selectRaw('COUNT(*) as c, MAX(updated_at) as m')->first();
+        $dm = DanhMuc::selectRaw('COUNT(*) as c, MAX(updated_at) as m')->first();
+
+        return md5(implode('|', [
+            $sp->c ?? 0, $sp->m ?? '',
+            $dm->c ?? 0, $dm->m ?? '',
+        ]));
+    }
+
+    /**
+     * Endpoint cho polling realtime: trả về phiên bản menu hiện tại.
+     */
+    public function version()
+    {
+        return response()->json(['v' => $this->menuVersion()]);
     }
 
     public function show(int $id)

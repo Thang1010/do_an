@@ -44,15 +44,17 @@
 
                     <div class="form-group">
                         <label class="form-label">Mô tả ngắn</label>
-                        <input type="text" name="mo_ta_ngan" class="form-control"
+                        <input type="text" name="mo_ta" class="form-control @error('mo_ta') is-invalid @enderror"
                                placeholder="Mô tả ngắn gọn hiển thị trên card sản phẩm"
-                               value="{{ old('mo_ta_ngan', $product->mo_ta_ngan ?? '') }}">
+                               value="{{ old('mo_ta', $product->mo_ta ?? '') }}">
+                        @error('mo_ta')<div class="form-error">{{ $message }}</div>@enderror
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">Mô tả chi tiết</label>
-                        <textarea name="mo_ta" class="form-control" rows="4"
-                                  placeholder="Mô tả đầy đủ về sản phẩm...">{{ old('mo_ta', $product->mo_ta ?? '') }}</textarea>
+                        <textarea name="mo_ta_chi_tiet" class="form-control @error('mo_ta_chi_tiet') is-invalid @enderror" rows="4"
+                                  placeholder="Mô tả đầy đủ về sản phẩm...">{{ old('mo_ta_chi_tiet', $product->mo_ta_chi_tiet ?? '') }}</textarea>
+                        @error('mo_ta_chi_tiet')<div class="form-error">{{ $message }}</div>@enderror
                     </div>
 
                     <div class="form-grid-2">
@@ -330,15 +332,6 @@
                     </div>
                     <input type="file" id="img-input" name="anh_chinh" accept="image/*"
                            class="file-input-hidden" onchange="previewImage(this)">
-                </div>
-            </div>
-
-            {{-- Notes --}}
-            <div class="card">
-                <div class="card-header"><span class="card-title">Ghi chú nội bộ</span></div>
-                <div class="card-body">
-                    <textarea name="ghi_chu" class="form-control" rows="3"
-                              placeholder="Ghi chú cho nhân viên pha chế...">{{ old('ghi_chu', $product->ghi_chu ?? '') }}</textarea>
                 </div>
             </div>
 

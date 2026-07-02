@@ -38,12 +38,18 @@ class DonHang extends Model
                 return;
             }
 
-            $shouldNotify = !is_null($order->nhan_vien_id);
+            // Chỉ báo "đơn mới cần pha chế" khi đơn do QUẢN LÝ/CHỦ tạo. Đơn do CHÍNH nhân viên
+            // tạo tại quầy thì không cần kêu chuông cho ai (nhân viên đã biết).
+            $creatorRole = $order->nhan_vien_id
+                ? NguoiDung::whereKey($order->nhan_vien_id)->value('vai_tro')
+                : null;
+            $shouldNotify = in_array($creatorRole, ['quản lý', 'chủ cửa hàng'], true);
 
             if ($shouldNotify) {
                 try {
+                    // Chỉ báo cho NHÂN VIÊN (người pha chế/phục vụ), không báo quản lý/chủ.
                     NguoiDung::query()
-                        ->whereIn('vai_tro', ['nhân viên', 'quản lý', 'chủ cửa hàng'])
+                        ->where('vai_tro', 'nhân viên')
                         ->where('trang_thai', UserStatus::HOAT_DONG->value)
                         ->get()
                         ->each(function ($user) use ($order) {
@@ -201,7 +207,22 @@ class DonHang extends Model
     {
         return $query->whereNull('nhan_vien_id')
             ->whereNull('da_xem_luc')
+            ->whereNull('da_giao_luc') // đơn đã đóng phiên (bàn đã trả) thì không tính
             ->whereHas('chiTietDonHang', fn($q) => $q->where('trang_thai_thanh_toan', 'đã thanh toán'));
+    }
+
+    /**
+     * Đóng (kết thúc phiên phục vụ) tất cả đơn của một bàn — gọi khi TRẢ BÀN.
+     * Dùng cột `da_giao_luc` làm cờ "đã đóng" cho đơn tại bàn (cột này vốn chỉ dùng
+     * cho đơn MANG VỀ nên đơn tại bàn luôn trống → mượn làm cờ mà không đụng logic khác).
+     * Đơn đã đóng sẽ KHÔNG bị gộp lại vào chi tiết bàn khi bàn được dùng cho khách mới.
+     */
+    public static function closeForTable(int $tableId): void
+    {
+        static::query()
+            ->where('ban_an_id', $tableId)
+            ->whereNull('da_giao_luc')
+            ->update(['da_giao_luc' => now()]);
     }
 
     /**
@@ -251,7 +272,8 @@ class DonHang extends Model
      */
     public function scopeActiveForTable($query, bool $servingOrReserved)
     {
-        return $query->where(function ($q) use ($servingOrReserved) {
+        return $query->whereNull('da_giao_luc') // bỏ qua đơn đã đóng (bàn đã trả) → tránh "hồi sinh" phiên cũ
+            ->where(function ($q) use ($servingOrReserved) {
             $q->where(function ($q2) {
                 $q2->whereNotNull('nhan_vien_id')
                     ->whereHas('chiTietDonHang', fn($s) => $s->where('trang_thai_thanh_toan', 'chưa thanh toán'));

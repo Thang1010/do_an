@@ -45,17 +45,17 @@ class InventoryController extends Controller
         $inventory = $this->buildInventoryQuery($request)
             ->orderByRaw("CASE 
                 WHEN {$this->cupsExpression()} <= 0 THEN 0 
-                WHEN {$this->cupsExpression()} <= 3 THEN 1 
+                WHEN {$this->cupsExpression()} <= 20 THEN 1 
                 ELSE 2 
             END")
             ->orderBy('nguyen_lieu.ten_nguyen_lieu')
             ->paginate(10)
             ->withQueryString();
 
-        // "Sắp hết" = với tồn kho hiện tại chỉ làm được <= 3 cốc/sản phẩm (và > 0).
+        // "Sắp hết" = với tồn kho hiện tại chỉ làm được <= 20 cốc/sản phẩm (và > 0).
         $lowCount = DB::query()
             ->fromSub($this->applyPurposeFilter($this->baseInventoryQuery(), $currentPurpose), 'inventory_balance')
-            ->whereRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) <= 3')
+            ->whereRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) <= 20')
             ->whereRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) > 0')
             ->count();
         
@@ -106,7 +106,7 @@ class InventoryController extends Controller
 
         $lowCount = DB::query()
             ->fromSub($this->applyPurposeFilter($this->baseInventoryQuery(), $currentPurpose), 'inventory_balance')
-            ->whereRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) <= 3')
+            ->whereRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) <= 20')
             ->whereRaw('FLOOR(so_luong / GREATEST(COALESCE(max_tieu_hao, 1), 1)) > 0')
             ->count();
 
@@ -378,9 +378,16 @@ class InventoryController extends Controller
 
         $rows = [];
         foreach ($inventory as $index => $item) {
-            $status = 'Đủ hàng';
-            if ((float) $item->so_luong <= 0.0) {
+            $maxTieuHao = (float) ($item->max_tieu_hao ?? 0);
+            $divisor = $maxTieuHao > 0 ? $maxTieuHao : 1;
+            $soCup = (int) floor(((float) $item->so_luong) / $divisor);
+
+            if ($soCup <= 0) {
                 $status = 'Hết hàng';
+            } elseif ($soCup <= 20) {
+                $status = 'Sắp hết';
+            } else {
+                $status = 'Đủ hàng';
             }
 
             $rows[] = [
@@ -423,9 +430,9 @@ class InventoryController extends Controller
             if ($request->trang_thai === 'het') {
                 $query->havingRaw("{$expr} <= 0");
             } elseif ($request->trang_thai === 'sap_het') {
-                $query->havingRaw("{$expr} > 0 AND {$expr} <= 3");
+                $query->havingRaw("{$expr} > 0 AND {$expr} <= 20");
             } elseif ($request->trang_thai === 'ok') {
-                $query->havingRaw("{$expr} > 3");
+                $query->havingRaw("{$expr} > 20");
             }
         }
 

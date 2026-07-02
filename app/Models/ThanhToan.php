@@ -59,6 +59,15 @@ class ThanhToan extends Model
 
                 if ($order->nhan_vien_id) {
                     $recipientIds->push((int) $order->nhan_vien_id);
+                } else {
+                    // Đơn của KHÁCH (vãng lai/thành viên) không gắn nhân viên → báo cho
+                    // toàn bộ nhân viên đang trực để kịp pha chế/phục vụ.
+                    $staffIds = NguoiDung::query()
+                        ->where('vai_tro', 'nhân viên')
+                        ->where('trang_thai', 'hoạt động')
+                        ->pluck('id')
+                        ->map(fn ($id) => (int) $id);
+                    $recipientIds = $recipientIds->merge($staffIds);
                 }
 
                 $managerIds = NguoiDung::query()

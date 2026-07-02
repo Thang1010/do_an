@@ -22,7 +22,7 @@
             @if($isStoreOwnerActor ?? false)
                 <a href="{{ route('manager.positions.edit', ['id' => $position->id]) }}" class="btn btn-primary">Sửa chức vụ</a>
             @endif
-            <a href="{{ route('manager.positions.index') }}" class="btn btn-secondary">Quay lại danh sách</a>
+            <a href="{{ route('manager.positions.index') }}" class="btn btn-secondary">Quay lại</a>
         </div>
     </div>
 

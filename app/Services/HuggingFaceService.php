@@ -64,9 +64,11 @@ class HuggingFaceService
         $url = 'https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo';
 
         try {
-            // HF Inference cho Audio thường nhận raw bytes trong body
+            // HF Inference cho Audio nhận raw bytes trong body. Frontend đã convert sang WAV PCM
+            // (HF/soundfile không đọc được WebM/Opus). HF tự nhận diện định dạng theo nội dung
+            // file nên Content-Type chỉ mang tính khai báo.
             $response = Http::withToken($this->token)
-                ->withBody($audioContent, 'audio/webm') // Browser ghi âm thường ra webm hoặc mp4
+                ->withBody($audioContent, 'audio/wav')
                 ->timeout(60) // Whisper có thể mất thời gian khởi động (cold boot)
                 ->post($url);
 

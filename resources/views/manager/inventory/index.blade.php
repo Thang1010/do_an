@@ -105,7 +105,7 @@
                         $divisor = $maxTieuHao > 0 ? $maxTieuHao : 1;
                         $soCup = (int) floor(((float) $item->so_luong) / $divisor);
                         $hetHang = $soCup <= 0;
-                        $sapHet = !$hetHang && $soCup <= 3;
+                        $sapHet = !$hetHang && $soCup <= 20;
                     @endphp
                     <tr>
                         <td><strong>{{ $item->ten_nguyen_lieu }}</strong></td>

@@ -172,6 +172,8 @@ class PaymentService
             BanAn::query()->whereKey($tableId)->update([
                 'trang_thai' => 'trống',
             ]);
+            // Đóng các đơn của bàn (kết thúc phiên) để không "hồi sinh" khi bàn được dùng lại.
+            DonHang::closeForTable($tableId);
         }
     }
 

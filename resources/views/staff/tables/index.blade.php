@@ -319,6 +319,73 @@ function startPosAutoRefresh() {
 document.addEventListener('DOMContentLoaded', function() {
     initPaymentModal();
     startPosAutoRefresh();
+
+    // ── Ajax Chuyển danh mục không reload trang ──
+    document.addEventListener('click', async function(e) {
+        var categoryLink = e.target.closest('.menu-category-item');
+        if (categoryLink) {
+            e.preventDefault();
+            var href = categoryLink.getAttribute('href');
+            if (!href) return;
+
+            // Đổi class active lập tức để tạo cảm giác mượt mà (snappy UI)
+            document.querySelectorAll('.menu-category-item').forEach(function(el) {
+                el.classList.remove('active');
+            });
+            categoryLink.classList.add('active');
+
+            try {
+                var url = new URL(href, window.location.origin);
+                url.searchParams.set('partial', '1');
+
+                var res = await fetch(url.toString(), {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                if (!res.ok) {
+                    window.location.href = href;
+                    return;
+                }
+                var data = await res.json();
+
+                var leftPanel = document.getElementById('pos-left-panel');
+                var detailPanel = document.getElementById('pos-detail-panel');
+                if (leftPanel && data.left) {
+                    leftPanel.innerHTML = data.left;
+                }
+                if (detailPanel && data.detail) {
+                    detailPanel.innerHTML = data.detail;
+                    initPaymentModal();
+                }
+
+                window.history.pushState({}, '', href);
+            } catch (err) {
+                console.error('Error switching category:', err);
+                window.location.href = href;
+            }
+        }
+    });
+
+    // Hỗ trợ nút Back/Forward của trình duyệt
+    window.addEventListener('popstate', async function() {
+        var leftPanel = document.getElementById('pos-left-panel');
+        var detailPanel = document.getElementById('pos-detail-panel');
+        if (!leftPanel || !detailPanel) return;
+
+        try {
+            var url = new URL(window.location.href);
+            url.searchParams.set('partial', '1');
+            var res = await fetch(url.toString(), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (!res.ok) return;
+            var data = await res.json();
+            if (data.left) leftPanel.innerHTML = data.left;
+            if (data.detail) detailPanel.innerHTML = data.detail;
+            initPaymentModal();
+        } catch (e) {
+            // im lặng
+        }
+    });
 });
 </script>
 @endpush

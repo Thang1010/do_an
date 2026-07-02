@@ -13,7 +13,7 @@ Kinh doanh / <a href="{{ route('manager.vouchers.index') }}">Mã giảm giá & K
         <p class="page-subtitle">Theo dõi danh sách người dùng đã nhận mã giảm giá và trạng thái đã dùng/chưa dùng</p>
     </div>
     <div class="page-actions">
-        <a href="{{ route('manager.vouchers.index') }}" class="btn btn-secondary">Quay lại danh sách</a>
+        <a href="{{ route('manager.vouchers.index') }}" class="btn btn-secondary">Quay lại</a>
     </div>
 </div>
 

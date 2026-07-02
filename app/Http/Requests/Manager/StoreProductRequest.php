@@ -45,6 +45,7 @@ class StoreProductRequest extends FormRequest
                 Rule::unique('san_pham', 'ten_san_pham')->ignore($this->route('id')),
             ],
             'mo_ta'                     => 'nullable|string|max:150',
+            'mo_ta_chi_tiet'            => 'nullable|string|max:300',
             'danh_muc_id'               => 'required|exists:danh_muc,id',
             'gia_goc'                   => 'required|numeric|min:0',
             'gia_khuyen_mai'            => 'nullable|numeric|min:0',
@@ -73,7 +74,8 @@ class StoreProductRequest extends FormRequest
         return [
             'ten_san_pham.required'       => 'Vui lòng nhập tên sản phẩm.',
             'ten_san_pham.unique'         => "Sản phẩm \"{$tenSanPham}\" đã tồn tại.",
-            'mo_ta.max'                   => 'Mô tả không được vượt quá 150 ký tự.',
+            'mo_ta.max'                   => 'Mô tả ngắn không được vượt quá 150 ký tự.',
+            'mo_ta_chi_tiet.max'          => 'Mô tả chi tiết không được vượt quá 300 ký tự.',
             'danh_muc_id.required'        => 'Vui lòng chọn danh mục.',
             'gia_goc.required'            => 'Vui lòng nhập giá sản phẩm.',
             'sizes.*.kich_co_id.required' => 'Vui lòng chọn kích cỡ.',

@@ -15,7 +15,7 @@
 		<p class="page-subtitle">Điền thông tin ca, sau đó lấy danh sách nhân sự rảnh theo chức vụ để phân ca</p>
 	</div>
 	<div class="page-actions">
-		<a href="{{ route('manager.shifts.index') }}" class="btn btn-secondary">Quay lại danh sách</a>
+		<a href="{{ route('manager.shifts.index') }}" class="btn btn-secondary">Quay lại</a>
 	</div>
 </div>
 

@@ -16,7 +16,7 @@
         <div class="page-actions">
             <button type="button" class="btn btn-secondary" onclick="openModal('shift-checkin-qr-modal')">Tạo QR chấm
                 công</button>
-            <a href="{{ route('manager.shifts.index') }}" class="btn btn-primary">Quay lại danh sách ca</a>
+            <a href="{{ route('manager.shifts.index') }}" class="btn btn-primary">Quay lại</a>
         </div>
     </div>
 

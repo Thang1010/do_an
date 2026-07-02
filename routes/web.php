@@ -25,7 +25,10 @@ Route::view('/contact', 'customer.home.contact')->name('home.contact');
 
 // Menu / Sản phẩm
 Route::get('/menu', [MenuController::class, 'index'])->name('menu.index');
-Route::get('/menu/{id}', [MenuController::class, 'show'])->name('menu.show');
+// Phiên bản menu (dùng cho realtime — khách poll để biết khi nào cần làm mới lưới sản phẩm).
+// Phải đặt TRƯỚC '/menu/{id}' để không bị route show nuốt mất.
+Route::get('/menu/version', [MenuController::class, 'version'])->name('menu.version');
+Route::get('/menu/{id}', [MenuController::class, 'show'])->whereNumber('id')->name('menu.show');
 Route::post('/menu/{id}/favorite', [MenuController::class, 'toggleFavorite'])->name('menu.favorite');
 Route::post('/menu/{id}/review', [MenuController::class, 'storeReview'])->name('menu.review.store');
 

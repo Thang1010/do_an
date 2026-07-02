@@ -1075,7 +1075,6 @@
                     var isNumericName = ['gia_', 'so_luong', 'chi_phi', 'chiet_khau', 'he_so_gia', 'so_ban', 'so_tien'].some(n => input.name && input.name.includes(n));
                     
                     var isPhoneField = input.type === 'tel' || (input.name && input.name.includes('dien_thoai'));
-                    var isPersonName = input.name === 'ho_ten' || input.name === 'ten_nhan_vien' || input.name === 'ten_khach_hang';
                     var isEmailField = input.type === 'email' || input.name === 'email';
 
                     if (isPhoneField) {
@@ -1083,12 +1082,6 @@
                         if (hasLettersPhone) {
                             isValid = false;
                             errorMsg = 'Số điện thoại chỉ được chứa các chữ số!';
-                        }
-                    } else if (isPersonName) {
-                        var hasNumbersOrSpecial = /[0-9!@#$%^&*()_+={}\[\]:;"'<>,.?\\|]/g.test(rawValue);
-                        if (hasNumbersOrSpecial) {
-                            isValid = false;
-                            errorMsg = 'Tên người không được chứa số hay ký tự đặc biệt!';
                         }
                     } else if (isEmailField) {
                         var hasSpacesOrAccents = /[ \u00C0-\u024F\u1E00-\u1EFF]/.test(rawValue);
@@ -1107,7 +1100,6 @@
 
                 if (!isValid) {
                     input.style.borderColor = '#d92d20';
-                    input.style.backgroundColor = '#fef2f2';
                     input.dataset.invalid = "true";
                     
                     var errEl = input.nextElementSibling;
